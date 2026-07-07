@@ -130,7 +130,7 @@ svg#graph.dragging{cursor:grabbing}
 /* 포커스/시나리오 dim이 걸린 노드는 라벨/글리프/서브텍스트를 숨겨, 흰 배경 위에서
    포커스된 이웃만 라벨과 함께 도드라지게 한다. */
 .node.dim .lbl,.node.dim .glyph,.node.dim .sub,.node.dim .dlbl{opacity:0}
-.node.lit .box{filter:drop-shadow(0 0 9px rgba(0,162,229,.4))}
+.node.lit .box{stroke:#00a2e5;stroke-width:1.8;filter:drop-shadow(0 0 12px rgba(0,162,229,.7))}
 .node.sel .box{stroke:var(--beam)!important;stroke-width:2}
 .node .glyph{font-family:var(--mono);font-size:9px;font-weight:600;pointer-events:none}
 .node .lbl{font-size:12.5px;font-weight:500;fill:var(--ink);pointer-events:none}

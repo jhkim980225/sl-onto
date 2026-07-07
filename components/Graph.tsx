@@ -853,10 +853,10 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
       nodes.forEach((n) => {
         if (!n.el) return;
         const near = focusVisible.has(n.id);
-        n.el.classList.toggle("dim", !near);
-        // PHASE 1 LOD: 포커스된 이웃은 전체 보기에서도 라벨을 켠다.
+        // 포커스 시 나머지 노드를 dim(가림)하지 않는다 — 대신 포커스 노드+이웃에 글로우(.lit) 강조.
+        n.el.classList.remove("dim");
+        n.el.classList.toggle("lit", near);
         n.el.classList.toggle("lbl-on", near);
-        // 이웃 문서 노드는 라벨을 읽을 수 있게 표시.
         if (n.type === "doc") n.el.classList.toggle("showlbl", near);
       });
       edges.forEach((e) => {
@@ -887,7 +887,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
         n.ftx = null;
         n.fty = null;
         if (!n.el) return;
-        n.el.classList.remove("dim", "lbl-on");
+        n.el.classList.remove("dim", "lit", "lbl-on");
         if (n.type === "doc") n.el.classList.remove("showlbl");
       });
       edges.forEach((e) => {
