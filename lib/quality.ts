@@ -38,7 +38,7 @@ function tokenSet(s: string): Set<string> {
   return new Set(
     nfc(s)
       .toLowerCase()
-      .split(/[\s·]+/)
+      .split(/[\s·\-_/()]+/) // foldKey 와 동일 구분자 — "센서-온도" 가 한 토큰으로 뭉치지 않게 (리뷰 지적)
       .filter((t) => t.length >= 2)
   );
 }

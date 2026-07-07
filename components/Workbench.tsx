@@ -228,28 +228,26 @@ export default function Workbench() {
     };
   }, []);
 
-  // 온톨로지 구축 완료 후 전역 모순을 한 번 스캔 — 배지("⚠ 모순 N건")로 상시 노출.
-  useEffect(() => {
-    if (!ontologyBuilt) return;
-    let cancelled = false;
+  // 온톨로지 구축 완료 후 전역 모순 스캔 — 배지("⚠ 모순 N건"). 큐레이션 후 재스캔에도 재사용.
+  const refreshContradictions = useCallback(() => {
     setContradictionsLoading(true);
-    fetch("/api/contradictions")
+    return fetch("/api/contradictions")
       .then((res) => {
         if (!res.ok) throw new Error(`모순 스캔 실패 (${res.status})`);
         return res.json() as Promise<ContradictionsResponse>;
       })
       .then((data) => {
-        if (!cancelled) setContradictions(data.items);
+        setContradictions(data.items);
+        setContradictionsError(null);
       })
-      .catch((err) => {
-        if (!cancelled) setContradictionsError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setContradictionsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .catch((err) => setContradictionsError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setContradictionsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!ontologyBuilt) return;
+    void refreshContradictions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ontologyBuilt]);
 
   // 온톨로지 품질 스캔 — 배지("🧹 정리 N건")로 상시 노출. 큐레이션 액션 후 재스캔에도 재사용.
@@ -700,31 +698,35 @@ export default function Workbench() {
   // ── 품질 패널 액션: 중복 후보 병합 / 고립·근거없음 노드 삭제 — curate() 경유, 액션 후 재스캔 ──
   const handleQualityMerge = useCallback(
     (fromId: string, fromLabel: string, intoId: string) => {
-      if (!window.confirm(`"${fromLabel}" 을(를) 병합할까요?\n(인메모리 편집 — 서버 재시작 시 원복)`)) return;
+      if (!window.confirm(`"${fromLabel}" 을(를) 병합할까요?\n(저장소에 반영됩니다 — 되돌리려면 재인제스천 필요)`)) return;
       curate({ op: "merge", from: fromId, into: intoId })
         .then((d) => {
           graphRef.current?.removeFromCanvas([fromId], []);
           if (d.movedEdges?.length) graphRef.current?.addDelta([], d.movedEdges);
           setFullTotals({ nodes: d.totals.nodes, edges: d.totals.edges });
+          if (selectedNodeRef.current?.id === fromId) selectedNodeRef.current = null; // 사라진 노드 참조 정리
           void refreshQuality();
+          void refreshContradictions(); // 병합이 모순 판정을 바꿀 수 있음
         })
         .catch((e) => setQualityError(e instanceof Error ? e.message : String(e)));
     },
-    [curate, refreshQuality]
+    [curate, refreshQuality, refreshContradictions]
   );
 
   const handleQualityDelete = useCallback(
     (id: string, label: string) => {
-      if (!window.confirm(`"${label}" 객체와 연결 관계를 삭제할까요?\n(인메모리 편집 — 서버 재시작 시 원복)`)) return;
+      if (!window.confirm(`"${label}" 객체와 연결 관계를 삭제할까요?\n(저장소에 반영됩니다 — 되돌리려면 재인제스천 필요)`)) return;
       curate({ op: "deleteNode", id })
         .then((d) => {
           graphRef.current?.removeFromCanvas([id], []);
           setFullTotals({ nodes: d.totals.nodes, edges: d.totals.edges });
+          if (selectedNodeRef.current?.id === id) selectedNodeRef.current = null; // 사라진 노드 참조 정리
           void refreshQuality();
+          void refreshContradictions();
         })
         .catch((e) => setQualityError(e instanceof Error ? e.message : String(e)));
     },
-    [curate, refreshQuality]
+    [curate, refreshQuality, refreshContradictions]
   );
 
   // ── 다음 액션: 인스펙터의 고장모드/원인을 신규 설계 조건에 리스크로 반영 ──
