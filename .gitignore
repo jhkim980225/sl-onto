@@ -1,0 +1,23 @@
+# deps / build
+node_modules/
+.next/
+out/
+dist/
+
+# env / secrets
+.env*
+!.env.example
+
+# logs / os
+*.log
+.DS_Store
+Thumbs.db
+
+# 견고 파싱 검증 전용(데모 미포함, 대용량)
+data/real-samples/
+
+# office lock files
+~$*
+
+# scratch
+*.tmp

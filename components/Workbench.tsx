@@ -1,0 +1,1177 @@
+"use client";
+
+// FEDA OntoGround 워크벤치 — FMEA_온톨로지_시연_v2.html 의 오케스트레이션(§5~7, DOM 셸)을 이식.
+// 하드코딩된 CORE/CORE_EDGES/DOC_RULES/CHECKLIST는 전부 제거하고 API(fetch) 응답으로 대체한다.
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import Graph, { type FocusInfo, type GraphCounts, type GraphHandle, type ViewInfo } from "./Graph";
+import Inspector, { type NavEntry } from "./Inspector";
+import Checklist from "./Checklist";
+import SourcePanel from "./SourcePanel";
+import SourcePreview from "./SourcePreview";
+import Stepper from "./Stepper";
+import SearchResults from "./SearchResults";
+import CondensationPanel from "./CondensationPanel";
+import NLSearchPanel from "./NLSearchPanel";
+import IngestPanel from "./IngestPanel";
+import DrawingPanel, { type DrawingResult } from "./DrawingPanel";
+import { buildNodeIndex, type NodeIndex } from "./nodeIndex";
+import type { SourceInfo, SourcesResponse } from "./sourceTypes";
+import type { IngestResponse } from "./ingestTypes";
+import type { RegionsResponse, RegionSummary } from "./condensationTypes";
+import type {
+  DesignInput,
+  Edge,
+  GraphResponse,
+  InferResponse,
+  NLSearchResponse,
+  ObjectDetail,
+  SearchHit,
+  SearchResponse,
+} from "@/lib/types";
+
+type Stage = 1 | 2 | 3;
+
+// 결로·습기 데모 기본 조건 — 아우터 렌즈 · 아시아(고온다습) · 밀폐형 하우징.
+// 밀폐형 → 결로·벤트 부스트(lib/infer.ts BOOST_FOG)로 체크리스트 최상위에 결로 항목이 온다.
+const DEFAULT_CONDITION: DesignInput = {
+  market: "아시아",
+  lightSource: "LED",
+  shape: ["슬림 하우징", "밀폐형"],
+  components: ["아우터 렌즈"],
+};
+
+const CHAOS_SAMPLES: [string, string][] = [
+  ["XLSX", "FMEA_2016_HL03.xlsx"],
+  ["XLSX", "검토시트_수출형.xlsx"],
+  ["PPTX", "재발방지_간극.pptx"],
+  ["PPTX", "대책서_배광이슈.pptx"],
+  ["TIF", "2D스캔_단면_주석.tif"],
+  ["BOM", "BOM_HL07_rev4.xlsx"],
+  ["PTS", "PTS-8812_클레임"],
+  ["PTS", "PTS-9034_외관"],
+  ["SPEC", "HKMC_ES_광학.pdf"],
+  ["XLSX", "시험결과_방열.xlsx"],
+];
+
+interface ChaosChip {
+  key: string;
+  ext: string;
+  fn: string;
+  left: number;
+  top: number;
+  rot: number;
+  fx: number;
+  fy: number;
+  delay: number;
+}
+
+function makeChaosChips(samples: [string, string][] = CHAOS_SAMPLES): ChaosChip[] {
+  const chips: ChaosChip[] = [];
+  const pool = samples.length > 0 ? samples : CHAOS_SAMPLES;
+  for (let i = 0; i < 72; i++) {
+    const [ext, fn] = pool[i % pool.length];
+    const x = 6 + Math.random() * 84;
+    const y = 6 + Math.random() * 78;
+    chips.push({
+      key: `chip${i}`,
+      ext,
+      fn,
+      left: x,
+      top: y,
+      rot: Number((Math.random() * 8 - 4).toFixed(1)),
+      fx: (50 - x) * 6,
+      fy: (46 - y) * 6,
+      delay: Number((Math.random() * 0.4).toFixed(2)),
+    });
+  }
+  return chips;
+}
+
+/** 체크리스트 항목의 trace(예: "PJ26→SIMILAR→PJ21")에서 실제 그래프 노드 id만 추출. */
+function parseTraceIds(trace: string[], idSet: Set<string>): string[] {
+  const found = new Set<string>();
+  for (const seg of trace) {
+    for (const tok of seg.split(/→|->/)) {
+      const t = tok.trim();
+      if (idSet.has(t)) found.add(t);
+    }
+  }
+  return [...found];
+}
+
+export default function Workbench() {
+  const graphRef = useRef<GraphHandle | null>(null);
+  const graphDataRef = useRef<GraphResponse | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Enter로 자연어 검색을 실행하면 true — 아직 응답 오지 않은 인스턴트 키워드 fetch가
+  // 뒤늦게 드롭다운을 다시 열지 않도록 막는다. 다음 타이핑 시 false로 리셋.
+  const nlSubmittedRef = useRef(false);
+  const staggerTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const [stage, setStage] = useState<Stage>(1);
+  // 병합 모드 상태를 그래프 클릭 콜백(이른 정의)에서 참조하기 위한 ref
+  const mergeSourceRef = useRef<{ id: string; label: string } | null>(null);
+  const handleMergeIntoRef = useRef<((id: string) => void) | null>(null);
+  const [chaosChips, setChaosChips] = useState<ChaosChip[]>(() => makeChaosChips());
+  const [chaosGone, setChaosGone] = useState(false);
+  const [chaosHidden, setChaosHidden] = useState(false);
+
+  const [sources, setSources] = useState<SourceInfo[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(true);
+  const [sourcesError, setSourcesError] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState<SourceInfo | null>(null);
+
+  const [buildStarted, setBuildStarted] = useState(false);
+  const [ontologyBuilt, setOntologyBuilt] = useState(false);
+  const [ontologyError, setOntologyError] = useState<string | null>(null);
+  const [graphCounts, setGraphCounts] = useState<GraphCounts>({ nodes: 0, edges: 0, byType: {} });
+  // PHASE 1: 전체 온톨로지 규모(뷰와 무관) + 현재 표시 중인 노드 수/뷰 모드.
+  const [fullTotals, setFullTotals] = useState<{ nodes: number; edges: number } | null>(null);
+  const [viewInfo, setViewInfo] = useState<ViewInfo | null>(null);
+  const [focusInfo, setFocusInfo] = useState<FocusInfo | null>(null);
+  const [ingestVisible, setIngestVisible] = useState(false);
+  const [ingestLines, setIngestLines] = useState<string[]>([]);
+  const [ingestPct, setIngestPct] = useState(0);
+
+  const [scenarioTriggered, setScenarioTriggered] = useState(false);
+  const [condition, setCondition] = useState<DesignInput>(DEFAULT_CONDITION);
+
+  const [rightPanelMode, setRightPanelMode] = useState<
+    "inspector" | "checklist" | "source" | "condensation" | "nlsearch" | "ingest" | "drawing"
+  >("inspector");
+  const [condensationRegions, setCondensationRegions] = useState<RegionSummary[] | null>(null);
+  const [condensationLoading, setCondensationLoading] = useState(false);
+  const [condensationError, setCondensationError] = useState<string | null>(null);
+  const [inspectorLoading, setInspectorLoading] = useState(false);
+  const [inspectorError, setInspectorError] = useState<string | null>(null);
+  const [inspectorObj, setInspectorObj] = useState<ObjectDetail | null>(null);
+
+  const [inferLoading, setInferLoading] = useState(false);
+  const [inferError, setInferError] = useState<string | null>(null);
+  const [inferResult, setInferResult] = useState<InferResponse | null>(null);
+  const [revealedChecklistCount, setRevealedChecklistCount] = useState(0);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [nodeIndex, setNodeIndex] = useState<NodeIndex>(() => new Map());
+  // id→label 조회를 handleNodeClick(의존성 없는 콜백) 안에서도 쓰기 위한 ref 미러.
+  const nodeIndexRef = useRef<NodeIndex>(new Map());
+
+  // ── 탐색 히스토리 — 선택할 때마다 {id, label, via} push. 뒤로/크럼 점프는 push 없이 재선택. ──
+  const [navHistory, setNavHistory] = useState<NavEntry[]>([]);
+
+  // ── 자연어 검색(Enter 제출) 상태 ──
+  const [nlQuery, setNlQuery] = useState("");
+  const [nlLoading, setNlLoading] = useState(false);
+  const [nlError, setNlError] = useState<string | null>(null);
+  const [nlResult, setNlResult] = useState<NLSearchResponse | null>(null);
+
+  // ── 문서 인제스천(증분 반영) 상태 ──
+  const [ingestLoading, setIngestLoading] = useState(false);
+  const [ingestError, setIngestError] = useState<string | null>(null);
+  const [ingestResult, setIngestResult] = useState<IngestResponse | null>(null);
+  const [ingestHistory, setIngestHistory] = useState<IngestResponse[]>([]);
+
+  // ── STAGE 1: 실제 원천 파일 목록 조회 (온톨로지 구축 전에도 "흩어진 원천"이 실데이터임을 보여준다) ──
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/sources")
+      .then((res) => {
+        if (!res.ok) throw new Error(`원천 조회 실패 (${res.status})`);
+        return res.json() as Promise<SourcesResponse>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setSources(data.sources);
+        // 혼돈 오버레이 칩도 실제 파일명으로 재시딩(간단히 가능한 범위 내에서 실데이터화).
+        const samples: [string, string][] = data.sources.map((s) => [s.type, s.file]);
+        if (samples.length > 0) setChaosChips(makeChaosChips(samples));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setSourcesError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setSourcesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSelectSource = useCallback(
+    (file: string) => {
+      const found = sources.find((s) => s.file === file);
+      if (!found) return;
+      setSelectedSource(found);
+      setRightPanelMode("source");
+    },
+    [sources]
+  );
+
+  // ── 결로 지역별 분석 시나리오 진입 (Inspector에서 아우터 렌즈/결로·습기 선택 시) ──
+  const handleOpenCondensation = useCallback(() => {
+    setRightPanelMode("condensation");
+    if (condensationRegions || condensationLoading) return; // 이미 로드됨/로딩 중이면 재요청하지 않음
+    setCondensationLoading(true);
+    setCondensationError(null);
+    fetch("/api/condensation")
+      .then((res) => {
+        if (!res.ok) throw new Error(`지역 목록 조회 실패 (${res.status})`);
+        return res.json() as Promise<RegionsResponse>;
+      })
+      .then((data) => setCondensationRegions(data.regions))
+      .catch((err) => setCondensationError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setCondensationLoading(false));
+  }, [condensationRegions, condensationLoading]);
+
+  // 결로 분석 패널의 근거 문서 칩 클릭 → 원천 파일 정형화 미리보기(SourcePreview)로 이동.
+  const handleOpenEvidenceFile = useCallback(
+    (file: string) => {
+      const found = sources.find((s) => s.file === file);
+      if (!found) return;
+      setSelectedSource(found);
+      setRightPanelMode("source");
+    },
+    [sources]
+  );
+
+  // 인스펙터 근거 문서 행의 "미리보기 가능" 판정용 파일명 목록
+  const sourceFileNames = useMemo(() => sources.map((s) => s.file), [sources]);
+
+  const sourceTypeCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of sources) m.set(s.type, (m.get(s.type) ?? 0) + 1);
+    return m;
+  }, [sources]);
+
+  const stageName = useMemo(() => {
+    const names = ["흩어진 원천 데이터", ontologyBuilt ? "온톨로지 구축 완료" : "온톨로지 구축 중", "신규 설계 추론"];
+    return names[stage - 1];
+  }, [stage, ontologyBuilt]);
+
+  // ── 노드 클릭 → 인스펙터 (모든 선택이 지나는 단일 funnel) ──
+  // opts.via   : 어떻게 이 객체에 도달했는지(관계명+방향 또는 진입 태그). 히스토리 항목에 기록.
+  // opts.fresh : 새 진입점(그래프 클릭/검색/자연어 검색) — 브레드크럼 트레일을 여기서 다시 시작.
+  // opts.push  : false면 히스토리에 push하지 않는다(뒤로 가기/크럼 점프 재선택용 가드).
+  const handleNodeClick = useCallback(
+    (id: string, opts?: { via?: string; fresh?: boolean; push?: boolean }) => {
+      setRightPanelMode("inspector");
+      setInspectorLoading(true);
+      setInspectorError(null);
+      graphRef.current?.selectNode(id);
+      if (opts?.push !== false) {
+        const via = opts?.via ?? "선택";
+        const fresh = opts?.fresh ?? false;
+        setNavHistory((prev) => {
+          if (prev.length > 0 && prev[prev.length - 1].id === id) return prev; // 같은 객체 연속 선택은 중복 push 방지
+          const label = nodeIndexRef.current.get(id)?.label ?? id;
+          return [...prev, { id, label, via, fresh }];
+        });
+      }
+      fetch(`/api/object/${encodeURIComponent(id)}`)
+        .then((res) => {
+          if (!res.ok) throw new Error(`객체 조회 실패 (${res.status})`);
+          return res.json() as Promise<ObjectDetail>;
+        })
+        .then((data) => {
+          setInspectorObj(data);
+          // 인덱스에 없어서 id로 기록된 라벨을 실제 라벨로 보정(best-effort).
+          setNavHistory((prev) =>
+            prev.some((e) => e.id === data.id && e.label === e.id)
+              ? prev.map((e) => (e.id === data.id && e.label === e.id ? { ...e, label: data.label } : e))
+              : prev
+          );
+        })
+        .catch((err) => {
+          setInspectorObj(null);
+          setInspectorError(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => setInspectorLoading(false));
+    },
+    []
+  );
+
+  // 그래프 캔버스에서 직접 클릭 — 새 진입점으로 트레일을 리셋한다.
+  const handleGraphNodeClick = useCallback(
+    (id: string) => {
+      if (mergeSourceRef.current) { handleMergeIntoRef.current?.(id); return; } // 병합 모드: 클릭 = 대상 선택
+      handleNodeClick(id, { via: "그래프 선택", fresh: true });
+    },
+    [handleNodeClick]
+  );
+
+  // 인스펙터 관계 행 클릭 — via에 관계명+방향("HAS_FAILURE →" / "REF_MASTER ←")이 담겨 온다.
+  const handleInspectorGo = useCallback(
+    (id: string, via?: string) => handleNodeClick(id, { via: via ?? "선택" }),
+    [handleNodeClick]
+  );
+
+  // 체크리스트 trace/근거 클릭 — 트레일을 이어간다(진입점 아님).
+  const handleChecklistSelect = useCallback(
+    (id: string) => handleNodeClick(id, { via: "체크리스트 근거" }),
+    [handleNodeClick]
+  );
+
+  // 결로 분석 패널의 객체 링크 클릭.
+  const handleCondensationSelect = useCallback(
+    (id: string) => handleNodeClick(id, { via: "결로 분석" }),
+    [handleNodeClick]
+  );
+
+  // ── 뒤로 가기: 현재 항목을 pop하고 직전 항목을 push 없이 재선택(그래프 포커스 포함) ──
+  const handleNavBack = useCallback(() => {
+    if (navHistory.length <= 1) return;
+    const next = navHistory.slice(0, -1);
+    setNavHistory(next);
+    handleNodeClick(next[next.length - 1].id, { push: false });
+  }, [navHistory, handleNodeClick]);
+
+  // ── 브레드크럼 점프: 해당 항목까지 히스토리를 잘라내고 push 없이 재선택 ──
+  const handleNavJumpTo = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= navHistory.length - 1) return; // 마지막(현재) 항목은 no-op
+      const next = navHistory.slice(0, index + 1);
+      setNavHistory(next);
+      handleNodeClick(next[next.length - 1].id, { push: false });
+    },
+    [navHistory, handleNodeClick]
+  );
+
+  // ── STAGE 1 → 2: 온톨로지 구축 시작 (instant = ?update=1 직행 진입, 연출 스킵) ──
+  const handleBuildOntology = useCallback(
+    (instant = false) => {
+      if (buildStarted) return;
+      setBuildStarted(true);
+      setChaosGone(true);
+      if (instant) setChaosHidden(true);
+      else setTimeout(() => setChaosHidden(true), 800);
+      setStage(2);
+      setIngestVisible(!instant);
+      setOntologyError(null);
+
+      fetch("/api/ontology")
+        .then((res) => {
+          if (!res.ok) throw new Error(`온톨로지 조회 실패 (${res.status})`);
+          return res.json() as Promise<GraphResponse>;
+        })
+        .then((data) => {
+          graphDataRef.current = data;
+          setFullTotals({ nodes: data.nodes.length, edges: data.edges.length });
+          const idx = buildNodeIndex(data.nodes);
+          nodeIndexRef.current = idx;
+          setNodeIndex(idx);
+          graphRef.current?.buildOntology(
+            data.nodes,
+            data.edges,
+            {
+              onLog: (html) => setIngestLines((prev) => [...prev, html].slice(-7)),
+              onCounts: setGraphCounts,
+              onProgress: setIngestPct,
+              onDone: () => {
+                setOntologyBuilt(true);
+                setTimeout(() => setIngestVisible(false), instant ? 0 : 2600);
+              },
+            },
+            { instant }
+          );
+        })
+        .catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          setOntologyError(msg);
+          setIngestLines((prev) => [...prev, `<span style="color:#FF5470">[docling] 오류 — ${msg}</span>`]);
+        });
+    },
+    [buildStarted]
+  );
+
+  // ── ?update=1 → 구축 완료 상태로 직행(카오스·버튼·연출 스킵) ──
+  const autoBuildRef = useRef(false);
+  useEffect(() => {
+    if (autoBuildRef.current) return;
+    autoBuildRef.current = true;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("update") === "1") handleBuildOntology(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── STAGE 2 → 3: 신규 설계 추론 시연 ──
+  const handleRunScenario = useCallback(() => {
+    if (scenarioTriggered || !ontologyBuilt) return;
+    setScenarioTriggered(true);
+    setStage(3);
+    setInferLoading(true);
+    setInferError(null);
+    setRevealedChecklistCount(0);
+
+    const gd = graphDataRef.current;
+
+    fetch("/api/infer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(condition),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`추론 API 실패 (${res.status})`);
+        return res.json() as Promise<InferResponse>;
+      })
+      .then((data) => {
+        setInferLoading(false);
+        const scenarioNode = gd?.nodes.find((n) => n.hidden);
+        const scenEdges: Edge[] = gd?.edges.filter((e) => e.scen) ?? [];
+        const reveal = () => {
+          setInferResult(data);
+          setRightPanelMode("checklist");
+          data.checklist.forEach((_, i) => {
+            const t = setTimeout(() => setRevealedChecklistCount((c) => Math.max(c, i + 1)), 200 + i * 360);
+            staggerTimeoutsRef.current.push(t);
+          });
+        };
+        if (gd && scenarioNode) {
+          const idSet = new Set(gd.nodes.map((n) => n.id));
+          const waves = [[scenarioNode.id], ...data.checklist.map((c) => parseTraceIds(c.trace, idSet))];
+          graphRef.current?.runScenario(scenarioNode.id, scenEdges, waves, {
+            onWave: () => {},
+            onDone: reveal,
+          });
+        } else {
+          // 그래프가 아직 구축되지 않았거나 시나리오 노드를 찾지 못한 경우에도 체크리스트는 보여준다.
+          reveal();
+        }
+      })
+      .catch((err) => {
+        setInferLoading(false);
+        setInferError(err instanceof Error ? err.message : String(err));
+        setRightPanelMode("checklist");
+      });
+  }, [scenarioTriggered, ontologyBuilt, condition]);
+
+  // ── 도면 분석 (POST /api/drawing-input): 업로드 → 형상 유사 설계 카드 + 조건 후보 ──
+  const drawingInputRef = useRef<HTMLInputElement | null>(null);
+  const [drawingLoading, setDrawingLoading] = useState(false);
+  const [drawingError, setDrawingError] = useState<string | null>(null);
+  const [drawingResult, setDrawingResult] = useState<DrawingResult | null>(null);
+
+  const handleDrawingFile = useCallback((fileOrSample: File | { sample: true }) => {
+    setDrawingLoading(true);
+    setDrawingError(null);
+    setRightPanelMode("drawing");
+    const init: RequestInit =
+      fileOrSample instanceof File
+        ? (() => {
+            const fd = new FormData();
+            fd.append("file", fileOrSample);
+            return { method: "POST", body: fd };
+          })()
+        : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sample: true }) };
+    fetch("/api/drawing-input", init)
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error ?? `도면 분석 실패 (${res.status})`);
+        return data as DrawingResult & { delta?: GraphResponse };
+      })
+      .then((data) => {
+        setDrawingLoading(false);
+        setDrawingResult(data);
+        // 도면 프로젝트 + SIMILAR(형상 유사) 엣지를 그래프에 합류(빨간 강조) + 전체 카운터 갱신
+        if (data.delta && (data.delta.nodes.length || data.delta.edges.length)) {
+          graphRef.current?.addDelta(data.delta.nodes, data.delta.edges);
+        }
+        const t = (data as { totals?: { nodes: number; edges: number } }).totals;
+        if (t) setFullTotals({ nodes: t.nodes, edges: t.edges });
+      })
+      .catch((err) => {
+        setDrawingLoading(false);
+        setDrawingError(err instanceof Error ? err.message : String(err));
+      });
+  }, []);
+
+  // 도면 조건 적용 → 즉시 추론(웨이브 연출 없이) — "도면을 던지면 체크리스트가 나온다"
+  const handleApplyDrawingConditions = useCallback(
+    (c: Partial<DesignInput>) => {
+      const next: DesignInput = {
+        ...condition,
+        components: c.components?.length ? c.components : condition.components,
+        shape: c.shape?.length ? c.shape : condition.shape,
+        seedProject: c.seedProject,
+      };
+      setCondition(next);
+      setScenarioTriggered(true);
+      setStage(3);
+      setInferLoading(true);
+      setInferError(null);
+      setRightPanelMode("checklist");
+      fetch("/api/infer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`추론 API 실패 (${res.status})`);
+          return res.json() as Promise<InferResponse>;
+        })
+        .then((data) => {
+          setInferLoading(false);
+          setInferResult(data);
+          setRevealedChecklistCount(data.checklist.length);
+        })
+        .catch((err) => {
+          setInferLoading(false);
+          setInferError(err instanceof Error ? err.message : String(err));
+        });
+    },
+    [condition]
+  );
+
+  // ── 큐레이션: 노드/관계 삭제 · 노드 병합 (인메모리 — 리셋 시 원복) ──
+  const [mergeSource, setMergeSource] = useState<{ id: string; label: string } | null>(null);
+  mergeSourceRef.current = mergeSource;
+
+  const curate = useCallback((body: Record<string, unknown>) => {
+    return fetch("/api/curate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(async (res) => {
+      const d = await res.json();
+      if (!res.ok || !d.ok) throw new Error(d.error ?? `큐레이션 실패 (${res.status})`);
+      return d;
+    });
+  }, []);
+
+  const handleDeleteNode = useCallback(
+    (id: string, label: string) => {
+      if (!window.confirm(`"${label}" 객체와 연결 관계를 삭제할까요?\n(인메모리 편집 — 서버 재시작 시 원복)`)) return;
+      curate({ op: "deleteNode", id })
+        .then((d) => {
+          graphRef.current?.removeFromCanvas([id], []);
+          setFullTotals({ nodes: d.totals.nodes, edges: d.totals.edges });
+          // 삭제 후에도 보던 맥락 유지 — 히스토리에서 삭제된 노드를 걷어내고
+          // 직전 항목(예: 결로·습기)을 다시 선택(포커스+인스펙터 복원).
+          const prev = navHistory.filter((e) => e.id !== id);
+          setNavHistory(prev);
+          const back = prev[prev.length - 1];
+          if (back) handleNodeClick(back.id, { push: false });
+          else setInspectorObj(null);
+        })
+        .catch((e) => setInspectorError(e instanceof Error ? e.message : String(e)));
+    },
+    [curate, navHistory, handleNodeClick]
+  );
+
+  const handleDeleteRel = useCallback(
+    (src: string, rel: string, dst: string, currentId: string) => {
+      curate({ op: "deleteEdge", src, rel, dst })
+        .then((d) => {
+          graphRef.current?.removeFromCanvas([], [`${src}|${rel}|${dst}`]);
+          setFullTotals({ nodes: d.totals.nodes, edges: d.totals.edges });
+          handleNodeClick(currentId, { push: false }); // 인스펙터 새로고침
+        })
+        .catch((e) => setInspectorError(e instanceof Error ? e.message : String(e)));
+    },
+    [curate, handleNodeClick]
+  );
+
+  // 병합: 인스펙터에서 시작 → 다음에 클릭하는 노드가 병합 대상(into)
+  const handleMergeInto = useCallback(
+    (intoId: string) => {
+      if (!mergeSource || intoId === mergeSource.id) return;
+      const from = mergeSource;
+      setMergeSource(null);
+      curate({ op: "merge", from: from.id, into: intoId })
+        .then((d) => {
+          graphRef.current?.removeFromCanvas([from.id], []);
+          if (d.movedEdges?.length) graphRef.current?.addDelta([], d.movedEdges); // 이관 관계 합류(강조)
+          setFullTotals({ nodes: d.totals.nodes, edges: d.totals.edges });
+          handleNodeClick(intoId, { via: "병합", fresh: true });
+        })
+        .catch((e) => setInspectorError(e instanceof Error ? e.message : String(e)));
+    },
+    [mergeSource, curate, handleNodeClick]
+  );
+  handleMergeIntoRef.current = handleMergeInto;
+
+  // ── 다음 액션: 인스펙터의 고장모드/원인을 신규 설계 조건에 리스크로 반영 ──
+  // 추론이 이미 실행된 상태(STAGE 3)라면 새 조건으로 체크리스트를 즉시 재계산한다
+  // (웨이브 연출 없이 결과만 갱신 — "그래프 탐색"이 다음 설계 행동으로 이어지는 경로).
+  const handleAddRiskToCondition = useCallback(
+    (label: string) => {
+      const risk = `${label} 리스크`;
+      const next: DesignInput = condition.shape.includes(risk)
+        ? condition
+        : { ...condition, shape: [...condition.shape, risk] };
+      if (next !== condition) setCondition(next);
+      if (!scenarioTriggered) return; // 아직 추론 전이면 조건에만 반영 — 추론 시 사용됨
+      setInferLoading(true);
+      setInferError(null);
+      setRightPanelMode("checklist");
+      fetch("/api/infer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`추론 API 실패 (${res.status})`);
+          return res.json() as Promise<InferResponse>;
+        })
+        .then((data) => {
+          setInferLoading(false);
+          setInferResult(data);
+          setRevealedChecklistCount(data.checklist.length); // 재계산은 연출 없이 즉시 표시
+        })
+        .catch((err) => {
+          setInferLoading(false);
+          setInferError(err instanceof Error ? err.message : String(err));
+        });
+    },
+    [condition, scenarioTriggered]
+  );
+
+  // ── 검색 (디바운스) — 온톨로지가 구축된 이후(STAGE 2+)에만 활성화 ──
+  const handleSearchChange = useCallback(
+    (q: string) => {
+      setSearchQuery(q);
+      nlSubmittedRef.current = false; // 사용자가 다시 타이핑하면 키워드 드롭다운 복구
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      const query = q.trim();
+      if (!query) {
+        setSearchHits([]);
+        setSearchOpen(false);
+        graphRef.current?.applySearch([], [], "");
+        return;
+      }
+      if (!ontologyBuilt) return; // 그래프가 아직 없으면 검색을 걸지 않는다.
+      searchDebounceRef.current = setTimeout(() => {
+        fetch(`/api/search?q=${encodeURIComponent(query)}`)
+          .then((res) => {
+            if (!res.ok) throw new Error(`검색 실패 (${res.status})`);
+            return res.json() as Promise<SearchResponse>;
+          })
+          .then((data) => {
+            if (nlSubmittedRef.current) return; // Enter로 NL 검색이 실행됐으면 드롭다운을 열지 않는다
+            graphRef.current?.applySearch(data.hits, data.neighbors, query);
+            setSearchHits(data.hits);
+            setSearchOpen(true);
+          })
+          .catch(() => {
+            /* 검색 API 미가용 시 조용히 무시 — UI degrade */
+            setSearchHits([]);
+          });
+      }, 250);
+    },
+    [ontologyBuilt]
+  );
+
+  // ── 검색 결과 클릭 → 그래프 선택(펄스) + 인스펙터 로드 (provenance 이동) ──
+  const handleSelectSearchHit = useCallback(
+    (hit: SearchHit) => {
+      // 검색 드롭다운/입력을 닫고, 남아있는 검색 강조(applySearch dim·pulse)를 먼저 완전히
+      // 해제한다. 그래야 이어지는 selectNode → applyFocus(자기 자신 + 1홉 이웃)가 이겨서
+      // 캔버스에서 그 노드를 직접 클릭한 것과 동일한 포커스 결과가 된다.
+      setSearchOpen(false);
+      setSearchQuery("");
+      setSearchHits([]);
+      graphRef.current?.applySearch([], [], "");
+      handleNodeClick(hit.id, { via: "검색", fresh: true });
+    },
+    [handleNodeClick]
+  );
+
+  // ── 자연어 검색(Enter 제출) — POST /api/nlsearch, 결과는 우측 nlsearch 패널로 ──
+  const handleNLSearch = useCallback(
+    (raw: string) => {
+      const query = raw.trim();
+      if (query.length < 2 || !ontologyBuilt) return; // 빈/사소한 질의는 무시
+      // 인스턴트 키워드 드롭다운을 닫고 자연어 검색 모드로 전환한다.
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      nlSubmittedRef.current = true; // in-flight 키워드 응답이 드롭다운을 다시 열지 못하게
+      setSearchOpen(false);
+      setSearchHits([]);
+      setNlQuery(query);
+      setNlLoading(true);
+      setNlError(null);
+      setNlResult(null);
+      setRightPanelMode("nlsearch");
+
+      fetch("/api/nlsearch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`자연어 검색 실패 (${res.status})`);
+          return res.json() as Promise<NLSearchResponse>;
+        })
+        .then((data) => {
+          setNlResult(data);
+          // 매칭된 객체를 그래프에 강조(펄스) + 이웃 하이라이트.
+          graphRef.current?.applySearch(data.hits, data.neighbors, query);
+        })
+        .catch((err) => {
+          setNlError(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => setNlLoading(false));
+    },
+    [ontologyBuilt]
+  );
+
+  // ── 자연어 검색 결과의 hit 클릭 → 그래프 강조 해제 후 해당 노드 포커스 + 인스펙터 로딩 ──
+  const handleSelectNLHit = useCallback(
+    (id: string) => {
+      graphRef.current?.applySearch([], [], "");
+      handleNodeClick(id, { via: "자연어 검색", fresh: true });
+    },
+    [handleNodeClick]
+  );
+
+  // ── 문서 인제스천 — 성공 시 좌측 원천 패널의 파일 목록/카운트를 최신화 ──
+  const refreshSources = useCallback(() => {
+    fetch("/api/sources")
+      .then((res) => {
+        if (!res.ok) throw new Error(`원천 조회 실패 (${res.status})`);
+        return res.json() as Promise<SourcesResponse>;
+      })
+      .then((data) => setSources(data.sources))
+      .catch(() => {
+        /* 목록 갱신 실패는 조용히 무시 — 기존 목록 유지 */
+      });
+  }, []);
+
+  // POST /api/ingest 공통 경로 — FormData(파일 업로드) 또는 JSON 문자열({sample:true}).
+  const runIngest = useCallback(
+    (body: FormData | string) => {
+      setIngestLoading(true);
+      setIngestError(null);
+      const init: RequestInit =
+        typeof body === "string"
+          ? { method: "POST", headers: { "Content-Type": "application/json" }, body }
+          : { method: "POST", body };
+      fetch("/api/ingest", init)
+        .then(async (res) => {
+          const data = (await res.json().catch(() => null)) as
+            | (IngestResponse | { ok: false; error?: string })
+            | null;
+          if (!res.ok || !data || data.ok !== true) {
+            const msg =
+              data && data.ok === false && typeof data.error === "string"
+                ? data.error
+                : `인제스천 API 실패 (${res.status})`;
+            throw new Error(msg);
+          }
+          return data;
+        })
+        .then((data) => {
+          setIngestResult(data);
+          setIngestHistory((prev) => [data, ...prev]);
+          if (!data.alreadyIngested && (data.delta.nodes.length > 0 || data.delta.edges.length > 0)) {
+            // 그래프 델타 합류(스폰+펄스, doc 노드는 Graph 내부에서 제외).
+            graphRef.current?.addDelta(data.delta.nodes, data.delta.edges);
+            // 전체 규모 카운터(객체/관계)를 서버 totals로 갱신.
+            setFullTotals(data.totals);
+            // 라벨 색인·그래프 데이터 캐시에도 병합(히스토리 라벨/후속 시나리오 trace 대비).
+            const idx: NodeIndex = new Map(nodeIndexRef.current);
+            for (const n of data.delta.nodes) idx.set(n.id, { label: n.label, type: n.type });
+            nodeIndexRef.current = idx;
+            setNodeIndex(idx);
+            if (graphDataRef.current) {
+              graphDataRef.current = {
+                nodes: [...graphDataRef.current.nodes, ...data.delta.nodes],
+                edges: [...graphDataRef.current.edges, ...data.delta.edges],
+              };
+            }
+          }
+          refreshSources();
+          // 샘플 인제스천: 결로·습기 노드 활성화(포커스) — 새 3개 노드가 그 둘레에 합류한 모습이 보이게.
+          const focusId = (data as { focus?: string }).focus;
+          if (focusId) {
+            setTimeout(() => handleNodeClick(focusId, { via: "샘플 인제스천", fresh: true }), 700);
+          }
+        })
+        .catch((err) => setIngestError(err instanceof Error ? err.message : String(err)))
+        .finally(() => setIngestLoading(false));
+    },
+    [refreshSources]
+  );
+
+  const handleIngestFile = useCallback(
+    (file: File) => {
+      if (ingestLoading) return;
+      if (!/\.(xlsx|pptx|docx)$/i.test(file.name)) {
+        setIngestError("지원하지 않는 형식입니다 — .xlsx / .pptx / .docx 파일만 업로드할 수 있습니다.");
+        setIngestResult(null);
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setIngestError("파일이 10MB를 초과합니다.");
+        setIngestResult(null);
+        return;
+      }
+      const fd = new FormData();
+      fd.append("file", file);
+      runIngest(fd);
+    },
+    [ingestLoading, runIngest]
+  );
+
+  const handleIngestSample = useCallback(() => {
+    if (ingestLoading) return;
+    runIngest(JSON.stringify({ sample: true }));
+  }, [ingestLoading, runIngest]);
+
+  // 인제스천 결과의 새 객체 클릭 → 기존 선택 funnel로(그래프 포커스 + 인스펙터).
+  const handleIngestNodeSelect = useCallback(
+    (id: string) => handleNodeClick(id, { via: "인제스천", fresh: true }),
+    [handleNodeClick]
+  );
+
+  const handleReset = useCallback(() => {
+    window.location.reload();
+  }, []);
+
+  return (
+    <>
+      <header className="topbar">
+        <div className="brand">
+          <span className="logo">
+            SL <em>OntoGround</em>
+          </span>
+          <span className="sub">FMEA 지식 온톨로지 워크벤치 · for SL Corporation</span>
+        </div>
+        <div className="grow" />
+        <div className={"search" + (nlLoading ? " search-busy" : "")}>
+          {nlLoading ? (
+            <span className="search-spinner" aria-hidden="true" />
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#93a1b5" strokeWidth={2.4}>
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4.4-4.4" />
+            </svg>
+          )}
+          <input
+            id="q"
+            type="text"
+            placeholder="온톨로지 검색 — 간극, 배광, FMVSS… · Enter로 문장 검색"
+            autoComplete="off"
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onFocus={() => {
+              if (searchHits.length > 0) setSearchOpen(true);
+            }}
+            onBlur={() => {
+              // 드롭다운 항목의 onMouseDown이 먼저 선택을 확정하므로, 약간의 지연 후 닫는다.
+              window.setTimeout(() => setSearchOpen(false), 120);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setSearchOpen(false);
+                return;
+              }
+              if (e.key === "Enter") {
+                // Enter = 자연어(문장) 검색. 인스턴트 키워드 드롭다운은 닫고 NL 경로로.
+                e.preventDefault();
+                handleNLSearch(searchQuery);
+              }
+            }}
+          />
+          {searchOpen && ontologyBuilt && <SearchResults hits={searchHits} onSelect={handleSelectSearchHit} />}
+        </div>
+        <input
+          ref={drawingInputRef}
+          type="file"
+          accept=".dxf"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleDrawingFile(f);
+            e.target.value = "";
+          }}
+        />
+        <button
+          className="btn btn-ghost"
+          id="btnDrawing"
+          disabled={!ontologyBuilt || drawingLoading}
+          title={ontologyBuilt ? "도면(.dxf)을 업로드해 형상 유사 과거 설계를 탐색" : "온톨로지 구축 후 사용 가능"}
+          onClick={() => setRightPanelMode("drawing")}
+        >
+          {drawingLoading ? "📐 분석 중…" : "📐 도면 분석"}
+        </button>
+        <button
+          className="btn btn-ghost"
+          id="btnIngest"
+          disabled={!ontologyBuilt}
+          title={ontologyBuilt ? "새 문서를 온톨로지에 증분 반영" : "온톨로지 구축 후 사용 가능"}
+          onClick={() => setRightPanelMode("ingest")}
+        >
+          📥 문서 인제스천
+        </button>
+        <button className="btn btn-ghost" id="btnReset" onClick={handleReset}>
+          처음부터
+        </button>
+        <button
+          className="btn btn-primary"
+          id="btnScenario"
+          disabled={!ontologyBuilt || scenarioTriggered}
+          onClick={handleRunScenario}
+        >
+          ▶ 신규 설계 추론
+        </button>
+      </header>
+
+      <div className="main">
+        <SourcePanel
+          counts={graphCounts}
+          sources={sources}
+          sourcesLoading={sourcesLoading}
+          sourcesError={sourcesError}
+          onSelectSource={handleSelectSource}
+        />
+
+        <section className="canvas-wrap" id="cw">
+          <div className="stagechip" id="stageChip">
+            STAGE <b>{stage}</b> / 3 — {stageName}
+          </div>
+          {/* PHASE 1: 구축 후에는 뷰와 무관하게 전체 온톨로지 규모 + 표시 중 수를 보여준다. */}
+          <div className="counter">
+            <span className="c">
+              객체 <b>{ontologyBuilt && fullTotals ? fullTotals.nodes : graphCounts.nodes}</b>
+            </span>
+            <span className="c">
+              관계 <b>{ontologyBuilt && fullTotals ? fullTotals.edges : graphCounts.edges}</b>
+            </span>
+            {ontologyBuilt && viewInfo && (
+              <span className="c">
+                표시 중 <b>{viewInfo.visible}</b>
+              </span>
+            )}
+          </div>
+          {ontologyBuilt && viewInfo && (
+            <button
+              className="viewtoggle"
+              id="viewToggle"
+              title={viewInfo.full ? "큐레이션된 핵심 백본만 표시" : "숨긴 자동 추출 객체까지 모두 표시"}
+              onClick={() => graphRef.current?.setFullView(!viewInfo.full)}
+            >
+              {viewInfo.full ? "핵심만 보기" : `숨겨진 객체 ${viewInfo.hiddenCount}개 더 보기`}
+            </button>
+          )}
+          {mergeSource && (
+            <div className="viewtoggle" style={{ top: 88, right: 16, color: "#b3453c", borderColor: "#f3d5d2" }}>
+              ⇄ 병합 모드: &ldquo;{mergeSource.label}&rdquo; → 대상 노드를 클릭하세요{" "}
+              <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => setMergeSource(null)}>
+                취소
+              </span>
+            </div>
+          )}
+          {ontologyBuilt && focusInfo && (focusInfo.hidden > 0 || focusInfo.expanded) && (
+            <button
+              className="viewtoggle focus-more"
+              title={
+                focusInfo.expanded
+                  ? "직접 원인·조치·품목 등 핵심 관계만 표시"
+                  : "선택 객체의 모든 연결을 표시"
+              }
+              onClick={() => graphRef.current?.setFocusExpand(!focusInfo.expanded)}
+            >
+              {focusInfo.expanded ? "핵심 관계만 보기" : `숨겨진 관계 ${focusInfo.hidden}개 더 보기`}
+            </button>
+          )}
+
+          {!chaosHidden && (
+            <div className="chaos" id="chaos">
+              {chaosChips.map((c) => (
+                <div
+                  key={c.key}
+                  className={"chip" + (chaosGone ? " gone" : "")}
+                  style={
+                    {
+                      left: `${c.left}%`,
+                      top: `${c.top}%`,
+                      transform: `rotate(${c.rot}deg)`,
+                      transitionDelay: `${c.delay}s`,
+                      "--fx": `${c.fx}px`,
+                      "--fy": `${c.fy}px`,
+                    } as CSSProperties
+                  }
+                >
+                  <span className="x">{c.ext}</span>
+                  {c.fn}
+                </div>
+              ))}
+            </div>
+          )}
+          {!chaosHidden && (
+            <div className="chaos-cta" id="chaosCta" style={{ opacity: chaosGone ? 0 : 1, transition: "opacity .5s" }}>
+              <div className="hint">
+                {sourcesLoading ? (
+                  "흩어진 원천 파일을 불러오는 중…"
+                ) : sources.length > 0 ? (
+                  <>
+                    {[...sourceTypeCounts.entries()].map(([type, count], i) => (
+                      <span key={type}>
+                        {i > 0 && " · "}
+                        {type} <b>{count}</b>
+                      </span>
+                    ))}{" "}
+                    — 총 <b>{sources.length}</b>개 파일, 설계자 한 사람이 다 기억할 수 없습니다
+                  </>
+                ) : (
+                  <>
+                    원천 파일 없음{sourcesError ? ` (${sourcesError})` : ""} — 시드 데이터로 동작 중
+                  </>
+                )}
+              </div>
+              <button className="btn btn-primary" id="btnBuild" disabled={buildStarted} onClick={() => handleBuildOntology()}>
+                ✦ 온톨로지 구축 시작 →
+              </button>
+            </div>
+          )}
+          {ontologyError && (
+            <div
+              className="disclaimer"
+              style={{ left: 16, right: "auto", bottom: 46, color: "#FF5470" }}
+            >
+              온톨로지 API 오류: {ontologyError}
+            </div>
+          )}
+
+          <Graph
+            ref={graphRef}
+            onNodeClick={handleGraphNodeClick}
+            onViewChange={setViewInfo}
+            onFocusChange={setFocusInfo}
+          />
+
+          <div className={"ingest" + (ingestVisible ? " show" : "")} id="ingest">
+            <div className="ih">
+              <span className="t">DOCLING INGESTION</span>
+              <span className="p" id="ipct">
+                {ingestPct}%
+              </span>
+            </div>
+            <div className="lines" id="ilines">
+              {ingestLines.map((html, i) => (
+                // eslint-disable-next-line react/no-danger
+                <div key={i} dangerouslySetInnerHTML={{ __html: html }} />
+              ))}
+            </div>
+            <div className="ibar">
+              <i id="ibar" style={{ width: `${ingestPct}%` }} />
+            </div>
+          </div>
+
+          <div className="zoombar">
+            <button id="zin" title="확대" onClick={() => graphRef.current?.zoomBy(0.85)}>
+              ＋
+            </button>
+            <button id="zout" title="축소" onClick={() => graphRef.current?.zoomBy(1.18)}>
+              －
+            </button>
+            <button id="zfit" title="전체 보기" onClick={() => graphRef.current?.zoomFit()}>
+              ⤢
+            </button>
+          </div>
+        </section>
+
+        <aside className="side right" id="insp">
+          {rightPanelMode === "checklist" ? (
+            <Checklist
+              loading={inferLoading}
+              error={inferError}
+              result={inferResult}
+              condition={condition}
+              revealedCount={revealedChecklistCount}
+              nodeIndex={nodeIndex}
+              onSelectObject={handleChecklistSelect}
+            />
+          ) : rightPanelMode === "nlsearch" ? (
+            <NLSearchPanel
+              query={nlQuery}
+              loading={nlLoading}
+              error={nlError}
+              result={nlResult}
+              onSelectHit={handleSelectNLHit}
+              onClose={() => {
+                graphRef.current?.applySearch([], [], "");
+                setRightPanelMode("inspector");
+              }}
+            />
+          ) : rightPanelMode === "ingest" ? (
+            <IngestPanel
+              loading={ingestLoading}
+              error={ingestError}
+              result={ingestResult}
+              history={ingestHistory}
+              onIngestFile={handleIngestFile}
+              onIngestSample={handleIngestSample}
+              onSelectNode={handleIngestNodeSelect}
+              onClose={() => setRightPanelMode("inspector")}
+            />
+          ) : rightPanelMode === "drawing" ? (
+            <DrawingPanel
+              loading={drawingLoading}
+              error={drawingError}
+              result={drawingResult}
+              onSelectObject={(id) => handleNodeClick(id, { via: "도면 분석", fresh: true })}
+              onApplyConditions={handleApplyDrawingConditions}
+              onClose={() => setRightPanelMode("inspector")}
+              onPickFile={() => drawingInputRef.current?.click()}
+              onSample={() => handleDrawingFile({ sample: true })}
+            />
+          ) : rightPanelMode === "source" && selectedSource ? (
+            <SourcePreview source={selectedSource} onClose={() => setRightPanelMode("inspector")} />
+          ) : rightPanelMode === "condensation" ? (
+            condensationRegions ? (
+              <CondensationPanel
+                regions={condensationRegions}
+                onSelectObject={handleCondensationSelect}
+                onOpenEvidence={handleOpenEvidenceFile}
+                onClose={() => setRightPanelMode("inspector")}
+              />
+            ) : (
+              <>
+                <div className="sec-label">결로 지역별 분석</div>
+                <div className="insp-empty">
+                  {condensationError ? (
+                    <>
+                      지역 목록을 불러오지 못했습니다.
+                      <br />
+                      <span className="k">{condensationError}</span>
+                    </>
+                  ) : (
+                    "불러오는 중…"
+                  )}
+                </div>
+              </>
+            )
+          ) : (
+            <Inspector
+              loading={inspectorLoading}
+              error={inspectorError}
+              obj={inspectorObj}
+              history={navHistory}
+              onGo={handleInspectorGo}
+              onBack={handleNavBack}
+              onJumpTo={handleNavJumpTo}
+              onOpenCondensation={handleOpenCondensation}
+              onAddToCondition={handleAddRiskToCondition}
+              conditionRisks={condition.shape}
+              onOpenDoc={handleOpenEvidenceFile}
+              sourceFiles={sourceFileNames}
+              onDeleteNode={handleDeleteNode}
+              onDeleteRel={handleDeleteRel}
+              onMergeStart={(id, label) => setMergeSource({ id, label })}
+            />
+          )}
+        </aside>
+      </div>
+
+      <Stepper
+        stage={stage}
+        condition={condition}
+        onChangeCondition={setCondition}
+        editable={stage >= 2 && !scenarioTriggered}
+      />
+    </>
+  );
+}

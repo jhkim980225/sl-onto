@@ -1,0 +1,73 @@
+# feature: ingestion — 비정형 데이터 → 정형화 → 온톨로지
+
+## 목표
+실제 `.xlsx/.pptx/.docx` 원천 파일을 파싱·정규화해 온톨로지를 구성한다. 데모의
+"흩어진 원천 → Docling 정형화 → 지식 온톨로지" 흐름을 **하드코딩 seed가 아니라 실제 파일에서** 재현.
+
+## 핵심 원칙 — 라운드트립 충실도
+생성 스크립트가 `lib/seed.ts`(권위 데이터)를 읽어 사람이 작성한 듯한 파일로 내보내고,
+파서가 그 파일을 읽어 **동일한 객체 id/관계로 복원**한다. → `ingestAll()` 출력 ≈ seed(문서 위성 제외).
+따라서 store를 파싱 결과로 바꿔도 infer/search/UI가 안 깨진다.
+
+## 원천 파일 (data/sources/) — 약 34개
+`scripts/gen-sources.ts` 가 seed 기반으로 생성(결정적). FMEA·재발방지·8D·품질리포트·참조 xlsx 를 아우르며
+FMEA 행은 총 약 547줄. 인제스천 결과 온톨로지 규모 ≈ **170 노드 / 2,156 엣지**(auto-create 포함).
+
+| 유형 | 파일(예) | 인코딩하는 것 |
+|---|---|---|
+| xlsx (FMEA 검토시트) | `FMEA_HL07_검토시트.xlsx` 등 | item·fm·cause·action·S·O·proj (행 단위 FMEA 라인) |
+| pptx (재발방지 대책서·8D) | `재발방지_간극클레임.pptx`·`8D_융착불량_HL06.pptx` | fm→cause→action + 근거·proj (현상/원인/대책 슬라이드, 산문형 8D 포함) |
+| docx (품질 리포트) | `품질리포트_결로.docx` | proj·fm·cause·action·비고 |
+| xlsx (참조 마스터데이터) | `법규기준.xlsx`·`설계표준_마스터.xlsx`·`고객사_스펙.xlsx`·`유사도매트릭스.xlsx` | reg·master·spec·SIMILAR·scenario(PJ26) |
+
+> reg/master/spec/유사도는 현실에서도 정형 참조 테이블이므로 구조화 xlsx로 둔다. FMEA 지식은 비정형(pptx/docx)+반정형(xlsx)에서 추출.
+> Office 임시 잠금 파일(`~$*`)은 파싱에서 제외된다.
+
+## 파이프라인 (lib/ingest/)
+- `xlsx.ts` `pptx.ts` `docx.ts` — 포맷별 파서(우리가 만든 파일이라 구조 예측 가능).
+  - xlsx: SheetJS `sheet_to_json`.
+  - pptx/docx: `jszip`로 압축 해제 → `fast-xml-parser`로 `<a:t>`/`<w:t>` 텍스트 추출 → 섹션 파싱.
+- `normalize.ts` — 원문 문자열 → 표준 객체 id 매핑(통제 어휘 사전/동의어) + **확신도** 부여. 원본값 보존
+  (골든 룰 #3). 확신도 티어: 정확한 id 1.00 · 정확한 라벨 0.95 · 동의어 0.82 · 비표준 원본코드 0.72(예 "외관-B"→FMGAP).
+  - **`resolveOrCreate(raw, type)` (신규):** 통제 어휘에 없는 원문이라도 그 값이 놓인 컬럼/섹션의 기대 타입을 알면
+    **신규 엔티티를 자동 생성**해 온톨로지에 편입. id = `AUTO_<TYPE>_<FNV해시>`(결정론적), label = 원문(NFC),
+    확신도 **0.66**("추출됐으나 큐레이션 전"). 같은 (타입,라벨)은 같은 id 로 dedupe·병합.
+  - **`scanEntities(text)` / `EntityHit`:** 자유 텍스트에서 통제 어휘 라벨/동의어를 스캔(1글자 키 제외 → 오탐 방지).
+- `index.ts` — `ingestAll(dir?): { nodes, edges, sources }`  (테스트/스크립트가 임의 디렉터리 지정 가능)
+  - 모든 파일 파싱 → 레코드 → 정규화(정형 컬럼은 타입 지정 → auto-create) → 노드·엣지 구축(중복 병합).
+  - 각 원천 파일은 `doc`(근거) 노드가 되고, 추출한 객체에 `EVIDENCED_BY` 연결.
+  - `sources: SourceInfo[]` = { file, type, sizeBytes, extracted:{objects,relations}, preview }.
+  - 개별 파일/시트 파싱 실패는 격리(건너뛰고 나머지 계속) — 견고성.
+
+## 견고 파싱 (실무 지저분한 문서 대응)
+데모용 `data/sources/` 는 "깨끗한" 포맷이지만, 실무 문서는 타이틀블록·2행 병합헤더·세로 병합·대체 컬럼명·산문형이다.
+`data/real-samples/`(별도, 데모 미오염 · `scripts/gen-real-samples.ts` 생성)로 이를 재현하고 처리한다.
+
+- **xlsx 휴리스틱**(`ingestXlsxHeuristic`, `lib/ingest/xlsx.ts::readWorkbookGrids`):
+  - `fillMerges` — 병합 범위 좌상단 값을 범위 전체(빈 셀)에 전파(세로 병합 부품셀·2행 헤더).
+  - `detectHeader` — 앞쪽 최대 15행에서 FMEA 컬럼 키워드가 가장 잘 맞는 **헤더행(또는 2행 병합)** 자동 탐지.
+  - `matchRole` / `ROLE_SYNS` — **컬럼명 동의어 매핑**(부품명·품명·item / 불량모드·고장형태·현상 / 발생원인·메커니즘 / 권고조치·시정 / RPN·검출도 등).
+- **자유 텍스트 링크**(`linkFreeText`, pptx/docx): 정형 앵커가 **아무 관계도 못 뽑을 때만 폴백**.
+  통제 어휘 스캔 + "키: 값" 라벨 필드로 item/fm/cause/action/proj 수집 → 문서 내 공동언급을 HAS_FAILURE/CAUSED_BY/MITIGATED_BY 로 연결
+  (fm 없으면 부품·원인→조치 폴백, 예: LED 방열 CTHERM→ARIB).
+- **효과(측정):** `data/real-samples/` 에서 **BEFORE(정형 전용 파서) = 0객체/0관계 → AFTER(견고 파서) = 42객체/36관계**.
+  검증 스크립트: `scripts/check-before.ts`(구파서) · `scripts/check-real-samples.ts`(견고파서). 단위 테스트 `lib/ingest/robust.test.ts`.
+
+### 정직한 한계 (Docling 경계)
+- 자유 텍스트에서 **과다 링크(over-linking)** 경향(공동언급이 실제 인과가 아닐 수 있음).
+- 여전히 필요: **Docling** — 스캔/이미지 PDF, 표를 찍은 사진, 복잡한 중첩/전치(transposed) 표. 이 범위는 MVP 밖(Python 사이드카).
+
+## API
+- `GET /api/sources` — 원천 파일 목록 + 파일별 추출 요약/미리보기(정형화 전→후 시연용).
+
+## 저장소 배선
+- `lib/store.ts`가 기동 시 `ingestAll()`로 온톨로지 구축(파싱 실패 시 seed로 폴백).
+- 무상태: `data/sources`를 이미지에 포함(standalone `outputFileTracingIncludes`).
+
+## UI (STAGE 1·2)
+- STAGE 1: `/api/sources`로 실제 파일 목록·카운트 표시(하드코딩 숫자 제거).
+- STAGE 2: "Docling 정형화" 시 파일별 추출 객체를 스트리밍(원문 → 표준 매핑·확신도 노출).
+
+## 검증
+- 라운드트립: `ingestAll()`의 코어 노드/엣지 = seed 코어(id 집합 동일).
+- 스크립트 재생성 결정적(no random/Date). 파싱 후 infer 시나리오 핵심 항목(간극·수축·배광·방열·휘도) 유지.

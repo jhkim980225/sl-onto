@@ -1,0 +1,75 @@
+# requirements.md — 배경·요구사항·범위
+
+> 온톨로지 모델/스키마는 [data-model.md](data-model.md), 스택은 [tech-stack.md](tech-stack.md) 참조.
+> 이 문서는 **왜 만들고, 무엇을 어디까지 하는가**만 다룬다.
+
+- 작성일: 2026-07-03 · 스택: Next.js · 목표: 회사 클라우드에 올리는 동작하는 MVP
+- 전제: 텍스트 우선 · 이미지/도면 이해 없음 · 로그인 없음 · 합성 데이터로 시작
+
+## 1. 한 줄 요약
+> 흩어진 FMEA 문서 → 온톨로지 저장소 적재 → 신규 설계 조건 입력 시 유사 사례를 그래프 탐색해
+> **근거·확신도가 붙은 설계 검토 체크리스트**를 자동 생성한다.
+
+## 2. 배경 (출처: `정리할거.txt`)
+SL 자동차 램프 FMEA는 필수 업무지만 과거 자료가 비정형(PPT·Word·Excel)으로 흩어져 활용이 제한적이다.
+
+| 문제(원천 요구) | 해결 방식 |
+|---|---|
+| 비정형·분산으로 핵심정보 추출 어려움 | 온톨로지로 구조화 적재 |
+| 키워드 검색으로 문맥 유사 사례 탐색 불가 | 의미/그래프 기반 유사 사례 탐색 |
+| 신규 설계가 경험 의존, 품질 편차 | 유사 사례 기반 고장모드 추천 + 체크리스트 초안 |
+| 근거 추적 불가 | 결론마다 원본 문서 근거 + 확신도 |
+
+과제 원문은 과제①(FMEA 자동화 Agent) + 과제②(150TB 멀티모달 K8s 플랫폼).
+**이 MVP는 과제①의 핵심 루프를 텍스트 우선으로 구현.** 과제②는 확장(§5).
+
+## 3. 데모가 확정한 것 (요약)
+- 온톨로지 객체 9종 · 관계 12종 · 속성/근거/확신도 모델 → [data-model.md](data-model.md)
+- 3단계 흐름(흩어진 원천 → 온톨로지 구축 → 신규 설계 추론) → [features/workbench-ui.md](features/workbench-ui.md)
+- 산출물: 설계 검토 체크리스트(제목·인과설명·근거칩·확신도%) → [features/inference.md](features/inference.md)
+
+## 4. MVP 범위
+### ✅ 구현
+- 온톨로지 저장소(객체·관계·속성·근거) — **실제 원천 파일 인제스천**(auto-create·견고 파싱), 실패 시 seed 폴백
+- API: `/ontology` `/object/{id}` `/search` `/nlsearch` `/infer` `/sources` `/condensation`
+- 그래프 탐색 추론 → 체크리스트(근거+확신도) **동적 생성**(상위 8)
+- 기존 SVG 데모 UI를 API에 연결(3단계 유지) + 그래프 인터랙션(포커스·타입 존·방사형)
+- 검색: 키워드 + 그래프 스코어링 · **자연어 규칙기반 검색**
+- 결로·습기 지역별 시연 시나리오(지역 상세 + 설계도 SVG)
+- 라이트 SL 브랜드 테마 · Docker 단일 이미지로 **FEDA K8s 배포 완료(v7)**
+
+### ❌ 구현 안 함 (YAGNI/확장기)
+- Docling(스캔/이미지 PDF·표 사진·복잡 중첩표), 도면/이미지 이해(VLM), 멀티모달 임베딩
+- 신경망 임베딩·벡터DB(슬롯만 비움 — 사내 임베딩 모델은 한국어 변별 실패로 미채택)
+- 외부 데이터(논문·특허·소비자 반응) 연계
+- 로그인·멀티유저·객체 편집/쓰기
+- 150TB·K8s 대규모 스케일(HPA)
+
+## 5. 요구사항 ↔ 구현 추적표
+| `정리할거.txt` 요구 | MVP | 확장 |
+|---|---|---|
+| 비정형 문서 핵심정보 자동추출 | **실제 xlsx/pptx/docx 파싱** + auto-create + 견고 파싱 | Docling(스캔/이미지 PDF·표 사진) |
+| 의미 기반 유사 사례 검색 | 키워드+그래프 · **자연어 규칙기반 검색** | 임베딩 / 사내 LLM(옵트인) |
+| 신규 설계 고장모드 자동추천 | `/infer` 그래프 탐색(상위 8) | + LLM 초안 |
+| 리스크·영향 분석 + 맞춤 FMEA 초안 | 체크리스트(근거+확신도) | FMEA 문서 생성 |
+| 도면/이미지 이해 | **결로 지역별 설계도 SVG**(온톨로지 링크된 단면도) | 실 CAD/PDF 도면 뷰어·VLM |
+| 외부 데이터 연계 | ❌ | 논문·특허·소비자 |
+| 회사 클라우드 배포 | **완료 — FEDA K8s v7 (NodePort 30494)** | HPA·SSO |
+
+## 6. 완료 기준 (Definition of Done)
+- [x] STAGE 2에서 온톨로지가 저장소에서 로드되어 렌더 (인제스천 결과 ≈170 노드/2156 엣지, seed 폴백 시 ≈275)
+- [x] 노드 클릭 시 `/api/object`로 실제 속성·관계·근거 표시 (인스펙터 검증)
+- [x] STAGE 3에서 조건 입력 → `/api/infer`가 **계산된** 체크리스트 반환(하드코딩 아님, 상위 8 캡·`total`)
+- [x] 온톨로지가 **실제 원천 파일**(xlsx/pptx/docx 약 34개)에서 인제스천되어 구축(≈170 노드/2156 엣지) ([features/ingestion.md](features/ingestion.md))
+- [x] 통제 어휘에 없는 값도 **auto-create**로 편입(id `AUTO_*`, 확신도 0.66)
+- [x] **견고 파싱**: 지저분한 실무 문서(병합헤더·동의어 컬럼·산문) 처리 — real-samples BEFORE 0/0 → AFTER 42객체/36관계
+- [x] 체크리스트 항목 클릭 → 상세(근거 경로·근거칩·확신도) + 근거 클릭 시 그래프 선택
+- [x] 검색 → 드롭다운 결과 클릭 → 노드 포커스 + 인스펙터
+- [x] **자연어 검색**(Enter) → `/api/nlsearch` 규칙기반 해석·관련 객체·이웃 ([features/nlsearch.md](features/nlsearch.md))
+- [x] **결로 지역별 시나리오**: 지역 탭 + 상세 + 설계도 SVG ([features/condensation-scenario.md](features/condensation-scenario.md))
+- [x] **그래프 인터랙션**: 클릭 포커스/디밍·타입 존·방사형 레이아웃 ([features/graph-interaction.md](features/graph-interaction.md))
+- [x] 전체 테스트 green (`npm test` 26 pass)
+- [x] STAGE 1 원천 패널이 **실제 파일** 목록 + 클릭 시 정형화 미리보기(원문→표준 매핑·확신도) 표시
+- [x] `next build` standalone 이미지 검증 — data/sources 트레이싱 + 7 API 동작 확인
+- [x] Dockerfile + [deployment.md](deployment.md) 준비 완료
+- [x] **회사 클라우드 배포 완료** — FEDA K8s ns `sl-ontoground`, v7, NodePort 30494 → `http://192.168.0.100:30494/`

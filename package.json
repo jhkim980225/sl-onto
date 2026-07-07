@@ -1,0 +1,28 @@
+{
+  "name": "feda-ontoground",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "node --test --experimental-strip-types"
+  },
+  "dependencies": {
+    "next": "15.1.6",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "zod": "^3.24.1",
+    "xlsx": "0.18.5",
+    "jszip": "3.10.1",
+    "fast-xml-parser": "4.5.1"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "@types/node": "22.10.7",
+    "@types/react": "19.0.7",
+    "@types/react-dom": "19.0.3",
+    "pptxgenjs": "3.12.0",
+    "docx": "9.1.1"
+  }
+}

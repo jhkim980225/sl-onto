@@ -1,0 +1,10 @@
+node_modules
+.next
+npm-debug.log*
+.git
+.gitignore
+*.md
+docs
+FMEA_온톨로지_시연_v2.html
+정리할거.txt
+.env*

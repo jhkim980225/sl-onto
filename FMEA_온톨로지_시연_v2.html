@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FEDA OntoGround — FMEA 지식 온톨로지 워크벤치 (시연 v2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0E0C09; --bg-raise:#16120D; --panel:#131009;
+  --line:#2B241A; --line-soft:#211B12;
+  --ink:#F2EDE2; --ink-dim:#A69C8A; --ink-faint:#6E6555;
+  --amber:#FFB454; --beam:#FFE9C2;
+  --c-item:#FFC46B; --c-fm:#FF5470; --c-cause:#FF8A3D; --c-action:#5EDC9A;
+  --c-reg:#5EA8FF; --c-proj:#B18CFF; --c-master:#4FE0D2; --c-spec:#93A8FF; --c-doc:#7D7566;
+  --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans KR',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;font-size:14px}
+button{font-family:var(--sans);cursor:pointer;border:none;background:none;color:inherit}
+button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* ── 상단 바 ── */
+.topbar{height:56px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#161209,#100D08)}
+.brand{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
+.brand .logo{font-weight:700;font-size:16px}
+.brand .logo em{font-style:normal;color:var(--amber)}
+.brand .sub{font-size:11.5px;color:var(--ink-dim)}
+.brand .tag{font-family:var(--mono);font-size:10px;color:var(--bg);background:var(--amber);border-radius:3px;padding:2px 6px;font-weight:600}
+.topbar .grow{flex:1}
+.search{display:flex;align-items:center;gap:8px;background:var(--bg-raise);border:1px solid var(--line);border-radius:8px;padding:7px 12px;min-width:220px}
+.search input{background:none;border:none;color:var(--ink);font-size:13px;width:100%}
+.search input::placeholder{color:var(--ink-faint)}
+.btn{border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:500;transition:transform .12s,box-shadow .12s}
+.btn-primary{background:var(--amber);color:#1A1204;font-weight:700;box-shadow:0 0 18px rgba(255,180,84,.25)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 0 26px rgba(255,180,84,.4)}
+.btn-primary:disabled{background:#4A3E29;color:#8A7B5F;box-shadow:none;cursor:not-allowed;transform:none}
+.btn-ghost{border:1px solid var(--line);color:var(--ink-dim)}
+.btn-ghost:hover{color:var(--ink);border-color:#4A4030}
+
+/* ── 레이아웃 ── */
+.main{display:grid;grid-template-columns:252px 1fr 340px;height:calc(100vh - 56px - 58px)}
+.side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:16px 14px}
+.side.right{border-right:none;border-left:1px solid var(--line)}
+.side::-webkit-scrollbar{width:8px}
+.side::-webkit-scrollbar-thumb{background:#2E2718;border-radius:4px}
+.sec-label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--ink-faint);text-transform:uppercase;margin:18px 0 10px}
+.sec-label:first-child{margin-top:2px}
+.src-row{display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--line-soft)}
+.src-row .ext{font-family:var(--mono);font-size:10px;font-weight:600;width:44px;text-align:center;padding:3px 0;border-radius:4px;background:#242013;color:var(--ink-dim)}
+.src-row .nm{flex:1;font-size:12px;color:var(--ink-dim)}
+.src-row .ct{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+.src-total{display:flex;justify-content:space-between;padding:10px 4px 2px;font-size:13px}
+.src-total b{font-family:var(--mono);color:var(--amber)}
+.pipe{margin:14px 0 0;padding:12px;border:1px dashed #3A3120;border-radius:10px;text-align:center}
+.pipe .arrow{color:var(--amber);font-size:16px;line-height:1}
+.pipe .t{font-size:12px;color:var(--ink-dim);margin-top:4px}
+.pipe .t b{color:var(--ink)}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+.lg{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-dim)}
+.lg .dot{width:10px;height:10px;border-radius:3px;flex:none}
+.lg .n{font-family:var(--mono);font-size:11px;color:var(--ink-faint);margin-left:auto}
+
+/* ── 캔버스 ── */
+.canvas-wrap{position:relative;overflow:hidden;background:radial-gradient(1200px 700px at 50% 46%,#171208 0%,var(--bg) 62%)}
+.canvas-wrap::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(circle,#2A2314 1px,transparent 1px);background-size:26px 26px;opacity:.32}
+svg#graph{width:100%;height:100%;display:block;cursor:grab}
+svg#graph.dragging{cursor:grabbing}
+
+.edge{stroke:#39311F;stroke-width:1.1;fill:none}
+.edge.core{stroke:#453A24;stroke-width:1.4}
+.edge.lit{stroke:var(--amber);stroke-width:2.2;filter:drop-shadow(0 0 5px rgba(255,180,84,.6))}
+.edge.dim{opacity:.07}
+.edge.hov{stroke:#B99453;stroke-width:1.8}
+.edge-label{font-family:var(--mono);font-size:9.5px;fill:var(--amber);opacity:0;pointer-events:none;transition:opacity .3s}
+.edge-label.lit{opacity:.95}
+
+.node{cursor:pointer}
+.node .box{transition:filter .25s,stroke .25s}
+.node.dim{opacity:.10}
+.node.lit .box{filter:drop-shadow(0 0 9px rgba(255,180,84,.55))}
+.node.sel .box{stroke:var(--beam)!important;stroke-width:2}
+.node .glyph{font-family:var(--mono);font-size:9px;font-weight:600;pointer-events:none}
+.node .lbl{font-size:12.5px;font-weight:500;fill:var(--ink);pointer-events:none}
+.node .sub{font-family:var(--mono);font-size:9px;fill:var(--ink-faint);pointer-events:none}
+.node.doc circle{transition:r .2s,filter .25s}
+.node.doc .dlbl{font-family:var(--mono);font-size:8.5px;fill:#948A76;opacity:0;pointer-events:none;transition:opacity .2s}
+.node.doc:hover .dlbl,.node.doc.lit .dlbl,.node.doc.showlbl .dlbl{opacity:1}
+.node.doc.lit circle{filter:drop-shadow(0 0 6px rgba(255,180,84,.6))}
+@keyframes pulse{0%,100%{filter:drop-shadow(0 0 6px rgba(255,180,84,.4))}50%{filter:drop-shadow(0 0 16px rgba(255,180,84,.95))}}
+.node.pulse .box,.node.pulse circle{animation:pulse 1.5s ease-in-out infinite}
+@keyframes spawnIn{from{opacity:0}to{opacity:1}}
+.node.spawn{animation:spawnIn .4s ease both}
+#hlGlow{pointer-events:none}
+@keyframes breathe{0%,100%{opacity:.45}50%{opacity:.85}}
+#hlGlow circle{animation:breathe 5s ease-in-out infinite}
+
+/* 혼돈 오버레이 */
+.chaos{position:absolute;inset:0;z-index:5}
+.chip{position:absolute;display:flex;align-items:center;gap:6px;background:#1B160D;border:1px solid #2E2716;border-radius:6px;padding:5px 9px;font-family:var(--mono);font-size:10px;color:var(--ink-dim);white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.5);transition:opacity .7s ease,transform .7s ease}
+.chip .x{font-weight:600;font-size:9px;padding:1px 4px;border-radius:3px;background:#2A2313}
+.chip.gone{opacity:0;transform:translate(var(--fx),var(--fy)) scale(.2) rotate(10deg)}
+.chaos-cta{position:absolute;left:50%;bottom:36px;transform:translateX(-50%);z-index:6;text-align:center}
+.chaos-cta .hint{font-size:12.5px;color:var(--ink-dim);margin-bottom:10px;text-shadow:0 2px 8px #000}
+.chaos-cta .hint b{color:var(--amber);font-family:var(--mono)}
+
+/* 상태/카운터 */
+.stagechip{position:absolute;top:14px;left:16px;z-index:7;font-family:var(--mono);font-size:11px;color:var(--ink-dim);background:rgba(19,16,9,.88);border:1px solid var(--line);border-radius:6px;padding:6px 10px;backdrop-filter:blur(4px)}
+.stagechip b{color:var(--amber)}
+.counter{position:absolute;top:14px;right:16px;z-index:7;display:flex;gap:8px}
+.counter .c{font-family:var(--mono);font-size:11px;color:var(--ink-dim);background:rgba(19,16,9,.88);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+.counter .c b{color:var(--amber)}
+.zoombar{position:absolute;right:16px;bottom:40px;z-index:7;display:flex;flex-direction:column;gap:6px}
+.zoombar button{width:34px;height:34px;border:1px solid var(--line);background:rgba(19,16,9,.9);border-radius:8px;color:var(--ink-dim);font-size:15px}
+.zoombar button:hover{color:var(--amber);border-color:#4A3E24}
+.disclaimer{position:absolute;bottom:12px;right:60px;z-index:7;font-size:10.5px;color:var(--ink-faint);font-family:var(--mono)}
+
+/* 인제스천 로그 */
+.ingest{position:absolute;left:16px;bottom:14px;z-index:7;width:400px;max-width:42%;background:rgba(14,12,8,.92);border:1px solid var(--line);border-radius:10px;padding:10px 12px;backdrop-filter:blur(5px);display:none}
+.ingest.show{display:block}
+.ingest .ih{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+.ingest .ih .t{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--amber)}
+.ingest .ih .p{font-family:var(--mono);font-size:10px;color:var(--ink-faint)}
+.ingest .lines{font-family:var(--mono);font-size:10.5px;line-height:1.75;color:var(--ink-dim);max-height:126px;overflow:hidden}
+.ingest .lines div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ingest .lines .ok{color:#8FBF7A}
+.ingest .lines .obj{color:var(--amber)}
+.ibar{height:3px;background:#2A2313;border-radius:2px;margin-top:8px;overflow:hidden}
+.ibar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#7A5A28,var(--amber));transition:width .3s}
+
+/* 인스펙터 */
+.insp-empty{color:var(--ink-faint);font-size:13px;line-height:1.7;padding:8px 2px}
+.insp-empty .k{color:var(--ink-dim)}
+.obj-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px}
+.obj-head .tp{font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;color:#14100A;flex:none;margin-top:2px}
+.obj-head h2{font-size:16px;font-weight:700;line-height:1.35;word-break:break-all}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:7px 10px;font-size:12.5px;padding:4px 2px}
+.kv .k{color:var(--ink-faint)}
+.kv .v{color:var(--ink)}
+.kv .v .map{font-family:var(--mono);font-size:11px;color:var(--c-master)}
+.kv .v .conf{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint)}
+.rel{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--line-soft);font-size:12.5px;cursor:pointer}
+.rel:hover{background:#191408}
+.rel .rt{font-family:var(--mono);font-size:9.5px;color:var(--amber);flex:none;width:108px}
+.rel .rn{color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rel:hover .rn{color:var(--ink)}
+.morerel{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);padding:8px 4px}
+
+/* 체크리스트 */
+.chk-head h2{font-size:16px;font-weight:700;color:var(--amber)}
+.chk-head .m{font-size:12px;color:var(--ink-dim);margin-top:4px;line-height:1.5}
+.stats{display:flex;gap:8px;margin:10px 0 14px;flex-wrap:wrap}
+.stat{font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);border:1px solid var(--line);border-radius:5px;padding:4px 8px}
+.stat b{color:var(--amber)}
+.chk{border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:10px;background:var(--bg-raise);opacity:0;transform:translateY(10px);transition:opacity .5s,transform .5s}
+.chk.show{opacity:1;transform:none}
+.chk .no{font-family:var(--mono);font-size:10px;color:var(--amber);font-weight:600}
+.chk h3{font-size:13.5px;font-weight:700;margin:3px 0 5px;line-height:1.45}
+.chk p{font-size:12px;color:var(--ink-dim);line-height:1.55}
+.chk .evs{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.chk .evc{font-family:var(--mono);font-size:9.5px;color:var(--ink-dim);background:#231D10;border-radius:4px;padding:3px 7px}
+.chk .cf{margin-top:8px;display:flex;align-items:center;gap:8px}
+.chk .bar{flex:1;height:4px;background:#2A2313;border-radius:2px;overflow:hidden}
+.chk .bar i{display:block;height:100%;background:linear-gradient(90deg,#7A5A28,var(--amber));border-radius:2px}
+.chk .cv{font-family:var(--mono);font-size:10.5px;color:var(--amber)}
+
+/* 하단 바 */
+.botbar{height:58px;border-top:1px solid var(--line);background:#100D07;display:flex;align-items:center;padding:0 16px}
+.step{display:flex;align-items:center;gap:10px;padding:0 18px;height:100%;color:var(--ink-faint);font-size:13px;white-space:nowrap}
+.step .num{width:22px;height:22px;border-radius:50%;border:1.5px solid #4A4030;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;flex:none}
+.step.on{color:var(--ink)}
+.step.on .num{border-color:var(--amber);color:var(--amber);box-shadow:0 0 10px rgba(255,180,84,.35)}
+.step.done .num{background:var(--amber);border-color:var(--amber);color:#1A1204;font-weight:700}
+.step-arrow{color:#3A3222;font-size:15px}
+.botbar .grow{flex:1}
+.cond{display:none;align-items:center;gap:7px}
+.cond.show{display:flex}
+.cond .cc{font-family:var(--mono);font-size:11px;color:var(--beam);background:#2A2110;border:1px solid #4A3A1D;border-radius:5px;padding:4px 9px}
+
+@media (max-width:1180px){.main{grid-template-columns:0 1fr 320px}.side.left{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">FEDA <em>OntoGround</em></span>
+    <span class="tag">시연</span>
+    <span class="sub">FMEA 지식 온톨로지 워크벤치 · for SL Corporation</span>
+  </div>
+  <div class="grow"></div>
+  <div class="search">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6E6555" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.4-4.4"/></svg>
+    <input id="q" type="text" placeholder="온톨로지 검색 — 간극, 배광, FMVSS…" autocomplete="off">
+  </div>
+  <button class="btn btn-ghost" id="btnReset">처음부터</button>
+  <button class="btn btn-primary" id="btnScenario" disabled>▶ 신규 설계 추론 시연</button>
+</header>
+
+<div class="main">
+  <aside class="side left">
+    <div class="sec-label">원천 데이터 · 정형화 전</div>
+    <div class="src-row"><span class="ext">XLSX</span><span class="nm">FMEA · 검토 시트</span><span class="ct">412</span></div>
+    <div class="src-row"><span class="ext">PPTX</span><span class="nm">재발방지 대책서</span><span class="ct">236</span></div>
+    <div class="src-row"><span class="ext">TIF</span><span class="nm">2D 도면 스캔·주석</span><span class="ct">118</span></div>
+    <div class="src-row"><span class="ext">BOM</span><span class="nm">부품 구성 목록</span><span class="ct">64</span></div>
+    <div class="src-row"><span class="ext">PTS</span><span class="nm">문제 트래킹 레코드</span><span class="ct">897</span></div>
+    <div class="src-row"><span class="ext">SPEC</span><span class="nm">고객사 스펙</span><span class="ct">23</span></div>
+    <div class="src-total"><span>합계</span><b>1,750건</b></div>
+    <div class="pipe">
+      <div class="arrow">▼</div>
+      <div class="t"><b>Docling 정형화</b><br>추출 → 항목화 → 정규화 → 분류</div>
+      <div class="arrow" style="margin-top:4px">▼</div>
+      <div class="t"><b>지식 온톨로지</b> 실시간 적재</div>
+    </div>
+    <div class="sec-label">온톨로지 객체 유형</div>
+    <div class="legend" id="legend">
+      <div class="lg"><span class="dot" style="background:var(--c-item)"></span>부품·구성<span class="n" data-t="item">0</span></div>
+      <div class="lg"><span class="dot" style="background:var(--c-fm)"></span>고장모드<span class="n" data-t="fm">0</span></div>
+      <div class="lg"><span class="dot" style="background:var(--c-cause)"></span>원인<span class="n" data-t="cause">0</span></div>
+      <div class="lg"><span class="dot" style="background:var(--c-action)"></span>조치<span class="n" data-t="action">0</span></div>
+      <div class="lg"><span class="dot" style="background:var(--c-reg)"></span>법규·인증<span class="n" data-t="reg">0</span></div>
+      <div class="lg"><span class="dot" style="background:var(--c-proj)"></span>프로젝트<span class="n" data-t="proj">0</span></div>
+      <div class="lg"><span class="dot" style="background:var(--c-master)"></span>마스터<span class="n" data-t="master">0</span></div>
+      <div class="lg"><span class="dot" style="background:var(--c-spec)"></span>고객 스펙<span class="n" data-t="spec">0</span></div>
+      <div class="lg"><span class="dot" style="background:var(--c-doc)"></span>근거 문서<span class="n" data-t="doc">0</span></div>
+    </div>
+    <div class="sec-label">관계 유형</div>
+    <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);line-height:2">
+      HAS_FAILURE · CAUSED_BY<br>MITIGATED_BY · UNDER_REG<br>
+      SIMILAR_SHAPE <span style="color:var(--amber)">← 형상 기준</span><br>REF_MASTER · EVIDENCED_BY
+    </div>
+  </aside>
+
+  <section class="canvas-wrap" id="cw">
+    <div class="stagechip" id="stageChip">STAGE <b>1</b> / 3 — 흩어진 원천 데이터</div>
+    <div class="counter">
+      <span class="c">객체 <b id="cN">0</b></span>
+      <span class="c">관계 <b id="cE">0</b></span>
+    </div>
+    <div class="chaos" id="chaos"></div>
+    <div class="chaos-cta" id="chaosCta">
+      <div class="hint">엑셀 <b>412</b> · PPT <b>236</b> · 도면 스캔 <b>118</b> · BOM <b>64</b> · PTS <b>897</b> — 설계자 한 사람이 다 기억할 수 없습니다</div>
+      <button class="btn btn-primary" id="btnBuild">✦ 온톨로지 구축 시작 →</button>
+    </div>
+    <svg id="graph"></svg>
+    <div class="ingest" id="ingest">
+      <div class="ih"><span class="t">DOCLING INGESTION</span><span class="p" id="ipct">0%</span></div>
+      <div class="lines" id="ilines"></div>
+      <div class="ibar"><i id="ibar"></i></div>
+    </div>
+    <div class="zoombar">
+      <button id="zin" title="확대">＋</button>
+      <button id="zout" title="축소">－</button>
+      <button id="zfit" title="전체 보기">⤢</button>
+    </div>
+    <div class="disclaimer">시연용 샘플 데이터 · 실제 SL 데이터 아님</div>
+  </section>
+
+  <aside class="side right" id="insp">
+    <div class="sec-label">객체 인스펙터</div>
+    <div class="insp-empty">
+      온톨로지 구축을 시작하면 문서가 실시간으로 객체·관계로 변환됩니다.<br><br>
+      노드를 <span class="k">클릭</span>하면 속성·근거·관계, <span class="k">드래그</span>하면 이동, <span class="k">호버</span>하면 이웃이 하이라이트됩니다.<br><br>
+      <span class="k">온톨로지의 약속:</span> 모든 객체는 <b style="color:var(--amber)">원본 문서를 근거로</b> 연결되며, 원본 코드값은 덮어쓰지 않고 표준 매핑·확신도를 함께 보존합니다.
+    </div>
+  </aside>
+</div>
+
+<footer class="botbar">
+  <div class="step done" id="st1"><span class="num">1</span>흩어진 원천</div>
+  <span class="step-arrow">›</span>
+  <div class="step" id="st2"><span class="num">2</span>온톨로지 구축</div>
+  <span class="step-arrow">›</span>
+  <div class="step" id="st3"><span class="num">3</span>신규 설계 추론</div>
+  <div class="grow"></div>
+  <div class="cond" id="cond">
+    <span style="font-size:12px;color:var(--ink-faint)">신규 조건</span>
+    <span class="cc">PJ 2026-HL21</span><span class="cc">북미향</span><span class="cc">LED</span><span class="cc">분리형 DRL</span><span class="cc">슬림 하우징</span>
+  </div>
+</footer>
+
+<script>
+/* ══════════ 1. 데이터 정의 ══════════ */
+const TYPES={
+ item:{c:'#FFC46B',g:'ITEM',name:'부품·구성'}, fm:{c:'#FF5470',g:'FM',name:'고장모드'},
+ cause:{c:'#FF8A3D',g:'CAUSE',name:'원인'}, action:{c:'#5EDC9A',g:'ACT',name:'조치'},
+ reg:{c:'#5EA8FF',g:'REG',name:'법규·인증'}, proj:{c:'#B18CFF',g:'PJ',name:'프로젝트'},
+ master:{c:'#4FE0D2',g:'MSTR',name:'마스터'}, spec:{c:'#93A8FF',g:'SPEC',name:'고객 스펙'},
+ doc:{c:'#7D7566',g:'DOC',name:'근거 문서'}
+};
+const W=1600,H=900;
+
+const CORE=[
+ {id:'PJ16',t:'proj',ax:520,ay:130,l:'PJ 2016-HL03',s:'SUV A 1세대·할로겐',kv:[['차종','중형 SUV A (1세대)'],['광원','할로겐'],['이슈 이력','수축 변형']]},
+ {id:'PJ19',t:'proj',ax:790,ay:95,l:'PJ 2019-HL07',s:'SUV A 2세대·LED',kv:[['차종','중형 SUV A (2세대)'],['광원','LED'],['비고','1세대와 차명 동일하나 형상 전면 변경']]},
+ {id:'PJ21',t:'proj',ax:1055,ay:130,l:'PJ 2021-HL12',s:'세단 B·LED+DRL',kv:[['차종','준중형 세단 B'],['이슈 이력','간극 클레임 (PTS-8812)']]},
+ {id:'PJ23',t:'proj',ax:1240,ay:200,l:'PJ 2023-HL15',s:'SUV C·LED',kv:[['차종','중형 SUV C'],['광원','LED 분리형']]},
+ {id:'PJ26',t:'proj',ax:790,ay:235,l:'PJ 2026-HL21',s:'신규·검토 대상',hidden:true,kv:[['상태','신규 설계 검토'],['조건','북미향·LED·분리형 DRL·슬림']]},
+ {id:'SHKMC',t:'spec',ax:1300,ay:90,l:'HKMC ES 스펙',s:'현대·기아',kv:[['고객사','현대·기아'],['포함','시험 방법·외관 기준']]},
+ {id:'SGM',t:'spec',ax:1450,ay:140,l:'GMW 스펙',s:'GM',kv:[['고객사','GM'],['포함','북미 요구사항']]},
+ {id:'RKR',t:'reg',ax:1430,ay:270,l:'KMVSS',s:'한국',kv:[['국가','한국'],['핵심','배광·광도']]},
+ {id:'RUS',t:'reg',ax:1465,ay:380,l:'FMVSS 108',s:'북미',kv:[['국가','미국·캐나다'],['핵심','배광 패턴·DRL 규정'],['비고','유럽과 배광 기준 상이']]},
+ {id:'REU',t:'reg',ax:1450,ay:490,l:'ECE R149',s:'유럽',kv:[['국가','유럽'],['핵심','배광·컷오프']]},
+ {id:'RCN',t:'reg',ax:1405,ay:595,l:'GB 25991',s:'중국',kv:[['국가','중국'],['핵심','자국 인증 별도']]},
+ {id:'CTOL',t:'cause',ax:245,ay:265,l:'조립 공차 누적',s:'',kv:[['분류','조립'],['발생도 O','5']]},
+ {id:'CSHRINK',t:'cause',ax:205,ay:385,l:'소재 수축 과다',s:'PP-GF',kv:[['분류','재료'],['발생도 O','4'],['상세','슬림 형상일수록 수축 영향 증대']]},
+ {id:'CMOLD',t:'cause',ax:195,ay:500,l:'금형 치수 오차',s:'',kv:[['분류','공정'],['발생도 O','3']]},
+ {id:'CVENT',t:'cause',ax:245,ay:615,l:'벤트·씰링 설계',s:'',kv:[['분류','설계'],['발생도 O','4']]},
+ {id:'CTHERM',t:'cause',ax:1010,ay:200,l:'방열 설계 미흡',s:'LED 온도→광량',kv:[['분류','설계'],['상세','LED 온도 상승 → 광량 저하 → 배광 편차']]},
+ {id:'FMGAP',t:'fm',ax:455,ay:300,l:'간극 벌어짐',s:'범퍼 매칭부 2mm',kv:[['심각도 S','6'],['발생','PJ 2021-HL12'],['최초 보고','2014'],['원본 코드(2014)','"외관-B" <span class="map">→ GAP-EXT</span> <span class="conf">확신도 0.72</span>'],['상태','재발방지 마스터 등록']]},
+ {id:'FMSTEP',t:'fm',ax:425,ay:435,l:'렌즈-하우징 단차',s:'',kv:[['심각도 S','5'],['근거','2D 스캔 주석 ("여기 잘못됨")']]},
+ {id:'FMSHRINK',t:'fm',ax:445,ay:565,l:'수축 변형',s:'하우징 휨',kv:[['심각도 S','6'],['발생','PJ 2016-HL03'],['조치 이력','저수축 소재 변경']]},
+ {id:'FMFOG',t:'fm',ax:490,ay:680,l:'결로·습기',s:'렌즈 내부',kv:[['심각도 S','5'],['특성','필드 클레임 빈발 유형'],['원인','벤트·씰링']]},
+ {id:'FMBEAM',t:'fm',ax:1165,ay:315,l:'배광 편차',s:'법규 부적합 위험',kv:[['심각도 S','8'],['위험','품질 이슈 넘어 규제 위반으로 확대'],['발생','PJ 2019-HL07']]},
+ {id:'FMLUM',t:'fm',ax:1190,ay:450,l:'휘도 불균일',s:'라이트가이드',kv:[['심각도 S','5'],['상세','분리형 DRL 구성에서 이력']]},
+ {id:'IHL',t:'item',ax:800,ay:440,l:'헤드램프 어셈블리',s:'LED·분리형 DRL',hero:true,kv:[['구성','LED모듈·라이트가이드·하우징·렌즈'],['BOM','BOM_HL07_rev4 기준'],['주변부','범퍼 매칭 (간극·단차 관리)']]},
+ {id:'ILED',t:'item',ax:660,ay:320,l:'LED 모듈',s:'',kv:[['특성','발열 → 방열 필수']]},
+ {id:'ILG',t:'item',ax:945,ay:320,l:'라이트가이드',s:'DRL',kv:[['특성','휘도 균일성 민감']]},
+ {id:'IHSG',t:'item',ax:650,ay:565,l:'하우징',s:'PP-GF',kv:[['소재','PP-GF'],['리스크','수축·간극·단차']]},
+ {id:'ILENS',t:'item',ax:950,ay:565,l:'아우터 렌즈',s:'PC',kv:[['소재','PC'],['리스크','단차·결로']]},
+ {id:'AMOLD',t:'action',ax:320,ay:720,l:'금형 치수 수정',s:'',kv:[['유형','공정 조치'],['사례','PJ 2021-HL12 간극 개선']]},
+ {id:'AMAT',t:'action',ax:530,ay:770,l:'저수축 소재 변경',s:'',kv:[['유형','재료 조치'],['사례','PJ 2016-HL03']]},
+ {id:'AVENT',t:'action',ax:405,ay:800,l:'벤트 경로 개선',s:'',kv:[['유형','설계 조치']]},
+ {id:'ARIB',t:'action',ax:1045,ay:705,l:'방열 리브 추가',s:'',kv:[['유형','설계 조치'],['효과','LED 온도 저감']]},
+ {id:'ASIM',t:'action',ax:1245,ay:670,l:'배광 시뮬레이션 강화',s:'',kv:[['유형','검증 조치'],['시점','설계 초기']]},
+ {id:'MGAP',t:'master',ax:650,ay:790,l:'간극·단차 마스터',s:'',kv:[['성격','특징별 표준 체크항목'],['원칙','신규 개발 시 필수 참조 — 누락 방지']]},
+ {id:'MTHERM',t:'master',ax:840,ay:815,l:'LED 방열 마스터',s:'',kv:[['성격','LED 채용 시 필수'],['항목','방열 경로·온도 시뮬·광량']]},
+ {id:'MBEAM',t:'master',ax:1035,ay:790,l:'배광 법규 마스터',s:'국가별',kv:[['성격','국가별 법규 체크'],['항목','배광 패턴·DRL·인증']]}
+];
+
+const CORE_EDGES=[
+ ['IHL','ILED','CONSISTS_OF'],['IHL','ILG','CONSISTS_OF'],['IHL','IHSG','CONSISTS_OF'],['IHL','ILENS','CONSISTS_OF'],
+ ['IHSG','FMGAP','HAS_FAILURE'],['IHSG','FMSTEP','HAS_FAILURE'],['IHSG','FMSHRINK','HAS_FAILURE'],
+ ['ILENS','FMSTEP','HAS_FAILURE'],['ILENS','FMFOG','HAS_FAILURE'],['IHL','FMBEAM','HAS_FAILURE'],['ILG','FMLUM','HAS_FAILURE'],
+ ['FMGAP','CSHRINK','CAUSED_BY'],['FMGAP','CMOLD','CAUSED_BY'],['FMGAP','CTOL','CAUSED_BY'],
+ ['FMSTEP','CTOL','CAUSED_BY'],['FMSTEP','CMOLD','CAUSED_BY'],['FMSHRINK','CSHRINK','CAUSED_BY'],
+ ['FMFOG','CVENT','CAUSED_BY'],['FMBEAM','CTHERM','CAUSED_BY'],['FMLUM','CSHRINK','CAUSED_BY'],['ILED','CTHERM','THERMAL_RISK'],
+ ['FMGAP','AMOLD','MITIGATED_BY'],['FMSHRINK','AMAT','MITIGATED_BY'],['FMFOG','AVENT','MITIGATED_BY'],
+ ['CTHERM','ARIB','MITIGATED_BY'],['FMBEAM','ASIM','MITIGATED_BY'],
+ ['FMGAP','MGAP','REF_MASTER'],['CTHERM','MTHERM','REF_MASTER'],['FMBEAM','MBEAM','REF_MASTER'],
+ ['FMBEAM','RUS','UNDER_REG'],['FMBEAM','REU','UNDER_REG'],['FMBEAM','RCN','UNDER_REG'],['FMBEAM','RKR','UNDER_REG'],['ILG','RUS','DRL_REG'],
+ ['PJ21','FMGAP','OCCURRED_IN'],['PJ16','FMSHRINK','OCCURRED_IN'],['PJ19','FMBEAM','OCCURRED_IN'],['PJ23','FMLUM','OCCURRED_IN'],
+ ['PJ19','SHKMC','SPEC_OF'],['PJ21','SGM','SPEC_OF'],['PJ23','SHKMC','SPEC_OF'],
+ ['PJ16','PJ19','SIMILAR 0.31',1],['PJ19','PJ21','SIMILAR 0.82',1],['PJ21','PJ23','SIMILAR 0.77',1],
+ // 시나리오 전용
+ ['PJ26','PJ21','SIMILAR 0.87',1,1],['PJ26','PJ19','SIMILAR 0.74',1,1],['PJ26','PJ23','SIMILAR 0.66',1,1],
+ ['PJ26','RUS','TARGET_MARKET',0,1],['PJ26','IHL','NEW_DESIGN_OF',0,1]
+];
+
+/* 근거 문서 위성 생성 규칙: [부모, 개수, 확장자 풀] */
+const DOC_RULES=[
+ ['FMGAP',   26,['PTS','PPTX','XLSX']], ['FMSTEP', 14,['TIF','PTS','XLSX']],
+ ['FMSHRINK',18,['XLSX','PPTX','PTS']], ['FMFOG',  20,['PTS','PPTX']],
+ ['FMBEAM',  22,['XLSX','PPTX','PTS','SPEC']], ['FMLUM',12,['XLSX','TIF']],
+ ['PJ16',16,['XLSX','BOM','TIF']], ['PJ19',22,['XLSX','BOM','PPTX']],
+ ['PJ21',20,['XLSX','BOM','PTS']], ['PJ23',14,['XLSX','BOM']],
+ ['MGAP',8,['PPTX','XLSX']], ['MTHERM',8,['XLSX']], ['MBEAM',10,['SPEC','XLSX']],
+ ['RUS',6,['SPEC']], ['REU',5,['SPEC']], ['SHKMC',7,['SPEC']], ['SGM',5,['SPEC']],
+ ['IHL',10,['BOM','TIF']], ['CSHRINK',6,['XLSX']], ['CTHERM',7,['XLSX','PPTX']]
+];
+const FN_WORD={PTS:['클레임','외관','배광','결로','간극'],PPTX:['재발방지','대책서','품질회의','개선보고'],
+ XLSX:['FMEA','검토시트','시험결과','치수측정'],TIF:['도면스캔','단면주석','조립도'],
+ BOM:['BOM','부품표'],SPEC:['스펙','시험방법','요구사항']};
+function docName(ext,i){
+ const w=FN_WORD[ext][i%FN_WORD[ext].length];
+ const yr=2010+((i*7)%16);
+ if(ext==='PTS')return `PTS-${7000+i*13}_${w}`;
+ const x=ext==='BOM'?'xlsx':ext.toLowerCase();
+ return `${w}_HL${String(3+i%19).padStart(2,'0')}_${yr}.${x}`;
+}
+
+/* ══════════ 2. 그래프 상태 ══════════ */
+const nodes=[], edges=[], nmap={};
+let nextDoc=0;
+function addNode(def){
+ const n={...def, x:(def.ax??W/2)+(Math.random()*60-30), y:(def.ay??H/2)+(Math.random()*60-30),
+   vx:0,vy:0, r:def.t==='doc'?4.5:0, deg:0, el:null, added:false};
+ nodes.push(n); nmap[n.id]=n; return n;
+}
+CORE.forEach(addNode);
+const scenEdges=[];
+CORE_EDGES.forEach(([a,b,rel,strong,scen])=>{
+ const e={a,b,rel,strong:!!strong,scen:!!scen,el:null,lel:null,added:false};
+ (scen?scenEdges:edges).push(e);
+});
+/* 문서 위성 정의(스폰은 나중에) */
+const docDefs=[];
+DOC_RULES.forEach(([pid,cnt,exts])=>{
+ for(let i=0;i<cnt;i++){
+  const ext=exts[i%exts.length];
+  const id='D'+(nextDoc++);
+  docDefs.push({id,t:'doc',parent:pid,ext,l:docName(ext,nextDoc),s:ext,
+   kv:[['형식',ext],['정형화','Docling 추출 완료'],['추출 객체','고장모드 '+(1+nextDoc%3)+' · 원인 '+(nextDoc%2+1)],['연결','근거 링크 '+(1+nextDoc%4)]]});
+ }
+});
+
+/* ══════════ 3. SVG 렌더 ══════════ */
+const svg=document.getElementById('graph');
+const NS='http://www.w3.org/2000/svg';
+svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+const defs=el('defs',{},svg);
+const rg=el('radialGradient',{id:'hlg'},defs);
+el('stop',{offset:'0%','stop-color':'#FFB454','stop-opacity':'.26'},rg);
+el('stop',{offset:'45%','stop-color':'#FFB454','stop-opacity':'.06'},rg);
+el('stop',{offset:'100%','stop-color':'#FFB454','stop-opacity':'0'},rg);
+const glowG=el('g',{id:'hlGlow'},svg);
+const glowC=el('circle',{cx:800,cy:440,r:240,fill:'url(#hlg)'},glowG);
+const edgeG=el('g',{},svg), labelG=el('g',{},svg), nodeG=el('g',{},svg);
+
+function nodeW(n){return Math.max(94,n.l.length*12+52)+(n.hero?26:0);}
+function mountNode(n){
+ if(n.added)return; n.added=true;
+ const tp=TYPES[n.t];
+ if(n.t==='doc'){
+  const g=el('g',{class:'node doc spawn','data-id':n.id,tabindex:'0'},nodeG);
+  el('circle',{r:n.r,fill:'#1E1910',stroke:tp.c,'stroke-width':1,class:'box'},g);
+  const t=el('text',{class:'dlbl',x:8,y:3},g); t.textContent=n.l;
+  n.el=g; bindNode(g,n); return;
+ }
+ const w=nodeW(n),h=n.hero?52:(n.s?44:36); n.w=w;n.h=h;
+ const g=el('g',{class:'node spawn','data-id':n.id,tabindex:'0',role:'button','aria-label':n.l},nodeG);
+ if(n.hidden)g.style.display='none';
+ el('rect',{width:w,height:h,rx:9,fill:'#1B160D',stroke:n.hero?'#FFB454':'#332B1C','stroke-width':n.hero?1.6:1,class:'box'},g);
+ el('rect',{width:4,height:h,rx:2,fill:tp.c},g);
+ const gl=el('text',{x:14,y:n.hero?20:16,class:'glyph',fill:tp.c},g);gl.textContent=tp.g;
+ const lb=el('text',{x:14,y:n.hero?38:(n.s?30:24),class:'lbl'},g);lb.textContent=n.l;
+ if(n.hero){lb.style.fontSize='14.5px';lb.style.fontWeight='700';}
+ if(n.s){const sb=el('text',{x:w-10,y:16,class:'sub','text-anchor':'end'},g);sb.textContent=n.s;}
+ n.el=g; bindNode(g,n);
+}
+function mountEdge(e){
+ if(e.added)return; e.added=true;
+ const cls='edge'+(e.strong?' core':'')+(nmap[e.a].t!=='doc'&&nmap[e.b].t!=='doc'?' core':'');
+ e.el=el('line',{class:cls,'data-key':e.a+'|'+e.b},edgeG);
+ if(e.rel&&e.rel.startsWith('SIMILAR'))e.el.style.strokeDasharray='5 4';
+ if(nmap[e.a].t!=='doc'&&nmap[e.b].t!=='doc'){
+  e.lel=el('text',{class:'edge-label','text-anchor':'middle','data-key':e.a+'|'+e.b},labelG);
+  e.lel.textContent=e.rel;
+ }
+ nmap[e.a].deg++; nmap[e.b].deg++;
+}
+
+/* ══════════ 4. 물리 시뮬레이션 ══════════ */
+let alpha=0, running=false;
+const adj={}; // 이웃 맵
+function addAdj(a,b){(adj[a]??=new Set()).add(b);(adj[b]??=new Set()).add(a);}
+function tick(){
+ // 반발
+ const act=nodes.filter(n=>n.added&&!n.hiddenNow);
+ for(let i=0;i<act.length;i++){
+  const a=act[i];
+  for(let j=i+1;j<act.length;j++){
+   const b=act[j];
+   let dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy;
+   if(d2>90000)continue;
+   d2=Math.max(d2,120);
+   const bothDoc=a.t==='doc'&&b.t==='doc';
+   const f=(bothDoc?520:2600)/d2;
+   const d=Math.sqrt(d2);dx/=d;dy/=d;
+   a.vx+=dx*f;a.vy+=dy*f;b.vx-=dx*f;b.vy-=dy*f;
+  }
+ }
+ // 스프링(엣지)
+ const allE=[...edges,...scenEdges];
+ for(const e of allE){
+  if(!e.added)continue;
+  const a=nmap[e.a],b=nmap[e.b];
+  if(!a.added||!b.added)continue;
+  let dx=b.x-a.x,dy=b.y-a.y;
+  const d=Math.max(1,Math.sqrt(dx*dx+dy*dy));
+  const rest=(a.t==='doc'||b.t==='doc')?62:170;
+  const k=(a.t==='doc'||b.t==='doc')?0.05:0.018;
+  const f=(d-rest)*k; dx/=d;dy/=d;
+  a.vx+=dx*f;a.vy+=dy*f;b.vx-=dx*f;b.vy-=dy*f;
+ }
+ // 앵커(코어 노드 → 의미 구역)
+ for(const n of act){
+  if(n.t!=='doc'&&n.ax!=null){n.vx+=(n.ax-n.x)*0.015;n.vy+=(n.ay-n.y)*0.015;}
+  n.vx*=0.82;n.vy*=0.82;
+  if(n.fx!=null){n.x=n.fx;n.y=n.fy;n.vx=0;n.vy=0;continue;}
+  const cap=14;
+  n.x+=Math.max(-cap,Math.min(cap,n.vx*alpha));
+  n.y+=Math.max(-cap,Math.min(cap,n.vy*alpha));
+  n.x=Math.max(30,Math.min(W-30,n.x)); n.y=Math.max(30,Math.min(H-30,n.y));
+ }
+ alpha=Math.max(alpha*0.995, 0.12); // 살아있는 느낌 유지
+}
+function render(){
+ for(const n of nodes){
+  if(!n.el)continue;
+  if(n.t==='doc')n.el.setAttribute('transform',`translate(${n.x},${n.y})`);
+  else n.el.setAttribute('transform',`translate(${n.x-n.w/2},${n.y-n.h/2})`);
+ }
+ for(const e of [...edges,...scenEdges]){
+  if(!e.el)continue;
+  const a=nmap[e.a],b=nmap[e.b];
+  e.el.setAttribute('x1',a.x);e.el.setAttribute('y1',a.y);
+  e.el.setAttribute('x2',b.x);e.el.setAttribute('y2',b.y);
+  if(e.lel){e.lel.setAttribute('x',(a.x+b.x)/2);e.lel.setAttribute('y',(a.y+b.y)/2-6);}
+ }
+ glowC.setAttribute('cx',nmap['IHL'].x);glowC.setAttribute('cy',nmap['IHL'].y);
+}
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function loop(){ if(!running)return; tick(); render(); requestAnimationFrame(loop); }
+function start(){ if(running)return; running=true;
+ if(reduced){for(let i=0;i<300;i++)tick(); render(); running=false; return;}
+ requestAnimationFrame(loop);
+}
+
+/* ══════════ 5. 스테이지 & 인제스천 ══════════ */
+const stageChip=document.getElementById('stageChip');
+const steps=[st1,st2,st3].map(x=>x);
+function setStage(s){
+ [document.getElementById('st1'),document.getElementById('st2'),document.getElementById('st3')].forEach((e,i)=>{
+  e.classList.toggle('done',i<s-1);e.classList.toggle('on',i===s-1);});
+ const nm=['흩어진 원천 데이터','온톨로지 구축 중','신규 설계 추론'];
+ stageChip.innerHTML=`STAGE <b>${s}</b> / 3 — ${nm[s-1]}`;
+}
+setStage(1);
+const cN=document.getElementById('cN'),cE=document.getElementById('cE');
+let nCount=0,eCount=0;
+const typeCnt={};
+function bump(n){
+ nCount++; cN.textContent=nCount;
+ typeCnt[n.t]=(typeCnt[n.t]||0)+1;
+ const le=document.querySelector(`.legend .n[data-t="${n.t}"]`);
+ if(le)le.textContent=typeCnt[n.t];
+}
+function bumpE(){eCount++;cE.textContent=eCount;}
+
+/* 혼돈 칩 */
+const chaosEl=document.getElementById('chaos');
+const SAMPLES=[['XLSX','FMEA_2016_HL03.xlsx'],['XLSX','검토시트_수출형.xlsx'],['PPTX','재발방지_간극.pptx'],
+ ['PPTX','대책서_배광이슈.pptx'],['TIF','2D스캔_단면_주석.tif'],['BOM','BOM_HL07_rev4.xlsx'],
+ ['PTS','PTS-8812_클레임'],['PTS','PTS-9034_외관'],['SPEC','HKMC_ES_광학.pdf'],['XLSX','시험결과_방열.xlsx']];
+for(let i=0;i<72;i++){
+ const [ext,fn]=SAMPLES[i%SAMPLES.length];
+ const d=document.createElement('div');d.className='chip';
+ d.innerHTML=`<span class="x">${ext}</span>${fn}`;
+ const x=6+Math.random()*84,y=6+Math.random()*78;
+ d.style.left=x+'%';d.style.top=y+'%';
+ d.style.transform=`rotate(${(Math.random()*8-4).toFixed(1)}deg)`;
+ d.style.setProperty('--fx',((50-x)*6)+'px');d.style.setProperty('--fy',((46-y)*6)+'px');
+ d.style.transitionDelay=(Math.random()*.4)+'s';
+ chaosEl.appendChild(d);
+}
+
+/* 인제스천 로그 */
+const ingest=document.getElementById('ingest'),ilines=document.getElementById('ilines'),
+      ibar=document.getElementById('ibar'),ipct=document.getElementById('ipct');
+function log(txt){
+ const d=document.createElement('div');d.innerHTML=txt;
+ ilines.appendChild(d);
+ while(ilines.children.length>7)ilines.removeChild(ilines.firstChild);
+}
+
+/* ══════════ 6. 온톨로지 구축 시퀀스 ══════════ */
+const btnBuild=document.getElementById('btnBuild');
+const btnScenario=document.getElementById('btnScenario');
+btnBuild.addEventListener('click',()=>{
+ btnBuild.disabled=true;
+ document.querySelectorAll('.chip').forEach(c=>c.classList.add('gone'));
+ const cta=document.getElementById('chaosCta');
+ cta.style.transition='opacity .5s';cta.style.opacity='0';
+ setTimeout(()=>{cta.style.display='none';chaosEl.style.display='none';},800);
+ setStage(2); ingest.classList.add('show'); start();
+
+ // 6-1. 코어 객체 순차 스폰
+ const coreVisible=nodes.filter(n=>!n.hidden);
+ coreVisible.forEach((n,i)=>{
+  setTimeout(()=>{ mountNode(n); bump(n); alpha=1;
+   log(`[docling] <span class="ok">✓</span> 객체 생성 <span class="obj">${TYPES[n.t].g}</span> ${n.l}`);
+  }, 300+i*120);
+ });
+ const tCore=300+coreVisible.length*120;
+
+ // 6-2. 코어 관계 스폰
+ edges.forEach((e,i)=>{
+  setTimeout(()=>{ mountEdge(e); addAdj(e.a,e.b); bumpE(); alpha=Math.max(alpha,.8); }, tCore+i*40);
+ });
+ const tEdge=tCore+edges.length*40;
+
+ // 6-3. 문서 위성 스트리밍 (배치)
+ const total=docDefs.length; let done=0;
+ function spawnBatch(){
+  const batch=docDefs.splice(0,6);
+  if(!batch.length){
+   ipct.textContent='100%'; ibar.style.width='100%';
+   log(`[docling] <span class="ok">✓ 완료</span> — 객체 ${nCount} · 관계 ${eCount}`);
+   setStage(2); stageChip.innerHTML='STAGE <b>2</b> / 3 — 온톨로지 구축 완료';
+   btnScenario.disabled=false;
+   setTimeout(()=>ingest.classList.remove('show'),2600);
+   return;
+  }
+  batch.forEach(d=>{
+   const p=nmap[d.parent];
+   const n=addNode({...d, ax:null, ay:null});
+   n.x=p.x+(Math.random()*90-45); n.y=p.y+(Math.random()*90-45);
+   mountNode(n); bump(n);
+   const e={a:d.parent,b:d.id,rel:'EVIDENCED_BY',added:false};
+   edges.push(e); mountEdge(e); addAdj(e.a,e.b); bumpE();
+   done++;
+  });
+  alpha=Math.max(alpha,.7);
+  const last=batch[batch.length-1];
+  log(`[docling] <span class="ok">✓</span> ${last.l} → 근거 링크 연결`);
+  const pct=Math.round(done/total*100);
+  ipct.textContent=pct+'%'; ibar.style.width=pct+'%';
+  setTimeout(spawnBatch, 190);
+ }
+ setTimeout(spawnBatch, tEdge+200);
+});
+
+/* ══════════ 7. 시나리오 (Stage 3) ══════════ */
+const WAVES=[['PJ26'],['PJ21','PJ19','PJ23','RUS','IHL'],
+ ['FMGAP','FMBEAM','ILED','ILG','SGM'],
+ ['CSHRINK','CMOLD','CTOL','CTHERM','FMLUM','MBEAM','ASIM'],
+ ['AMOLD','MGAP','MTHERM','ARIB','AMAT','FMSHRINK']];
+const SCEN_KEYS=new Set(['PJ26|PJ21','PJ26|PJ19','PJ26|PJ23','PJ26|RUS','PJ26|IHL',
+ 'PJ21|FMGAP','PJ19|FMBEAM','IHL|ILED','IHL|ILG','PJ21|SGM','PJ23|FMLUM',
+ 'FMGAP|CSHRINK','FMGAP|CMOLD','FMGAP|CTOL','FMBEAM|CTHERM','ILED|CTHERM','ILG|FMLUM',
+ 'FMBEAM|MBEAM','FMBEAM|ASIM','FMBEAM|RUS','ILG|RUS',
+ 'FMGAP|AMOLD','FMGAP|MGAP','CTHERM|MTHERM','CTHERM|ARIB','FMSHRINK|AMAT','CSHRINK|FMSHRINK']);
+const CHECKLIST=[
+ {t:'범퍼 매칭부 간극 관리 — 마스터 M-GAP 적용',d:'유사 형상 PJ 2021-HL12에서 간극 2mm 벌어짐 클레임. 금형·공차·수축 3개 원인 경로 확인 필요.',ev:['PTS-8812','재발방지_간극클레임.pptx (2014)','간극·단차 마스터'],cf:91},
+ {t:'슬림 하우징 소재 수축 검토 — 저수축 그레이드',d:'슬림 형상일수록 수축 영향 증대. PJ 2016-HL03 수축 변형 → 소재 변경으로 해결한 전례.',ev:['FMEA_HL07.xlsx','조치: 소재 변경'],cf:84},
+ {t:'북미 배광 법규 적합성 — FMVSS 108 · DRL',d:'북미향 조건 자동 감지. 유럽(ECE)과 배광 기준 상이 — 시뮬레이션 조건 분리 필수.',ev:['FMVSS 108','배광 법규 마스터','GMW 스펙'],cf:88},
+ {t:'LED 방열 마스터 체크 — 광량 저하 예방',d:'LED 온도↑ → 광량↓ → 배광 편차 인과 사슬 이력(PJ 2019-HL07). 방열 리브·온도 시뮬 조기 반영.',ev:['LED 방열 마스터','PJ 2019-HL07'],cf:86},
+ {t:'분리형 DRL 라이트가이드 휘도 균일성',d:'분리형 구성 휘도 불균일 이력(PJ 2023-HL15). 성형 수축의 광학 영향 — 소재·성형 연계 검토.',ev:['2D도면_단면주석.tif','PJ 2023-HL15'],cf:79}];
+
+let scenarioRun=false;
+btnScenario.addEventListener('click',()=>{
+ if(scenarioRun)return; scenarioRun=true; btnScenario.disabled=true;
+ setStage(3); document.getElementById('cond').classList.add('show');
+ const pj=nmap['PJ26']; pj.hidden=false;
+ mountNode(pj); pj.el.style.display=''; pj.el.classList.add('pulse'); bump(pj);
+ scenEdges.forEach(e=>{mountEdge(e);addAdj(e.a,e.b);bumpE();});
+ alpha=1;
+ setTimeout(()=>{
+  nodes.forEach(n=>{if(n.el&&n.id!=='PJ26')n.el.classList.add('dim');});
+  [...edges,...scenEdges].forEach(e=>e.el&&e.el.classList.add('dim'));
+ },600);
+ const litSet=new Set(['PJ26']);
+ WAVES.forEach((wave,wi)=>{
+  setTimeout(()=>{
+   wave.forEach(id=>{const n=nmap[id];litSet.add(id);
+    if(n.el){n.el.classList.remove('dim');n.el.classList.add('lit');}
+    // 해당 노드의 근거 문서 2개씩 함께 점등
+    let c=0;
+    (adj[id]||new Set()).forEach(o=>{
+     if(c<2&&nmap[o].t==='doc'){litSet.add(o);c++;
+      nmap[o].el.classList.remove('dim');nmap[o].el.classList.add('lit','showlbl');}
+    });
+   });
+   [...edges,...scenEdges].forEach(e=>{
+    const k1=e.a+'|'+e.b,k2=e.b+'|'+e.a;
+    const evd=e.rel==='EVIDENCED_BY'&&litSet.has(e.a)&&litSet.has(e.b);
+    if(evd||((SCEN_KEYS.has(k1)||SCEN_KEYS.has(k2))&&litSet.has(e.a)&&litSet.has(e.b))){
+     e.el.classList.remove('dim');e.el.classList.add('lit');
+     if(e.lel)e.lel.classList.add('lit');
+    }
+   });
+   alpha=Math.max(alpha,.5);
+  },900+wi*900);
+ });
+ setTimeout(showChecklist, 900+WAVES.length*900+400);
+});
+function showChecklist(){
+ const insp=document.getElementById('insp');
+ insp.innerHTML=`
+  <div class="sec-label">추론 결과</div>
+  <div class="chk-head"><h2>설계 검토 체크리스트</h2>
+   <div class="m">PJ 2026-HL21 · 북미향 LED 분리형 DRL — 온톨로지 탐색으로 도출</div></div>
+  <div class="stats">
+   <span class="stat">탐색 객체 <b>34</b></span><span class="stat">관계 <b>41</b></span>
+   <span class="stat">근거 문서 <b>12</b></span><span class="stat">체크항목 <b>5</b></span></div>
+  <div id="chkList"></div>
+  <div style="font-size:11px;color:var(--ink-faint);line-height:1.6;margin-top:6px;padding-top:10px;border-top:1px solid var(--line)">
+   모든 항목은 <b style="color:var(--amber)">원본 문서 근거</b>와 확신도를 함께 제시합니다.<br>최종 판단은 설계 엔지니어가 수행합니다 — 검토용 초안.</div>`;
+ const list=document.getElementById('chkList');
+ CHECKLIST.forEach((c,i)=>{
+  const d=document.createElement('div');d.className='chk';
+  d.innerHTML=`<span class="no">CHECK ${String(i+1).padStart(2,'0')}</span><h3>${c.t}</h3><p>${c.d}</p>
+   <div class="evs">${c.ev.map(e=>`<span class="evc">${e}</span>`).join('')}</div>
+   <div class="cf"><div class="bar"><i style="width:${c.cf}%"></i></div><span class="cv">${c.cf}%</span></div>`;
+  list.appendChild(d);
+  setTimeout(()=>d.classList.add('show'),200+i*360);
+ });
+}
+
+/* ══════════ 8. 인터랙션 ══════════ */
+let selId=null, dragN=null;
+function bindNode(g,n){
+ g.addEventListener('click',ev=>{ev.stopPropagation();select(n.id);});
+ g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();select(n.id);}});
+ g.addEventListener('mousedown',ev=>{ev.stopPropagation();dragN=n;n.fx=n.x;n.fy=n.y;alpha=Math.max(alpha,.6);});
+ g.addEventListener('mouseenter',()=>hover(n.id,true));
+ g.addEventListener('mouseleave',()=>hover(n.id,false));
+}
+function hover(id,on){
+ if(scenarioRun)return;
+ const nb=adj[id]||new Set();
+ nodes.forEach(n=>{ if(!n.el)return;
+  const near=n.id===id||nb.has(n.id);
+  n.el.classList.toggle('dim',on&&!near);
+  if(n.t==='doc')n.el.classList.toggle('showlbl',on&&near);
+ });
+ edges.forEach(e=>{ if(!e.el)return;
+  const touch=e.a===id||e.b===id;
+  e.el.classList.toggle('hov',on&&touch);
+  e.el.classList.toggle('dim',on&&!touch);
+ });
+}
+function select(id){
+ selId=id;
+ nodes.forEach(n=>n.el&&n.el.classList.toggle('sel',n.id===id));
+ const n=nmap[id],tp=TYPES[n.t];
+ const rels=[];
+ [...edges,...scenEdges].forEach(e=>{
+  if(!e.added)return;
+  if(e.a===id)rels.push([e.rel,e.b]); else if(e.b===id)rels.push([e.rel,e.a]);
+ });
+ const shown=rels.slice(0,14);
+ const insp=document.getElementById('insp');
+ insp.innerHTML=`
+  <div class="sec-label">객체 인스펙터</div>
+  <div class="obj-head"><span class="tp" style="background:${tp.c}">${tp.g}</span>
+   <h2>${n.l}${n.s?` <span style="font-size:11px;color:var(--ink-faint);font-family:var(--mono)">${n.s}</span>`:''}</h2></div>
+  <div class="sec-label">속성</div>
+  <div class="kv">${(n.kv||[]).map(([k,v])=>`<span class="k">${k}</span><span class="v">${v}</span>`).join('')}</div>
+  <div class="sec-label">관계 ${rels.length}</div>
+  ${shown.map(([r,o])=>`<div class="rel" data-go="${o}"><span class="rt">${r}</span><span class="rn">${nmap[o].l}</span></div>`).join('')}
+  ${rels.length>shown.length?`<div class="morerel">… 외 ${rels.length-shown.length}개 관계</div>`:''}`;
+ insp.querySelectorAll('.rel').forEach(e=>e.addEventListener('click',()=>select(e.dataset.go)));
+}
+
+/* 검색 */
+document.getElementById('q').addEventListener('input',e=>{
+ const q=e.target.value.trim().toLowerCase();
+ nodes.forEach(n=>{ if(!n.el)return;
+  const hit=q&&(n.l.toLowerCase().includes(q)||(n.s||'').toLowerCase().includes(q));
+  n.el.classList.toggle('pulse',!!hit);
+  n.el.classList.toggle('dim',q?!hit:false);
+ });
+ if(!q)edges.forEach(x=>x.el&&x.el.classList.remove('dim'));
+});
+
+/* 팬/줌/드래그 */
+let vb={x:0,y:0,w:W,h:H},panning=false,ps={};
+function applyVB(){svg.setAttribute('viewBox',`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);}
+function svgPt(cx,cy){const r=svg.getBoundingClientRect();
+ return {x:vb.x+(cx-r.left)/r.width*vb.w, y:vb.y+(cy-r.top)/r.height*vb.h};}
+svg.addEventListener('mousedown',e=>{panning=true;svg.classList.add('dragging');ps={x:e.clientX,y:e.clientY,vx:vb.x,vy:vb.y};});
+window.addEventListener('mousemove',e=>{
+ if(dragN){const p=svgPt(e.clientX,e.clientY);dragN.fx=p.x;dragN.fy=p.y;alpha=Math.max(alpha,.4);return;}
+ if(!panning)return;const r=svg.getBoundingClientRect();
+ vb.x=ps.vx-(e.clientX-ps.x)*(vb.w/r.width);vb.y=ps.vy-(e.clientY-ps.y)*(vb.h/r.height);applyVB();});
+window.addEventListener('mouseup',()=>{
+ if(dragN){dragN.fx=null;dragN.fy=null;dragN=null;}
+ panning=false;svg.classList.remove('dragging');});
+svg.addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY>0?1.09:0.92,e.clientX,e.clientY);},{passive:false});
+function zoom(f,cx,cy){
+ const r=svg.getBoundingClientRect();
+ cx=cx??r.left+r.width/2; cy=cy??r.top+r.height/2;
+ const p=svgPt(cx,cy);
+ vb.w=Math.min(2800,Math.max(500,vb.w*f)); vb.h=vb.w*H/W;
+ vb.x=p.x-(cx-r.left)/r.width*vb.w; vb.y=p.y-(cy-r.top)/r.height*vb.h; applyVB();
+}
+document.getElementById('zin').addEventListener('click',()=>zoom(0.85));
+document.getElementById('zout').addEventListener('click',()=>zoom(1.18));
+document.getElementById('zfit').addEventListener('click',()=>{vb={x:0,y:0,w:W,h:H};applyVB();});
+document.getElementById('btnReset').addEventListener('click',()=>location.reload());
+</script>
+</body>
+</html>
