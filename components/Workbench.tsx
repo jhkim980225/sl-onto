@@ -325,7 +325,13 @@ export default function Workbench() {
 
   // ── 뒤로 가기: 현재 항목을 pop하고 직전 항목을 push 없이 재선택(그래프 포커스 포함) ──
   const handleNavBack = useCallback(() => {
-    if (navHistory.length <= 1) return;
+    // 루트(항목 1개 이하)에서 뒤로 = 포커스 해제하고 부품(item) 백본으로 복귀.
+    if (navHistory.length <= 1) {
+      setNavHistory([]);
+      setInspectorObj(null);
+      graphRef.current?.clearSelection();
+      return;
+    }
     const next = navHistory.slice(0, -1);
     setNavHistory(next);
     handleNodeClick(next[next.length - 1].id, { push: false });

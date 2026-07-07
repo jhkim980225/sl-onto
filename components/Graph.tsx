@@ -531,6 +531,8 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
       // 타입 탐색기 활성 시: 그 타입 객체만(+ 포커스 공개·세션 추가). 앵커 백본보다 우선.
       if (typeFilter) return n.type === typeFilter || revealed.has(n.id) || sessionAdded.has(n.id);
       if (!built || fullView) return true;
+      // 포커스 중: 클릭 노드 + 연관(focusVisible)만 표시하고 나머지 item 백본은 가린다.
+      if (focusId) return focusVisible.has(n.id) || sessionAdded.has(n.id);
       return isBackbone(n) || revealed.has(n.id) || sessionAdded.has(n.id);
     }
     // 백본 뷰에서 기본 제외되는 관계: 근거(EVIDENCED_BY)·약한 SIMILAR(<0.7).

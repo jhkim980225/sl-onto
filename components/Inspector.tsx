@@ -77,9 +77,9 @@ function InspectorNav({
       <button
         type="button"
         className="insp-back"
-        disabled={history.length <= 1}
+        disabled={history.length < 1}
         onClick={onBack}
-        title="이전 객체로 돌아가기"
+        title="이전 객체로 돌아가기 (처음이면 부품 전체 보기)"
         aria-label="뒤로"
       >
         ←
