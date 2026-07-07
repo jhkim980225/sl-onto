@@ -22,3 +22,4 @@ data/real-samples/
 # scratch
 *.tmp
 .gstack/
+__pycache__/
