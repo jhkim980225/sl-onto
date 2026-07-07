@@ -517,7 +517,9 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
     let hideTimer: number | undefined;
 
     function isBackbone(n: GNode): boolean {
-      return !n.id.startsWith("AUTO_") && n.type !== "doc";
+      // 기본 뷰 = 대분류 앵커(부품 item·프로젝트 proj)만. 나머지(고장모드·원인·조치·근거문서)는
+      // 노드 클릭 시 1홉으로 펼쳐 공개(applyFocus). 전체 덤프 없음 → 렉 방지.
+      return n.type === "item" || n.type === "proj";
     }
     function nodeVisibleNow(n: GNode): boolean {
       if (!n.added || n.hidden) return false; // n.hidden = 시나리오 공개 전(PJ26)
@@ -809,7 +811,8 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
       const byRel = new Map<string, string[]>();
       (adj.get(id) ?? new Set<string>()).forEach((nid) => {
         const nn = nmap.get(nid);
-        if (!nn || !nn.added || nn.hiddenNow) return;
+        // 숨은 이웃(백본 밖 고장모드·원인·조치·문서)도 후보에 포함 — 클릭 시 캡만큼 공개한다.
+        if (!nn || !nn.added || nn.hidden) return; // n.hidden(시나리오 공개 전)만 제외
         const e = edgeBetween(id, nid);
         let key = (e?.rel ?? "REL").toUpperCase();
         if (key.startsWith("SIMILAR")) key = "SIMILAR";
@@ -830,6 +833,15 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
       });
       const hidden = total - (focusVisible.size - 1);
       onFocusChangeRef.current?.({ hidden, total, expanded: focusExpand });
+
+      // 클릭한 노드의 focusVisible(캡 적용 1홉 이웃)만 백본 위에 공개. revealed 를 매 포커스마다
+      // 리셋 → 누적 없이 항상 "백본 앵커 + 현재 노드 이웃"만 보이게(렉 방지).
+      if (built && !fullView && !scenarioAnimating) {
+        revealed.clear();
+        focusVisible.forEach((fid) => revealed.add(fid));
+        applyView(true);
+        notifyView();
+      }
 
       nodes.forEach((n) => {
         if (!n.el) return;

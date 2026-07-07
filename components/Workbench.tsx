@@ -948,16 +948,8 @@ export default function Workbench() {
               </span>
             )}
           </div>
-          {ontologyBuilt && viewInfo && (
-            <button
-              className="viewtoggle"
-              id="viewToggle"
-              title={viewInfo.full ? "큐레이션된 핵심 백본만 표시" : "숨긴 자동 추출 객체까지 모두 표시"}
-              onClick={() => graphRef.current?.setFullView(!viewInfo.full)}
-            >
-              {viewInfo.full ? "핵심만 보기" : `숨겨진 객체 ${viewInfo.hiddenCount}개 더 보기`}
-            </button>
-          )}
+          {/* 전체 덤프(숨겨진 객체 모두 보기) 버튼 제거 — 174노드/2171엣지 일괄 렌더가 렉 유발.
+              대신 기본 = 대분류 앵커(부품·프로젝트)만, 노드 클릭 시 1홉 관계를 펼쳐 본다. */}
           {mergeSource && (
             <div className="viewtoggle" style={{ top: 88, right: 16, color: "#b3453c", borderColor: "#f3d5d2" }}>
               ⇄ 병합 모드: &ldquo;{mergeSource.label}&rdquo; → 대상 노드를 클릭하세요{" "}
