@@ -63,7 +63,9 @@ type CheckItem = {
 (UI 에서 "상위 8 / total" 표기용). 근거·경로가 없는 항목은 캡 이전에 필터(골든 룰).
 
 ## API: `POST /api/infer`
-- body = `DesignInput`(zod 검증) → `{checklist, traversed}`.
+- body = `DesignInput`(zod 검증) → `{checklist, traversed, masterAudit?, pipeline?}`.
+- 응답은 오케스트레이터(`lib/orchestrator.ts` `runPipeline`) 경유 — 체크리스트는 `infer()` 와 동일,
+  `pipeline` 에 단계별 실행 로그(조건분석·그래프 탐색·마스터 대조·BOM 정합성, 실측 counts·ms) 동반.
 - UI: 웨이브 점등(파이프라인 단계별) 후 우측 체크리스트 렌더.
 
 ## 데모 대응(검증 기준)

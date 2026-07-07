@@ -32,6 +32,6 @@
 | **인제스천 에이전트** | 실제 xlsx/pptx/docx 파싱 + auto-create + 견고 휴리스틱(`lib/ingest/*`) | Docling(스캔/이미지 PDF·표 사진) Python 사이드카 |
 | **검색 에이전트** | 키워드+그래프(`lib/search.ts`) + 자연어 규칙기반(`lib/nlsearch.ts`) | 임베딩 의미검색·벡터DB / 사내 LLM(옵트인) |
 | **추론 에이전트** | 규칙기반 그래프 탐색(`lib/infer.ts`, 상위 8) | + LLM/SLM RAG로 FMEA 초안 생성 |
-| **오케스트레이터** | 없음(Route Handler가 직접 호출) | 다단계 Agent 워크플로우(조건분석→탐색→초안→검증) |
+| **오케스트레이터** | `runPipeline`(`lib/orchestrator.ts`) — 조건분석→탐색→마스터대조→BOM정합성 단계 로그(실측 counts·ms) | 각 스텝을 LLM/외부 에이전트로 교체(조건분석→탐색→초안→검증) |
 
 원칙: MVP의 각 `lib/*` 함수는 나중에 에이전트/외부서비스로 **갈아끼우기만** 하면 되게 인터페이스를 고정한다.
