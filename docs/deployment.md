@@ -38,7 +38,10 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v46 (2026-07-08)**. v24~v45 요약: Postgres+pgvector 영속화(+Python 임베딩 사이드카
+- **현재 배포 = v47 (2026-07-08, pyservice v2)** — v47: pyservice `/reason` RDF 리즈닝
+  (rdflib, 유도 관계 오버레이 — 전이 구성·유사 대칭·고장 전파, via 근거 체인) + "🔗 유도 관계" 배지.
+  프로덕션 실측 유도 81건, 스모크 20 불변식 PASS.
+- v46 (2026-07-08). v24~v45 요약: Postgres+pgvector 영속화(+Python 임베딩 사이드카
   pyservice, `k8s/pyservice.yaml`) · 그래프 포커스/hover 개선 · 부품 앵커 추론(v45).
   v46: BOM 파서+정합성 검증 · 전역 모순 스캔 배지 · 마스터 대조 audit · 품질 감사(🧹) ·
   확신도 breakdown · 오케스트레이터 v0 · 임베딩 자동 백필. 신규 원천 3개(BOM 2·결로 마스터)는
