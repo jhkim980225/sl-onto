@@ -183,3 +183,22 @@ test("anchorItem 없으면 유사 프로젝트 기반 유지 (기존 동작 회�
   const r = infer(DEMO);
   assert.ok(r.checklist.some((c) => /유사 프로젝트/.test(c.desc)), "기본 모드인데 유사 프로젝트 근거가 없음");
 });
+
+test("확신도 breakdown — 항 합계가 confidence 와 일치, 각 항 ≥ 0 (블랙박스 아님 검증)", () => {
+  for (const input of [DEMO, FOG_DEMO]) {
+    const r = infer(input);
+    assert.ok(r.checklist.length > 0, "체크리스트가 비어있음");
+    for (const it of r.checklist) {
+      assert.ok(it.breakdown, `항목 "${it.title}" 에 breakdown 이 없음`);
+      const { sim, evid, sev, master, boost } = it.breakdown!;
+      for (const [k, v] of Object.entries({ sim, evid, sev, master, boost })) {
+        assert.ok(v >= 0, `항목 "${it.title}" 의 breakdown.${k} 가 음수: ${v}`);
+      }
+      const sum = sim + evid + sev + master + boost;
+      assert.ok(
+        Math.abs(sum - it.confidence / 100) <= 0.01,
+        `항목 "${it.title}" breakdown 합계(${sum.toFixed(4)}) != confidence/100(${(it.confidence / 100).toFixed(4)})`
+      );
+    }
+  }
+});

@@ -120,6 +120,15 @@ export interface CheckItem {
   evidence: string[];         // 문서/사례 칩
   confidence: number;         // %
   trace: string[];            // 근거 경로 "PJ26→SIMILAR→PJ21"
+  /** 확신도 산식 공개 — confidenceOf() 가 이미 계산하는 항을 그대로 노출(옵셔널, 구 버전 무영향). */
+  breakdown?: {
+    sim: number;    // 유사도 항 기여분(가중 적용 후, 0..1)
+    evid: number;   // 근거수 항 기여분
+    sev: number;    // 심각도 항 기여분
+    master: number; // 마스터 일치 항 기여분
+    boost: number;  // 조건 부스트 합계
+    weights: { sim: number; evid: number; sev: number; master: number }; // 가중치 상수
+  };
 }
 
 /** 마스터 대조(masterAudit) — 도달한 마스터별 설계표준 필수 항목 커버리지.

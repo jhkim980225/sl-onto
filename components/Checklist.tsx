@@ -258,6 +258,8 @@ function ChecklistRow({ c, index, revealed, expanded, onToggle, nodeIndex, onSel
         <div className="chk-detail" onClick={(ev) => ev.stopPropagation()}>
           <p>{c.desc}</p>
 
+          {c.breakdown && <ConfidenceBreakdown breakdown={c.breakdown} confidence={c.confidence} />}
+
           <div className="sec-label">근거 문서·사례</div>
           <div className="evs">
             {c.evidence.map((e, j) => {
@@ -294,6 +296,46 @@ function ChecklistRow({ c, index, revealed, expanded, onToggle, nodeIndex, onSel
         </div>
       )}
     </div>
+  );
+}
+
+// 확신도 산식 공개 — confidenceOf() 가 계산하는 항을 누적 막대 + 한 줄 수식으로 노출.
+// 골든 룰(확신도 항상 노출)의 강화판: %만이 아니라 "왜 그 %인지" 항별 기여도를 보여준다.
+function ConfidenceBreakdown({
+  breakdown,
+  confidence,
+}: {
+  breakdown: NonNullable<CheckItem["breakdown"]>;
+  confidence: number;
+}) {
+  const { sim, evid, sev, master, boost } = breakdown;
+  const segs = [
+    { key: "sim", label: "유사도", v: sim, color: "#0b4ea0" },
+    { key: "evid", label: "근거", v: evid, color: "#00a2e5" },
+    { key: "sev", label: "심각도", v: sev, color: "#e5a300" },
+    { key: "master", label: "마스터", v: master, color: "#7a5cff" },
+    { key: "boost", label: "부스트", v: boost, color: "#2ecc71" },
+  ];
+  return (
+    <>
+      <div className="sec-label">확신도 산식</div>
+      <div className="conf-stack">
+        {segs.map((s) => (
+          <i key={s.key} style={{ width: `${s.v * 100}%`, background: s.color }} title={`${s.label} ${s.v.toFixed(2)}`} />
+        ))}
+      </div>
+      <p className="conf-formula">
+        {segs.map((s, i) => (
+          <span key={s.key}>
+            {i > 0 && " + "}
+            <span style={{ color: s.color }}>
+              {s.label} {s.v.toFixed(2)}
+            </span>
+          </span>
+        ))}
+        {" "}= {confidence}%
+      </p>
+    </>
   );
 }
 

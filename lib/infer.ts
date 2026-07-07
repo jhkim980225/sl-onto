@@ -504,7 +504,10 @@ export function infer(input: DesignInput): InferResponse {
   // ── 6단계: 확신도 계산 + 조립 + 정렬 ──
   const items = [...concerns.values()]
     .filter((c) => c.evidence.length > 0 && c.trace.length > 0) // 근거·경로 필수 (골든 룰)
-    .map((c) => ({ c, confidence: confidenceOf(c) }));
+    .map((c) => {
+      const { confidence, breakdown } = confidenceOf(c);
+      return { c, confidence, breakdown };
+    });
 
   items.sort((a, b) => b.confidence - a.confidence || b.c.severity - a.c.severity);
 
@@ -523,6 +526,7 @@ export function infer(input: DesignInput): InferResponse {
     evidence: it.c.evidence,
     confidence: it.confidence,
     trace: it.c.trace,
+    breakdown: it.breakdown,
   }));
 
   return {
@@ -638,12 +642,43 @@ function mostSimilarConcern(concerns: Map<string, Concern>, fmId: string): numbe
 }
 
 /* ────────────────────────── 확신도 공식 ────────────────────────── */
-function confidenceOf(c: Concern): number {
+// confidence 최종 값(반올림된 %)은 기존 산식과 1%p도 다르지 않다 — breakdown 은 이미 계산되던
+// 항을 버리지 않고 그대로 동반 반환할 뿐이다(순수 노출, 로직 변경 없음).
+function confidenceOf(c: Concern): { confidence: number; breakdown: NonNullable<CheckItem["breakdown"]> } {
   const sim = clamp01(c.sim);
   const evidenceNorm = clamp01(c.docCount / EVID_FULL);
   const severityNorm = clamp01(c.severity / SEV_FULL);
   const masterMatch = c.hasMaster ? 1 : 0;
-  const raw =
-    W1_SIM * sim + W2_EVID * evidenceNorm + W3_SEV * severityNorm + W4_MASTER * masterMatch + c.boost;
-  return Math.round(clamp01(raw) * 100);
+
+  let simTerm = W1_SIM * sim;
+  let evidTerm = W2_EVID * evidenceNorm;
+  let sevTerm = W3_SEV * severityNorm;
+  let masterTerm = W4_MASTER * masterMatch;
+  let boostTerm = c.boost;
+
+  const raw = simTerm + evidTerm + sevTerm + masterTerm + boostTerm;
+  const confidence = Math.round(clamp01(raw) * 100);
+
+  // raw > 1 (부스트 누적으로 상한 초과)이면 confidence 는 clamp01 로 1(100%)에 묶인다 —
+  // breakdown 항도 동일 비율로 축소해 합계가 clamp 후 값과 어긋나지 않게 한다.
+  if (raw > 1) {
+    const scale = 1 / raw;
+    simTerm *= scale;
+    evidTerm *= scale;
+    sevTerm *= scale;
+    masterTerm *= scale;
+    boostTerm *= scale;
+  }
+
+  return {
+    confidence,
+    breakdown: {
+      sim: simTerm,
+      evid: evidTerm,
+      sev: sevTerm,
+      master: masterTerm,
+      boost: boostTerm,
+      weights: { sim: W1_SIM, evid: W2_EVID, sev: W3_SEV, master: W4_MASTER },
+    },
+  };
 }
