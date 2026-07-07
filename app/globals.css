@@ -123,9 +123,10 @@ svg#graph.dragging{cursor:grabbing}
 .node .box{transition:filter .25s,stroke .25s}
 /* !important: 노드는 spawnIn 애니메이션(animation-fill-mode:both)이 opacity:1을 고정하므로
    일반 선언으로는 흐려지지 않는다. important 저자 선언은 애니메이션 값을 이긴다. */
-/* dim = 포커스 밖 거의 안 보이는 노드(opacity .06). pointer-events 살아있으면 큰 rect 가
-   위/아래로 겹쳐 클릭을 가로챈다 → none 으로 차단(배경 클릭 = 포커스 해제 후 재선택). */
-.node.dim{opacity:.06!important;pointer-events:none}
+/* dim = 포커스 밖 노드(opacity .06). 클릭 가능 유지 — 겹침 오클릭은 hover 시 맨 앞으로
+   올리는 방식(bindNode)으로 해결한다. pointer-events:none 을 걸면 포커스 중 다른 앵커(item)
+   클릭이 배경으로 빠져 "클릭해도 안 펼쳐짐" 문제가 생기므로 걸지 않는다. */
+.node.dim{opacity:.06!important}
 /* 포커스/시나리오 dim이 걸린 노드는 라벨/글리프/서브텍스트를 숨겨, 흰 배경 위에서
    포커스된 이웃만 라벨과 함께 도드라지게 한다. */
 .node.dim .lbl,.node.dim .glyph,.node.dim .sub,.node.dim .dlbl{opacity:0}
