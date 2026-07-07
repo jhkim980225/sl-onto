@@ -9,13 +9,17 @@
 + 타이틀 블록(대상·설계조건·작성일)과 요약 행.
 
 ## 로직 (`lib/fmea-draft.ts`)
-- **대상 부품**: 입력 `components` → item 노드 + 그 구성(`CONSISTS_OF`). 없으면 헤드램프 어셈블리 기본.
+- **대상 부품**: `anchorItem`(부품 앵커 — 그래프에서 item 선택 후 추론) 있으면 그 부품(+구성)으로
+  하드 스코프(파일명에도 반영), 없으면 `components` → item 노드 + 그 구성(`CONSISTS_OF`).
+  그것도 없으면 헤드램프 어셈블리 기본. 라벨 정확 일치 우선.
 - 각 item → `HAS_FAILURE` 고장모드 → `CAUSED_BY` 원인. fm 에서 S(`심각도 S`), 원인에서 O(`발생도 O`)/D(`검출도 D`, 기본 5).
 - **RPN = S × O × D**, 우선순위(높음 ≥125 / 중 ≥60 / 낮음).
 - 현행 설계관리(예방) = `REF_MASTER` 마스터 참조, 권고조치 = `MITIGATED_BY` 조치(상위 3), 근거 = `EVIDENCED_BY` 문서.
 - **조건 부스트**: 슬림→수축 원인, LED→방열/배광 관련 발생도(O) +1.
 - **정제(중요)**: FMEA 초안은 **큐레이션 백본(비-AUTO)만** 사용 — auto-create 벌크 엔티티는 조합 링크 노이즈가 있어 제외.
   fm-원인 중복 제거 · 원인 3/행·조치 3/행·총 40행 상한. → 사리에 맞는 ~13행 초안.
+- **마스터 대조 요약**: 워크시트 하단에 `infer(input).masterAudit` 커버/누락/미확인 행
+  (설계표준 필수 항목 커버리지 — [inference.md](inference.md) 참조).
 
 ## API
 - `POST /api/fmea-draft` (body: `DesignInput`) → `application/vnd...spreadsheetml.sheet` 첨부 다운로드
