@@ -522,9 +522,9 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
     let hideTimer: number | undefined;
 
     function isBackbone(n: GNode): boolean {
-      // 기본 뷰 = 대분류 앵커(부품 item·프로젝트 proj)만. 나머지(고장모드·원인·조치·근거문서)는
-      // 노드 클릭 시 1홉으로 펼쳐 공개(applyFocus). 전체 덤프 없음 → 렉 방지.
-      return n.type === "item" || n.type === "proj";
+      // 기본 뷰 = 대분류 앵커(부품 item)만. 나머지(프로젝트·고장모드·원인·조치·근거문서)는
+      // 좌측 타입 탐색기 또는 노드 클릭 1홉 펼침으로 접근. 전체 덤프 없음 → 렉 방지.
+      return n.type === "item";
     }
     function nodeVisibleNow(n: GNode): boolean {
       if (!n.added || n.hidden) return false; // n.hidden = 시나리오 공개 전(PJ26)
