@@ -4,6 +4,7 @@
 import * as XLSX from "xlsx";
 import type { DesignInput, Node } from "./types";
 import { getNode, allNodes, neighbors, evidenceOf } from "./store";
+import { infer } from "./infer";
 
 const propOf = (n: Node | undefined, sub: string): string | undefined =>
   n?.props?.find(([k]) => k.replace(/\s+/g, "").includes(sub))?.[1];
@@ -137,6 +138,20 @@ export function buildFmeaWorkbook(input: DesignInput, meta: { date: string }): B
       r.cause, r.O, r.ctrlPrev, r.ctrlDet, r.D, r.rpn, r.priority, r.action, r.evidence,
     ]),
   ];
+  // 마스터 대조(있으면) — 워크시트 하단에 커버/누락/미확인 요약. 근거: infer masterAudit(REF_MASTER 경로).
+  const audit = infer(input).masterAudit ?? [];
+  if (audit.length > 0) {
+    aoa.push([], ["마스터 대조 — 설계표준 필수 항목 커버리지 (검토용)"]);
+    for (const ma of audit) {
+      aoa.push([
+        "", ma.master.label,
+        `커버 ${ma.covered.length}/${ma.required.length}`,
+        ma.covered.join(", ") || "-",
+        `누락: ${ma.missing.join(", ") || "없음"}`,
+        ma.unknown.length ? `미확인: ${ma.unknown.join(", ")}` : "",
+      ]);
+    }
+  }
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"] = [
     { wch: 4 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 7 }, { wch: 16 }, { wch: 7 },
