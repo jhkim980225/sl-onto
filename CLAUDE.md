@@ -14,9 +14,12 @@ FMEA 지식 **온톨로지 워크벤치**. 흩어진 FMEA 문서를 객체·관�
 4. **UI에 데이터 하드코딩 금지:** 온톨로지·추론 결과는 전부 `/api/*`에서 온다. (데모의 하드코딩 배열은 시드/저장소로 이관)
 
 ## 스택 (요약, 상세는 `docs/tech-stack.md`)
-Next.js(App Router, TS) · Route Handlers API · 인메모리 온톨로지(→ Postgres) · 규칙기반 그래프 추론 ·
-자연어 검색(규칙기반, LLM 옵트인) · 인제스천(xlsx/pptx/docx) · **라이트 SL 브랜드 테마**(흰 배경·네이비 텍스트·시안 액센트 `#00a2e5`).
-- **배포됨(v8):** FEDA K8s ns `sl-ontoground`, NodePort **30494** → `http://192.168.0.100:30494/` (상세 `docs/deployment.md`).
+Next.js(App Router, TS) · Route Handlers API · **Postgres 영속 온톨로지**(DB=원본, 인메모리=읽기 캐시,
+pgvector 384-dim + Python 임베딩 사이드카 pyservice) · 규칙기반 그래프 추론 ·
+자연어 검색(규칙기반 + 임베딩 후보확장, LLM 옵트인) · 인제스천(xlsx/pptx/docx/dxf) ·
+**라이트 SL 브랜드 테마**(흰 배경·네이비 텍스트·시안 액센트 `#00a2e5`).
+- **배포됨:** FEDA K8s ns `sl-ontoground`, NodePort **30494** → `http://192.168.0.100:30494/` (상세 `docs/deployment.md`).
+  다음 버전 번호는 마스터의 `docker images` + `kubectl get rs`로 확인(로컬 스크립트 파일명 믿지 말 것).
 
 ## 레포 구조
 ```
@@ -33,7 +36,8 @@ data/sources/       데모 원천 파일 (약 34개, 런타임 인제스천 대�
 data/real-samples/  실무형 지저분한 문서(견고 파싱 검증 전용, 데모 미포함)
 docs/           설계 문서
 ```
-저장소는 MVP에서 **인메모리**(`ingestAll()` 결과 ≈170 노드/2156 엣지, 실패 시 seed 폴백). 확장 시 Postgres.
+저장소는 **Postgres**(DB=원본 · 최초 부팅 시 DB 비면 `ingestAll()` 적재 ≈174 노드/2171 엣지 ·
+`DATABASE_URL` 없으면 인메모리 폴백). 임베딩 백필은 부팅·병합 후 자동(재트리거 `POST /api/admin/embed-backfill`).
 
 ## 개발 명령어 (스캐폴딩 후)
 - `npm run dev` — 개발 서버

@@ -29,6 +29,17 @@ nlSearch(query: string): Promise<NLSearchResponse>
 8. **해석/답변 템플릿:** `interpretation`("지역: 북미 · 개념: 결로 · 유형: 조치"),
    `answer`("관련 객체 N건 (유형별 집계). …중심으로 연결된 항목입니다.").
 
+## 임베딩 후보 확장 (조건부 ON · pgvector)
+`DATABASE_URL` + `PYSERVICE_URL` 이 둘 다 설정되면(프로덕션 기본) 규칙 파이프라인 **앞단에서 후보를 넓힌다**:
+- 질의 → pyservice `POST /embed`(`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384-dim, 한국어 가능)
+  → `nodes.embedding <=> $vec` 코사인 top-20 id (`lib/db.ts semanticSearch`).
+- 이 id들은 `ruleBasedNL(q, embedIds)` 에 **고정 플로어 점수(EMBED_FLOOR=1.5, direct=false)** 로만 합류 —
+  최종 랭킹·해석·지역 필터는 여전히 규칙이 결정한다(후보 확장 전용).
+- 백필: 부팅(hydrate) 후·증분 병합(mergeDelta) 후 **자동 백그라운드 실행**(비차단·멱등).
+  `POST /api/admin/embed-backfill` 은 수동 재트리거용. 미백필이면 semanticSearch가 빈 결과
+  → 규칙기반과 동일 동작(안전 폴백).
+- pyservice 실패도 조용히 빈 배열(throw 금지) → 규칙기반 폴백.
+
 ## LLM 경로 (기본 OFF · `NL_USE_LLM=1` 로 옵트인)
 - 사내 vLLM `qwen3-32b-finance` 에 카탈로그(id=라벨 목록)를 주고 관련 id 를 고르게 함(JSON 강제, `/no_think`).
 - 실패/타임아웃/빈 결과 시 규칙기반으로 폴백.
@@ -40,10 +51,13 @@ nlSearch(query: string): Promise<NLSearchResponse>
 | **규칙기반**(채택) | 엔티티 링크 + 그래프 확장. **<1s**, 한국어 정확, 결정론적 | ✅ 기본 |
 | in-cluster vLLM `qwen3-32b-finance` | 품질은 되나 **쿼리당 ~60–70s** (서버 과부하) | 너무 느림 → 옵트인만 |
 | ollama `nomic-embed-text` 임베딩 | 한국어 개념을 **변별 못함**(유사도 붕괴) | 사용 안 함 |
+| pgvector + 다국어 MiniLM(현행) | 한국어 변별 됨 — 단 **후보 확장만** 담당, 랭킹은 규칙 유지 | ✅ 조건부 ON |
 > 좁고 통제된 온톨로지에서는 규칙기반 링크가 임베딩/대형 LLM보다 빠르고 정확. LLM 슬롯은 서버가 빨라지면 켠다.
+> nomic 실패 이후 다국어 MiniLM(pyservice)으로 임베딩은 재도입 — 역할은 보수적으로 "후보 넓히기"까지만.
 
 ## API: `POST /api/nlsearch`
 - body `{ query: string(1..400) }`(zod) → `NLSearchResponse`. 빈/잘못된 body → 400.
 
 ## 확장 이음새
-- 규칙 → LLM: `NL_USE_LLM=1` 만으로 전환(폴백 유지). 임베딩 도입 시 `ruleBasedNL` 내부만 교체.
+- 규칙 → LLM: `NL_USE_LLM=1` 만으로 전환(폴백 유지).
+- 임베딩은 후보 확장으로 **이미 도입됨**(위) — 랭킹까지 임베딩으로 넘기려면 `ruleBasedNL` 내부 스코어러만 교체.
