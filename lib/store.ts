@@ -9,8 +9,19 @@ import { NODES as SEED_NODES, EDGES as SEED_EDGES } from "./seed";
 import { ingestAll } from "./ingest/index";
 import type { SourceInfo } from "./ingest/index";
 import * as db from "./db";
+import { backfillEmbeddings } from "./embed";
 
 const HAS_DB = db.dbEnabled();
+
+/** 임베딩 백필을 백그라운드로(부팅·병합 비차단, 실패 무해 — backfillEmbeddings 자체가 멱등·no-throw). */
+function scheduleEmbedBackfill() {
+  if (!HAS_DB) return;
+  void backfillEmbeddings()
+    .then((r) => {
+      if (!r.skipped && r.embedded > 0) console.log(`[embed] auto-backfill: ${r.embedded}개 임베딩 생성`);
+    })
+    .catch(() => {});
+}
 
 // ── 인메모리 인덱스 ──
 let NODES: Node[] = [];
@@ -102,6 +113,7 @@ async function hydrate(): Promise<void> {
     for (const s of sources) RUNTIME_SOURCES.push(s);
     ACTIVE_DRAWING = activeDrawing;
   }
+  scheduleEmbedBackfill(); // 부팅 후 누락 임베딩 자동 채움(비차단)
 }
 
 /* ────────────────────────── 증분 병합 (인제스천·도면 추가) ──────────────────────────
@@ -139,6 +151,7 @@ export async function mergeDelta(
     if (!addedIds.has(e.src)) touchedSet.add(e.src);
     if (!addedIds.has(e.dst)) touchedSet.add(e.dst);
   }
+  if (addedNodes.length > 0) scheduleEmbedBackfill(); // 새 노드는 벡터 검색에도 보이게(비차단)
   return { addedNodes, addedEdges, touched: [...touchedSet] };
 }
 
