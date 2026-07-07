@@ -54,35 +54,39 @@ const WB: Record<string, string[]> = {
   PJ23: ["FMLUM"],
 };
 
-for (const [projId, fmIds] of Object.entries(WB)) {
-  const rows: Record<string, unknown>[] = [];
-  for (const fmId of fmIds) {
-    const items = inByRel(fmId, "HAS_FAILURE"); // item -> fm
-    const causes = outByRel(fmId, "CAUSED_BY"); // fm -> cause
-    const actions = outByRel(fmId, "MITIGATED_BY"); // fm -> action
-    const occurred = inByRel(fmId, "OCCURRED_IN"); // proj -> fm
-    const S = prop(fmId, "심각도 S");
-    const 조치 = actions[0] ? label(actions[0]) : "";
-    const 발생프로젝트 = occurred.includes(projId) ? label(projId) : "";
-    for (const itemId of items) {
-      for (const causeId of causes) {
-        rows.push({
-          부품: label(itemId),
-          기능: node(itemId).sub || "기능 유지",
-          고장모드: label(fmId),
-          원인: label(causeId),
-          영향: node(fmId).sub || "품질 저하",
-          심각도S: S,
-          발생도O: prop(causeId, "발생도 O"),
-          현행조치: 조치,
-          // 원본코드: 2014년 최초 보고 시의 비표준 코드(외관-B) → 매핑 시연용 (간극 행에만)
-          원본코드: fmId === "FMGAP" ? "외관-B" : "",
-          발생프로젝트: 발생프로젝트,
-        });
+// ponytail: 예전에는 이 for 루프가 모듈 로드시 즉시 실행됐다(항상 전체 재생성만 하던 스크립트라
+// 문제없었음). --bom 전용 실행 경로를 추가하며 함수로 감싸 main()에서만 호출하도록 분리.
+function buildBackboneFmea() {
+  for (const [projId, fmIds] of Object.entries(WB)) {
+    const rows: Record<string, unknown>[] = [];
+    for (const fmId of fmIds) {
+      const items = inByRel(fmId, "HAS_FAILURE"); // item -> fm
+      const causes = outByRel(fmId, "CAUSED_BY"); // fm -> cause
+      const actions = outByRel(fmId, "MITIGATED_BY"); // fm -> action
+      const occurred = inByRel(fmId, "OCCURRED_IN"); // proj -> fm
+      const S = prop(fmId, "심각도 S");
+      const 조치 = actions[0] ? label(actions[0]) : "";
+      const 발생프로젝트 = occurred.includes(projId) ? label(projId) : "";
+      for (const itemId of items) {
+        for (const causeId of causes) {
+          rows.push({
+            부품: label(itemId),
+            기능: node(itemId).sub || "기능 유지",
+            고장모드: label(fmId),
+            원인: label(causeId),
+            영향: node(fmId).sub || "품질 저하",
+            심각도S: S,
+            발생도O: prop(causeId, "발생도 O"),
+            현행조치: 조치,
+            // 원본코드: 2014년 최초 보고 시의 비표준 코드(외관-B) → 매핑 시연용 (간극 행에만)
+            원본코드: fmId === "FMGAP" ? "외관-B" : "",
+            발생프로젝트: 발생프로젝트,
+          });
+        }
       }
     }
+    writeXlsx(`FMEA_${hl(projId)}_검토시트.xlsx`, [{ name: "FMEA", rows }]);
   }
-  writeXlsx(`FMEA_${hl(projId)}_검토시트.xlsx`, [{ name: "FMEA", rows }]);
 }
 
 /* ══════════ 1b. 현실적 대량 FMEA (자동차 램프 도메인 풀) ══════════
@@ -782,6 +786,47 @@ function buildDrawings() {
   writeDxf("도면_아우터렌즈_단품.dxf", part);
 }
 
+/* ══════════ 2e. BOM(xlsx) — 부품표 인제스천 시연용 ══════════
+ * 파서(lib/ingest/index.ts ingestXlsxBom): 상위부품 컬럼(동의어: 상위부품/모듈/assembly) →
+ * 부품명 컬럼(동의어: 부품명/품명/part) 으로 CONSISTS_OF. 통제 어휘 부품(LED 모듈·아우터 렌즈·
+ * 하우징·라이트가이드 등)은 기존 id 로 병합되고, 신규 부품(방열판·벤트 멤브레인 등)은
+ * auto-create(0.66) 로 편입된다. 두 워크북은 컬럼명을 표준/동의어로 달리해 컬럼 동의어
+ * 매칭까지 시연한다. */
+function buildBom() {
+  writeXlsx("BOM_신규_헤드램프_HL22.xlsx", [
+    {
+      name: "BOM",
+      rows: [
+        { 레벨: 0, "상위 부품": "", 부품명: "헤드램프 어셈블리", 품번: "HL22-00-000", 수량: 1, 재질: "-" },
+        { 레벨: 1, "상위 부품": "헤드램프 어셈블리", 부품명: "LED 모듈", 품번: "HL22-01-100", 수량: 2, 재질: "-" },
+        { 레벨: 1, "상위 부품": "헤드램프 어셈블리", 부품명: "아우터 렌즈", 품번: "HL22-01-200", 수량: 1, 재질: "PC" },
+        { 레벨: 1, "상위 부품": "헤드램프 어셈블리", 부품명: "하우징", 품번: "HL22-01-300", 수량: 1, 재질: "PC+ABS" },
+        { 레벨: 1, "상위 부품": "헤드램프 어셈블리", 부품명: "라이트가이드", 품번: "HL22-01-400", 수량: 1, 재질: "PMMA" },
+        { 레벨: 1, "상위 부품": "헤드램프 어셈블리", 부품명: "히트싱크", 품번: "HL22-01-500", 수량: 1, 재질: "Al" },
+        { 레벨: 2, "상위 부품": "히트싱크", 부품명: "방열판", 품번: "HL22-02-510", 수량: 1, 재질: "Al 6061" },
+        { 레벨: 1, "상위 부품": "헤드램프 어셈블리", 부품명: "방수벤트", 품번: "HL22-01-600", 수량: 2, 재질: "PTFE 멤브레인" },
+        { 레벨: 2, "상위 부품": "방수벤트", 부품명: "벤트 멤브레인", 품번: "HL22-02-610", 수량: 2, 재질: "PTFE" },
+        { 레벨: 1, "상위 부품": "헤드램프 어셈블리", 부품명: "실링 개스킷", 품번: "HL22-01-700", 수량: 1, 재질: "EPDM" },
+      ],
+    },
+  ]);
+
+  // 동의어 컬럼명(모듈/품명/소재) 워크북 — 컬럼 동의어 매칭 검증.
+  writeXlsx("BOM_통합모듈_HL19.xlsx", [
+    {
+      name: "BOM",
+      rows: [
+        { 레벨: 0, 모듈: "", 품명: "DRL 모듈", 품번: "HL19-00-000", 수량: 1, 소재: "-" },
+        { 레벨: 1, 모듈: "DRL 모듈", 품명: "LED 모듈", 품번: "HL19-01-100", 수량: 1, 소재: "-" },
+        { 레벨: 1, 모듈: "DRL 모듈", 품명: "PCB 기판", 품번: "HL19-01-200", 수량: 1, 소재: "FR-4" },
+        { 레벨: 1, 모듈: "DRL 모듈", 품명: "커넥터", 품번: "HL19-01-300", 수량: 1, 소재: "-" },
+        { 레벨: 1, 모듈: "DRL 모듈", 품명: "LED 드라이버", 품번: "HL19-01-400", 수량: 1, 소재: "-" },
+        { 레벨: 1, 모듈: "DRL 모듈", 품명: "방열 그리스", 품번: "HL19-01-500", 수량: 1, 소재: "실리콘" },
+      ],
+    },
+  ]);
+}
+
 /* ══════════ 3c. 결로 지역별 품질 리포트 (docx) ══════════ */
 function buildFogReport() {
   const { Document, Packer, Paragraph, HeadingLevel, TextRun } = docx;
@@ -943,6 +988,7 @@ async function main() {
       else throw e;
     }
   };
+  buildBackboneFmea();
   buildReference();
   buildBulkFmea();
   buildCondensationFmea();
@@ -974,7 +1020,13 @@ async function main() {
   console.log("완료:", files.length, "files ·", files.join(", "));
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// --bom: BOM 파일만 추가로 쓴다(전체 재생성으로 기존 파일을 건드리지 않기 위한 별도 실행 경로).
+if (process.argv.includes("--bom")) {
+  buildBom();
+  console.log("완료(BOM only)");
+} else {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

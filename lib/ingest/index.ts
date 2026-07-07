@@ -319,9 +319,63 @@ function ingestXlsx(file: string, full: string, ctx: XlsxCtx) {
     return;
   }
 
+  if (file.startsWith("BOM")) {
+    ingestXlsxBom(full, ctx);
+    return;
+  }
+
   // 알려진 접두어(정형 참조/FMEA)에 매칭되지 않은 xlsx = "실무" 문서 → 휴리스틱 FMEA 추출.
   // (data/sources 의 정형 파일은 위 분기에서 이미 return 되므로 여기 도달하지 않는다 — 부가적.)
   ingestXlsxHeuristic(full, ctx);
+}
+
+// BOM(부품표) xlsx: 행 = (상위 부품, 부품명, 수량, 재질, …). 컬럼명은 동의어 허용
+// (상위부품/모듈/assembly, 부품명/품명/part, 수량/qty, 재질/소재/material) — 헤더 자동탐지는
+// 불요(정형 시트 가정)하되 실제 헤더 텍스트를 동의어로 찾는다. 상위 부품이 있으면 CONSISTS_OF,
+// 없으면(최상위 어셈블리 행) 노드만 생성. 통제 어휘 밖 부품명은 auto-create 로 편입.
+const BOM_COL_SYN = {
+  parent: ["상위부품", "상위 부품", "모듈", "assembly", "parent"],
+  child: ["부품명", "품명", "부품", "part"],
+  qty: ["수량", "qty", "quantity"],
+  material: ["재질", "소재", "material"],
+} as const;
+
+function ingestXlsxBom(full: string, ctx: XlsxCtx) {
+  const { resolve, link, getNode, addProp } = ctx;
+  const { sheets } = readWorkbook(full);
+  // 완전 일치를 부분 일치보다 우선한다 — "부품명"은 "상위 부품"의 부분 문자열이라
+  // includes 만으로 매칭하면 상위/하위 컬럼이 같은 헤더로 뒤섞인다(자기 자신 CONSISTS_OF 유발).
+  const findCol = (headers: string[], syns: readonly string[]) => {
+    const exact = headers.find((h) => syns.some((s) => nsl(h) === nsl(s)));
+    if (exact) return exact;
+    return headers.find((h) => syns.some((s) => nsl(h).includes(nsl(s))));
+  };
+
+  for (const sh of sheets) {
+    if (sh.rows.length === 0) continue;
+    const headers = Object.keys(sh.rows[0]);
+    const parentCol = findCol(headers, BOM_COL_SYN.parent);
+    const childCol = findCol(headers.filter((h) => h !== parentCol), BOM_COL_SYN.child);
+    const qtyCol = findCol(headers, BOM_COL_SYN.qty);
+    const matCol = findCol(headers, BOM_COL_SYN.material);
+    if (!childCol) continue; // 부품명 컬럼이 없으면 BOM 시트가 아님 — 견고하게 skip
+
+    for (const r of sh.rows) {
+      const childRaw = r[childCol];
+      if (EMPTY(childRaw)) continue; // 빈 행 skip
+      const child = resolve(childRaw, "item");
+      if (!child) continue;
+      const nc = getNode(child);
+      if (qtyCol) addProp(nc, "수량", r[qtyCol]);
+      if (matCol) addProp(nc, "재질", r[matCol]);
+
+      const parentRaw = parentCol ? r[parentCol] : "";
+      if (!EMPTY(parentRaw)) {
+        const parent = resolve(parentRaw, "item");
+        link(parent, "CONSISTS_OF", child);
+      }
+    }
+  }
 }
 
 /* ───── 실무 FMEA 워크시트 휴리스틱: 헤더 자동탐지 · 동의어 컬럼매핑 · 병합셀 채움 ───── */
