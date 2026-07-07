@@ -6,6 +6,7 @@ import { allNodes, getNode, neighbors, deg, outEdges, evidenceOf, getActiveDrawi
 import { featuresFromProps, hasFeatures, rankSimilarByShape } from "./shape-sim";
 import { dbEnabled, semanticSearch } from "./db";
 import { embedEnabled, embedOne } from "./embed";
+import { llmNLSearch } from "./llm";
 import { findConsumerMentions } from "./contradictions";
 
 // 임베딩 후보 합류 시 부여하는 고정 시드 점수(플로어). 직접 라벨 매칭(1.7+)보다 낮게 둬 실제 라벨 히트가 항상 우선하되,
@@ -352,50 +353,28 @@ function ruleBasedNL(query: string, embedIds: string[] = []): NLSearchResponse {
   return { answer, interpretation: parts.join(" · ") || undefined, hits, neighbors: nbr, mode: "llm" };
 }
 
-/* ───────── 옵션: 사내 LLM(qwen3) — 서버가 느려 기본 비활성(NL_USE_LLM=1 로 켬) ───────── */
-const LLM_BASE = (process.env.LLM_BASE_URL || "http://vllm-loadbalancer.vllm-cluster.svc.cluster.local/v1").replace(/\/$/, "");
-const LLM_MODEL = process.env.LLM_MODEL || "qwen3-32b-finance";
-const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS || 60000);
-
+/* ───────── 옵션: 사내 LLM(qwen3) — 서버가 느려 기본 비활성(NL_USE_LLM=1 로 켬) ─────────
+ * 프롬프트·호출은 pyservice(lib/llm.ts /llm)로 이관됨 — 여기선 카탈로그 조립 + 응답 후처리만. */
 function catalog(): string {
   const byType: Record<string, string[]> = {};
   for (const n of allNodes()) { if (n.type === "doc") continue; (byType[n.type] ??= []).push(`${n.id}=${n.label}`); }
   const order: ObjType[] = ["item", "fm", "cause", "action", "reg", "proj", "master", "spec"];
   return order.filter((t) => byType[t]?.length).map((t) => `[${t}] ${byType[t].join(" | ")}`).join("\n");
 }
-function extractJson(text: string): { answer?: string; interpretation?: string; ids?: string[] } | null {
-  const c = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-  const a = c.indexOf("{"), b = c.lastIndexOf("}");
-  if (a < 0 || b <= a) return null;
-  try { return JSON.parse(c.slice(a, b + 1)); } catch { return null; }
-}
 async function llmNL(query: string): Promise<NLSearchResponse | null> {
-  const body = {
-    model: LLM_MODEL, max_tokens: 400, temperature: 0,
-    messages: [
-      { role: "system", content: `너는 FMEA 온톨로지 검색기다. 목록의 id만 써서 질의 관련 id를 관련도순 최대 12개 고른다. 지역은 법규로: 북미→FMVSS 108, 유럽→ECE R149, 한국→KMVSS, 중국→GB 25991. JSON만 출력: {"answer":"요약","interpretation":"조건","ids":[...]}. /no_think` },
-      { role: "user", content: `/no_think 목록:\n${catalog()}\n\n질의: ${query}` },
-    ],
-  };
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), LLM_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${LLM_BASE}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal });
-    if (!res.ok) return null;
-    const out = extractJson((await res.json())?.choices?.[0]?.message?.content ?? "");
-    if (!out?.ids?.length) return null;
-    const seen = new Set<string>(); const hits: SearchHit[] = [];
-    for (const raw of out.ids) {
-      const n = getNode(String(raw)) || allNodes().find((x) => x.type !== "doc" && x.label === String(raw).trim());
-      if (!n || seen.has(n.id)) continue; seen.add(n.id);
-      hits.push({ id: n.id, label: n.label, type: n.type, score: 1 - hits.length * 0.01, matched: ["label"] });
-      if (hits.length >= 12) break;
-    }
-    if (!hits.length) return null;
-    const nseen = new Set(hits.map((h) => h.id)); const nbr: string[] = [];
-    for (const h of hits.slice(0, 4)) for (const nn of neighbors(h.id)) { if (nn.type === "doc" || nseen.has(nn.id)) continue; nseen.add(nn.id); nbr.push(nn.id); }
-    return { answer: out.answer?.trim() || `관련 객체 ${hits.length}건`, interpretation: out.interpretation?.trim(), hits, neighbors: nbr, mode: "llm" };
-  } catch { return null; } finally { clearTimeout(timer); }
+  const out = await llmNLSearch(query, catalog());
+  if (!out?.ids?.length) return null;
+  const seen = new Set<string>(); const hits: SearchHit[] = [];
+  for (const raw of out.ids) {
+    const n = getNode(String(raw)) || allNodes().find((x) => x.type !== "doc" && x.label === String(raw).trim());
+    if (!n || seen.has(n.id)) continue; seen.add(n.id);
+    hits.push({ id: n.id, label: n.label, type: n.type, score: 1 - hits.length * 0.01, matched: ["label"] });
+    if (hits.length >= 12) break;
+  }
+  if (!hits.length) return null;
+  const nseen = new Set(hits.map((h) => h.id)); const nbr: string[] = [];
+  for (const h of hits.slice(0, 4)) for (const nn of neighbors(h.id)) { if (nn.type === "doc" || nseen.has(nn.id)) continue; nseen.add(nn.id); nbr.push(nn.id); }
+  return { answer: out.answer?.trim() || `관련 객체 ${hits.length}건`, interpretation: out.interpretation?.trim(), hits, neighbors: nbr, mode: "llm" };
 }
 
 export async function nlSearch(query: string): Promise<NLSearchResponse> {

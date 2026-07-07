@@ -35,3 +35,37 @@ Rules:
 | `failure-propagation` | `parent—CONSISTS_OF→child` + `child—HAS_FAILURE→fm` ⇒ `parent—POTENTIAL_FAILURE→fm` (OWL property chain) | 0.7 |
 
 Tests: `python -m pytest test_reason.py -q` (no embedding model load).
+
+## POST /llm
+
+In-house vLLM gateway (OpenAI-compatible `/chat/completions`, `<think>` stripped, JSON extracted, temperature 0). Concurrency 1 (asyncio semaphore — vLLM overload guard); total wait+call ceiling 120s. Failures (timeout, non-JSON, vLLM down, unknown task) are **always HTTP 200** `{"ok": false, "error": "..."}` — never 500.
+
+Env: `LLM_BASE_URL` (default `http://vllm-loadbalancer.vllm-cluster.svc.cluster.local/v1`), `LLM_MODEL` (default `qwen3-32b-finance`), `LLM_TIMEOUT_S` (default 90).
+
+### task: nlsearch
+
+```json
+{ "task": "nlsearch", "query": "북미 결로", "catalog": "[item] I1=램프 | I2=하우징" }
+```
+
+→
+
+```json
+{ "ok": true, "result": { "answer": "요약", "interpretation": "조건", "ids": ["I1", "I2"] } }
+```
+
+### task: review
+
+```json
+{ "task": "review", "condition": "북미 헤드램프 결로",
+  "checklist": [{ "no": 1, "title": "벤트 위치", "desc": "하단 벤트 확인", "confidence": 80 }],
+  "masterAudit": ["마스터 3.2항 누락"], "contradictions": ["CHECK 1 vs 마스터 상충"] }
+```
+
+→ (`citedChecks`는 int로 정규화, `opinion` 비면 `ok:false`)
+
+```json
+{ "ok": true, "result": { "opinion": "[CHECK 1] ... 소견 3~5문장", "citedChecks": [1] } }
+```
+
+Tests: `python -m pytest test_llm.py -q` (vLLM mocked, no network).

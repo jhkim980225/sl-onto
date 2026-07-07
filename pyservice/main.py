@@ -1,9 +1,13 @@
-"""Stateless embedding + reasoning sidecar for SL OntoGround. Request -> result, no DB, no files."""
+"""Stateless embedding + reasoning + LLM sidecar for SL OntoGround. Request -> result, no DB, no files."""
+import asyncio
+import json
 import os
+import re
 from collections import defaultdict
 from functools import lru_cache
 from urllib.parse import quote, unquote
 
+import httpx
 from fastapi import FastAPI
 from pydantic import BaseModel
 from rdflib import Graph, Namespace, URIRef
@@ -166,6 +170,143 @@ def reason(req: ReasonRequest) -> ReasonResponse:
         return ReasonResponse(derived=_derive(req))
     except Exception:
         return ReasonResponse(derived=[])  # never 500 on reasoning input
+
+
+# ---------------------------------------------------------------------------
+# /llm — in-house vLLM gateway (OpenAI-compatible /chat/completions, qwen3).
+# Absorbs the direct call previously in Next lib/nlsearch.ts. Failures are
+# always HTTP 200 {"ok": false, "error": ...} — callers fall back, never 500.
+# ---------------------------------------------------------------------------
+
+LLM_BASE_URL = os.environ.get(
+    "LLM_BASE_URL", "http://vllm-loadbalancer.vllm-cluster.svc.cluster.local/v1"
+).rstrip("/")
+LLM_MODEL = os.environ.get("LLM_MODEL", "qwen3-32b-finance")
+LLM_TIMEOUT_S = float(os.environ.get("LLM_TIMEOUT_S", "90"))
+LLM_TOTAL_TIMEOUT_S = 120.0  # semaphore wait + vLLM call, hard ceiling
+
+_llm_sem = asyncio.Semaphore(1)  # ponytail: 동시 1 — vLLM 과부하 보호, 큐가 필요해지면 워커 분리
+
+# 프롬프트 원문: lib/nlsearch.ts 376-377행 이식 (검증된 자산 — 문구 변경 금지)
+NLSEARCH_SYSTEM = (
+    '너는 FMEA 온톨로지 검색기다. 목록의 id만 써서 질의 관련 id를 관련도순 최대 12개 고른다. '
+    '지역은 법규로: 북미→FMVSS 108, 유럽→ECE R149, 한국→KMVSS, 중국→GB 25991. '
+    'JSON만 출력: {"answer":"요약","interpretation":"조건","ids":[...]}. /no_think'
+)
+REVIEW_SYSTEM = (
+    '너는 자동차 램프 설계 검토 수석 엔지니어다. 아래 체크리스트·마스터 대조·모순 정보를 근거로 '
+    '종합 검토 소견 3~5문장을 작성하라. 반드시 근거로 삼은 CHECK 번호를 본문에 [CHECK n] 형식으로 인용하라. '
+    '데이터에 없는 사실 창작 금지. JSON만 출력: {"opinion":"...","citedChecks":[n,...]} /no_think'
+)
+
+
+class ChecklistItem(BaseModel):
+    no: int
+    title: str = ""
+    desc: str = ""
+    confidence: int = 0
+
+
+class LLMRequest(BaseModel):
+    task: str
+    # nlsearch
+    query: str = ""
+    catalog: str = ""
+    # review
+    condition: str = ""
+    checklist: list[ChecklistItem] = []
+    masterAudit: list[str] = []
+    contradictions: list[str] = []
+
+
+def strip_think(text: str) -> str:
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+
+def extract_json(text: str) -> dict | None:
+    """Port of Next extractJson: drop <think> blocks, parse outermost {...}."""
+    c = strip_think(text)
+    a, b = c.find("{"), c.rfind("}")
+    if a < 0 or b <= a:
+        return None
+    try:
+        out = json.loads(c[a : b + 1])
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return out if isinstance(out, dict) else None
+
+
+def _messages(req: LLMRequest) -> list[dict]:
+    if req.task == "nlsearch":
+        return [
+            {"role": "system", "content": NLSEARCH_SYSTEM},
+            {"role": "user", "content": f"/no_think 목록:\n{req.catalog}\n\n질의: {req.query}"},
+        ]
+    if req.task == "review":
+        lines = [f"설계 조건: {req.condition}", "", "체크리스트:"]
+        lines += [
+            f"CHECK {c.no}: {c.title} — {c.desc} (confidence {c.confidence}%)"
+            for c in req.checklist
+        ]
+        if req.masterAudit:
+            lines += ["", "마스터 대조:"] + [f"- {m}" for m in req.masterAudit]
+        if req.contradictions:
+            lines += ["", "모순:"] + [f"- {c}" for c in req.contradictions]
+        return [
+            {"role": "system", "content": REVIEW_SYSTEM},
+            {"role": "user", "content": "/no_think " + "\n".join(lines)},
+        ]
+    raise ValueError(f"unknown task: {req.task}")
+
+
+async def _chat(messages: list[dict]) -> str:
+    async with httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
+        res = await client.post(
+            f"{LLM_BASE_URL}/chat/completions",
+            json={"model": LLM_MODEL, "max_tokens": 400, "temperature": 0, "messages": messages},
+        )
+        res.raise_for_status()
+        return res.json()["choices"][0]["message"]["content"]
+
+
+async def _guarded_chat(messages: list[dict]) -> str:
+    async with _llm_sem:
+        return await _chat(messages)
+
+
+def _to_int_list(v) -> list[int]:
+    out = []
+    for x in v if isinstance(v, list) else []:
+        try:
+            out.append(int(x))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+@app.post("/llm")
+async def llm(req: LLMRequest) -> dict:
+    try:
+        messages = _messages(req)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    try:
+        content = await asyncio.wait_for(_guarded_chat(messages), timeout=LLM_TOTAL_TIMEOUT_S)
+    except Exception as e:  # timeout, connect error, HTTP error — never 500
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    out = extract_json(content)
+    if out is None:
+        return {"ok": False, "error": "LLM output is not JSON"}
+    if req.task == "nlsearch":
+        return {"ok": True, "result": {
+            "answer": str(out.get("answer") or "").strip(),
+            "interpretation": str(out.get("interpretation") or "").strip(),
+            "ids": [str(i) for i in out.get("ids") or [] if str(i).strip()],
+        }}
+    opinion = str(out.get("opinion") or "").strip()
+    if not opinion:
+        return {"ok": False, "error": "empty opinion"}
+    return {"ok": True, "result": {"opinion": opinion, "citedChecks": _to_int_list(out.get("citedChecks"))}}
 
 
 if __name__ == "__main__":

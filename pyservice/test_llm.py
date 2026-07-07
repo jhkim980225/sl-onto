@@ -1,0 +1,85 @@
+"""Tests for POST /llm — vLLM mocked via monkeypatch, no network (contract: always HTTP 200)."""
+import httpx
+from fastapi.testclient import TestClient
+
+import main
+
+client = TestClient(main.app)
+
+
+def mock_chat(monkeypatch, content: str):
+    captured = {}
+
+    async def fake(messages):
+        captured["messages"] = messages
+        return content
+
+    monkeypatch.setattr(main, "_chat", fake)
+    return captured
+
+
+NLSEARCH_REQ = {"task": "nlsearch", "query": "북미 결로", "catalog": "[item] I1=램프 | I2=하우징"}
+REVIEW_REQ = {
+    "task": "review",
+    "condition": "북미 헤드램프 결로",
+    "checklist": [{"no": 1, "title": "벤트 위치", "desc": "하단 벤트 확인", "confidence": 80}],
+    "masterAudit": ["마스터 3.2항 누락"],
+    "contradictions": ["CHECK 1 vs 마스터 상충"],
+}
+
+
+def test_nlsearch_parses_and_strips_think(monkeypatch):
+    cap = mock_chat(monkeypatch,
+        '<think>내부 추론...</think>{"answer":"관련 2건","interpretation":"북미·결로","ids":["I1","I2"]}')
+    body = client.post("/llm", json=NLSEARCH_REQ).json()
+    assert body == {"ok": True, "result": {
+        "answer": "관련 2건", "interpretation": "북미·결로", "ids": ["I1", "I2"]}}
+    # 프롬프트 계약: 시스템 프롬프트 이식 + /no_think + 카탈로그 포함
+    assert cap["messages"][0]["content"] == main.NLSEARCH_SYSTEM
+    assert cap["messages"][1]["content"].startswith("/no_think")
+    assert "I1=램프" in cap["messages"][1]["content"]
+
+
+def test_review_parses_and_normalizes_cited_checks(monkeypatch):
+    cap = mock_chat(monkeypatch,
+        '{"opinion":"[CHECK 1] 벤트 위치 재검토 필요.","citedChecks":["1", 2, "x"]}')
+    body = client.post("/llm", json=REVIEW_REQ).json()
+    assert body["ok"] is True
+    assert body["result"]["opinion"].startswith("[CHECK 1]")
+    assert body["result"]["citedChecks"] == [1, 2]  # 문자열→int, 비변환 항목 제거
+    user = cap["messages"][1]["content"]
+    assert "CHECK 1: 벤트 위치" in user and "마스터 3.2항 누락" in user and "상충" in user
+
+
+def test_review_empty_opinion_is_error(monkeypatch):
+    mock_chat(monkeypatch, '{"opinion":"","citedChecks":[1]}')
+    body = client.post("/llm", json=REVIEW_REQ).json()
+    assert body["ok"] is False and body["error"]
+
+
+def test_vllm_down_returns_ok_false(monkeypatch):
+    async def boom(messages):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(main, "_chat", boom)
+    res = client.post("/llm", json=NLSEARCH_REQ)
+    assert res.status_code == 200  # 500 금지
+    body = res.json()
+    assert body["ok"] is False and "ConnectError" in body["error"]
+
+
+def test_non_json_output_returns_ok_false(monkeypatch):
+    mock_chat(monkeypatch, "<think>only thoughts</think>JSON 아님")
+    body = client.post("/llm", json=NLSEARCH_REQ).json()
+    assert body["ok"] is False and body["error"]
+
+
+def test_unknown_task_returns_ok_false():
+    body = client.post("/llm", json={"task": "poem"}).json()
+    assert body["ok"] is False and "poem" in body["error"]
+
+
+def test_extract_json_handles_prose_wrapping():
+    assert main.extract_json('앞말 {"a": 1} 뒷말') == {"a": 1}
+    assert main.extract_json("<think>{...}</think>no json here") is None
+    assert main.extract_json('[1,2]') is None  # dict만 허용

@@ -306,6 +306,15 @@ svg#graph.fullview .edge.dim{opacity:.03}
 .fmea-dl{display:block;width:100%;margin:10px 0 2px;padding:9px 12px;border-radius:8px;border:none;background:var(--amber);color:#fff;font-weight:600;font-size:13px;font-family:var(--sans);cursor:pointer;box-shadow:0 1px 5px rgba(0,33,87,.14);transition:filter .15s,transform .1s}
 .fmea-dl:hover{filter:brightness(1.06);transform:translateY(-1px)}
 .fmea-dl:disabled{background:#9fb3cc;cursor:default;box-shadow:none;transform:none}
+.opinion-btn{display:block;width:100%;margin:6px 0 2px;padding:9px 12px;border-radius:8px;border:1px solid var(--amber);background:#fff;color:var(--amber);font-weight:600;font-size:13px;font-family:var(--sans);cursor:pointer;transition:background .15s}
+.opinion-btn:hover{background:rgba(0,162,229,.08)}
+.opinion-btn:disabled{border-color:var(--line);color:var(--ink-faint);cursor:default;background:#fff}
+.opinion-card{margin:10px 0;padding:11px 12px;border:1px solid var(--amber);border-radius:10px;background:rgba(0,162,229,.05)}
+.opinion-card.opinion-error{border-color:#c81e14;background:#fdeceb;color:#c81e14;font-size:12.5px}
+.opinion-body{font-size:12.5px;color:var(--ink);line-height:1.65;white-space:pre-wrap}
+.opinion-check-link{display:inline;border:none;background:transparent;color:var(--amber);font-weight:600;font-family:var(--mono);font-size:11.5px;cursor:pointer;padding:0}
+.opinion-check-link:hover{text-decoration:underline}
+.opinion-foot{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:10.5px;color:var(--ink-faint);line-height:1.5}
 .stats{display:flex;gap:8px;margin:10px 0 14px;flex-wrap:wrap}
 .stat{font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);border:1px solid var(--line);border-radius:5px;padding:4px 8px}
 .stat b{color:var(--amber)}

@@ -45,6 +45,54 @@ export default function Checklist({
     return () => window.removeEventListener("keydown", onKey);
   }, [vulnOpen]);
 
+  // AI 종합 소견(RAG) — /api/review-opinion. 새 추론 결과가 나오면(체크리스트가 바뀌면) 초기화.
+  const [opinion, setOpinion] = useState<{ opinion: string; citedChecks: number[]; cached: boolean; generatedAt: string } | null>(null);
+  const [opinionLoading, setOpinionLoading] = useState(false);
+  const [opinionError, setOpinionError] = useState(false);
+  useEffect(() => {
+    setOpinion(null);
+    setOpinionError(false);
+  }, [result]);
+
+  async function fetchOpinion() {
+    if (opinionLoading) return;
+    setOpinionLoading(true);
+    setOpinionError(false);
+    try {
+      const res = await fetch("/api/review-opinion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(condition),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "생성 실패");
+      setOpinion({ opinion: data.opinion, citedChecks: data.citedChecks ?? [], cached: !!data.cached, generatedAt: data.generatedAt });
+    } catch {
+      setOpinionError(true);
+    } finally {
+      setOpinionLoading(false);
+    }
+  }
+
+  // 소견 본문의 "[CHECK n]" 인용을 클릭 가능한 링크로 — 클릭 시 해당 체크 항목을 펼치고 스크롤(위쪽의 expanded state 재사용).
+  function scrollToCheck(no: number) {
+    setExpanded(no);
+    requestAnimationFrame(() => {
+      document.getElementById(`chk-${no}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+  function renderOpinionBody(text: string) {
+    return text.split(/(\[CHECK\s*\d+\])/g).map((part, i) => {
+      const m = /^\[CHECK\s*(\d+)\]$/.exec(part);
+      if (!m) return <span key={i}>{part}</span>;
+      return (
+        <button key={i} type="button" className="opinion-check-link" onClick={() => scrollToCheck(Number(m[1]))}>
+          {part}
+        </button>
+      );
+    });
+  }
+
   // 현재 조건으로 채워진 DFMEA 초안(xlsx)을 생성·다운로드
   async function downloadFmea() {
     if (dl) return;
@@ -113,6 +161,20 @@ export default function Checklist({
       <button className="fmea-dl" onClick={() => setVulnOpen(true)} disabled={dl} title="취약점 분석 리포트를 확인하고 DFMEA 워크시트를 내려받습니다">
         {dl ? "FMEA 초안 생성 중…" : "📄 FMEA 초안 다운로드"}
       </button>
+      <button className="opinion-btn" onClick={fetchOpinion} disabled={opinionLoading} title="현재 체크리스트를 사내 LLM이 종합해 소견을 생성합니다">
+        {opinionLoading ? "AI 소견 생성 중… (사내 LLM, 최대 1~2분)" : "🤖 AI 종합 소견"}
+      </button>
+      {opinionError && <div className="opinion-card opinion-error">사내 LLM 미가용</div>}
+      {opinion && (
+        <div className="opinion-card">
+          <div className="sec-label">AI 종합 소견</div>
+          <p className="opinion-body">{renderOpinionBody(opinion.opinion)}</p>
+          <div className="opinion-foot">
+            LLM 생성 초안 — 최종 판단은 엔지니어 · 생성 {new Date(opinion.generatedAt).toLocaleString("ko-KR")}
+            {opinion.cached ? " (캐시)" : ""}
+          </div>
+        </div>
+      )}
       {vulnOpen ? (
         <div className="drawing-modal" role="dialog" aria-label="도면 취약점 분석 리포트" onClick={() => setVulnOpen(false)}>
           <div className="vuln-modal-body" onClick={(e) => e.stopPropagation()}>
@@ -242,6 +304,7 @@ function ChecklistRow({ c, index, revealed, expanded, onToggle, nodeIndex, onSel
 
   return (
     <div
+      id={`chk-${c.no}`}
       className={"chk" + (revealed ? " show" : "") + (expanded ? " expanded" : "")}
       role="button"
       tabIndex={0}

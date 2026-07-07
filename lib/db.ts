@@ -311,3 +311,49 @@ export async function semanticSearch(vector: number[], k: number): Promise<strin
   );
   return rows.map((r) => r.id);
 }
+
+/* ────────────────────────── AI 검토 소견 캐시 (review-opinion) ────────────────────────── */
+
+export interface AiOpinionRow {
+  key: string;
+  condition: unknown;
+  opinion: string;
+  citedChecks: number[];
+  model: string | null;
+  createdAt: string;
+}
+
+interface AiOpinionDbRow {
+  key: string;
+  condition: unknown;
+  opinion: string;
+  cited_checks: number[];
+  model: string | null;
+  created_at: string;
+}
+
+export async function getAiOpinion(key: string): Promise<AiOpinionRow | null> {
+  const { rows } = await getPool().query<AiOpinionDbRow>(
+    "SELECT key, condition, opinion, cited_checks, model, created_at FROM ai_opinions WHERE key = $1",
+    [key]
+  );
+  if (!rows.length) return null;
+  const r = rows[0];
+  return { key: r.key, condition: r.condition, opinion: r.opinion, citedChecks: r.cited_checks, model: r.model, createdAt: r.created_at };
+}
+
+export async function saveAiOpinion(
+  key: string,
+  condition: unknown,
+  opinion: string,
+  citedChecks: number[],
+  model?: string
+): Promise<void> {
+  await getPool().query(
+    `INSERT INTO ai_opinions (key, condition, opinion, cited_checks, model) VALUES ($1,$2::jsonb,$3,$4,$5)
+     ON CONFLICT (key) DO UPDATE
+       SET condition = EXCLUDED.condition, opinion = EXCLUDED.opinion,
+           cited_checks = EXCLUDED.cited_checks, model = EXCLUDED.model, created_at = now()`,
+    [key, JSON.stringify(condition), opinion, citedChecks, model ?? null]
+  );
+}

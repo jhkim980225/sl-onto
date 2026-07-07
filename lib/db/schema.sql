@@ -70,3 +70,13 @@ CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,                          -- schema_version / active_drawing
   value JSONB NOT NULL
 );
+
+-- ⑥ AI 검토 소견 캐시 — condition 해시 키로 재요청 시 재생성 없이 즉시 응답.
+CREATE TABLE IF NOT EXISTS ai_opinions (
+  key          TEXT PRIMARY KEY,                   -- hashKey(DesignInput), lib/review-opinion.ts
+  condition    JSONB NOT NULL,
+  opinion      TEXT NOT NULL,
+  cited_checks INT[] NOT NULL DEFAULT '{}',
+  model        TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
