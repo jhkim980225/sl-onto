@@ -357,6 +357,9 @@ export default function Workbench() {
           return res.json() as Promise<GraphResponse>;
         })
         .then((data) => {
+          // 기본 진입 시 특정 노드(헤드램프 어셈블리 등) 강조(hero 박스·글로우) 해제 —
+          // 어떤 노드도 미리 선택된 것처럼 보이지 않게 한다.
+          for (const n of data.nodes) if (n.hero) n.hero = false;
           graphDataRef.current = data;
           setFullTotals({ nodes: data.nodes.length, edges: data.edges.length });
           const idx = buildNodeIndex(data.nodes);
