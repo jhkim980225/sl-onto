@@ -12,7 +12,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as XLSX from "xlsx";
 import { ingestOne } from "@/lib/ingest";
-import { mergeDelta, registerSource, allNodes, allEdges } from "@/lib/store";
+import { mergeDelta, registerSource, allNodes, allEdges, ready } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -37,6 +37,7 @@ function ingestBufferAs(fileName: string, buf: Buffer) {
 }
 
 export async function POST(req: Request) {
+  await ready();
   try {
     const ct = req.headers.get("content-type") ?? "";
     if (ct.includes("multipart/form-data")) return await handleUpload(req);
@@ -76,8 +77,8 @@ async function handleUpload(req: Request) {
     return bad(422, `파싱 실패(손상되었거나 지원하지 않는 문서): ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  const delta = mergeDelta(result.nodes, result.edges);
-  registerSource(result.source);
+  const delta = await mergeDelta(result.nodes, result.edges);
+  await registerSource(result.source, buf);
   return NextResponse.json({
     ok: true,
     file: name,
@@ -92,7 +93,7 @@ async function handleUpload(req: Request) {
 // 응답의 focus 로 클라이언트가 결로·습기 노드를 활성화(포커스)한다.
 let SAMPLE_ROUND = 0;
 
-function handleSample() {
+async function handleSample() {
   SAMPLE_ROUND++;
   const n = SAMPLE_ROUND;
   const rows = [
@@ -120,8 +121,8 @@ function handleSample() {
     return bad(422, `샘플 생성 실패: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  const delta = mergeDelta(result.nodes, result.edges);
-  registerSource(result.source);
+  const delta = await mergeDelta(result.nodes, result.edges);
+  await registerSource(result.source, buf);
   return NextResponse.json({
     ok: true,
     file: fileName,

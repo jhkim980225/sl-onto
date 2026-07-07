@@ -4,6 +4,13 @@
 import type { NLSearchResponse, SearchHit, ObjType, Node } from "./types";
 import { allNodes, getNode, neighbors, deg, outEdges, evidenceOf, getActiveDrawing } from "./store";
 import { featuresFromProps, hasFeatures, rankSimilarByShape } from "./shape-sim";
+import { dbEnabled, semanticSearch } from "./db";
+import { embedEnabled, embedOne } from "./embed";
+
+// 임베딩 후보 합류 시 부여하는 고정 시드 점수(플로어). 직접 라벨 매칭(1.7+)보다 낮게 둬 실제 라벨 히트가 항상 우선하되,
+// 라벨이 안 걸린 의미 유사 노드도 후보로 살아남게 한다.
+// ponytail: 유사도 가중합이 아니라 평평한 후보 플로어. 튜닝이 필요해지면 그때 유사도 기반 점수 도입.
+const EMBED_FLOOR = 1.5;
 
 const nrm = (s: string) => (s ?? "").normalize("NFC").toLowerCase().trim();
 const nospace = (s: string) => nrm(s).replace(/\s+/g, "");
@@ -245,7 +252,7 @@ function answerConsumerCross(qn: string): NLSearchResponse | null {
   };
 }
 
-function ruleBasedNL(query: string): NLSearchResponse {
+function ruleBasedNL(query: string, embedIds: string[] = []): NLSearchResponse {
   const qn = nrm(query);
   const qns = nospace(query);
   if (!qns) return { answer: "", hits: [], neighbors: [], mode: "fallback" };
@@ -297,6 +304,14 @@ function ruleBasedNL(query: string): NLSearchResponse {
   }
   // 지역 법규 노드는 직접 시드
   for (const id of regIds) { const n = getNode(id); if (n) bump(n, 2.6, true); }
+
+  // 임베딩 의미 후보 합류(가중치 없음 — 최종 랭킹은 아래 규칙 스코어러). 후보를 '넓히기'만 한다:
+  // 라벨이 안 걸린 의미 유사 노드도 후보에 포함하되 direct=false → 그래프 확장·해석 라벨엔 불참,
+  // 이미 라벨 매칭된 노드는 bump 가 더 높은 점수를 유지(강등 없음). 미가용·빈 결과면 이 루프는 no-op(기존 동작 동일).
+  for (const id of embedIds) {
+    const n = getNode(id);
+    if (n && n.type !== "doc") bump(n, EMBED_FLOOR, false);
+  }
 
   const directIds = [...scores.values()].filter((x) => x.direct).map((x) => x.n.id);
 
@@ -398,5 +413,16 @@ export async function nlSearch(query: string): Promise<NLSearchResponse> {
     const llm = await llmNL(q);
     if (llm) return llm;
   }
-  return ruleBasedNL(q);
+  // 임베딩 후보 확장(옵션): DB·pyservice 가용 시 질의 벡터로 의미 유사 top-k id 를 얻어 규칙 후보에 합류.
+  // 미가용·오류·빈 결과면 embedIds=[] → ruleBasedNL 은 바이트 동일한 기존 규칙기반 폴백.
+  let embedIds: string[] = [];
+  if (dbEnabled() && embedEnabled()) {
+    try {
+      const vec = await embedOne(q);
+      if (vec) embedIds = await semanticSearch(vec, 20);
+    } catch {
+      embedIds = []; // 의미검색 실패는 조용히 폴백(검색 자체는 규칙기반으로 계속)
+    }
+  }
+  return ruleBasedNL(q, embedIds);
 }

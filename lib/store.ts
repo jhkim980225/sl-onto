@@ -1,34 +1,30 @@
-// 인메모리 온톨로지 저장소 (MVP). 무상태 — 모듈 로드 시 seed로 인덱스 구축.
-// 확장: 이 파일 구현만 Postgres 등으로 교체(시그니처 유지). docs/features/ontology-store.md
+// 온톨로지 저장소. 읽기 = 인메모리 인덱스(캐시), 원본 = Postgres(DATABASE_URL 있을 때).
+// write-through: 쓰기는 DB 커밋 성공 후에만 메모리 반영(캐시/DB 정합). docs/features/ontology-store.md
+//
+// 모드:
+//   - DATABASE_URL 없음: 기존 인메모리 전용(모듈 로드 시 ingest→인덱스 구축). 테스트·로컬 개발 무변경.
+//   - DATABASE_URL 있음: 모듈 로드는 비움, ready() 가 스키마·시드 후 DB 적재 or 최초 ingest 를 DB 로 승격.
 import type { Node, Edge, ObjectDetail, Rel, Doc } from "./types";
 import { NODES as SEED_NODES, EDGES as SEED_EDGES } from "./seed";
 import { ingestAll } from "./ingest/index";
 import type { SourceInfo } from "./ingest/index";
+import * as db from "./db";
 
-// 온톨로지 출처: 실제 원천 파일(data/sources) 인제스천 우선, 실패/공백 시 seed 폴백.
-// docs/features/ingestion.md
-// (복사본으로 보관 — 증분 병합(mergeDelta)이 배열을 mutate 하므로 원본 seed/인제스천 결과를 오염시키지 않는다)
-let NODES: Node[];
-let EDGES: Edge[];
-try {
-  const ing = ingestAll();
-  if (ing.nodes.length > 0) {
-    NODES = [...ing.nodes];
-    EDGES = [...ing.edges];
-  } else {
-    NODES = [...SEED_NODES];
-    EDGES = [...SEED_EDGES];
-  }
-} catch {
-  NODES = [...SEED_NODES];
-  EDGES = [...SEED_EDGES];
-}
+const HAS_DB = db.dbEnabled();
 
+// ── 인메모리 인덱스 ──
+let NODES: Node[] = [];
+let EDGES: Edge[] = [];
 const byId = new Map<string, Node>();
 const outMap = new Map<string, Edge[]>();
 const inMap = new Map<string, Edge[]>();
 const degree = new Map<string, number>();
-const edgeKeySet = new Set<string>(); // `${src}|${rel}|${dst}` — 증분 병합의 idempotency 판정용
+const edgeKeySet = new Set<string>(); // `${src}|${rel}|${dst}` — 증분 병합 idempotency 판정용
+
+// 런타임(업로드) 인제스천 출처 — /api/sources 가 정적 data/sources 목록에 병합해 노출한다.
+const RUNTIME_SOURCES: SourceInfo[] = [];
+// "이 도면/이 커넥터"의 지시 대상 — 마지막으로 분석·추가된 도면 프로젝트 id (대화 컨텍스트).
+let ACTIVE_DRAWING: string | null = null;
 
 function push(map: Map<string, Edge[]>, k: string, e: Edge) {
   const arr = map.get(k);
@@ -36,29 +32,92 @@ function push(map: Map<string, Edge[]>, k: string, e: Edge) {
   else map.set(k, [e]);
 }
 
-for (const n of NODES) byId.set(n.id, n);
-for (const e of EDGES) {
-  edgeKeySet.add(`${e.src}|${e.rel}|${e.dst}`);
-  // 양끝 객체가 존재하는 링크만 채택(무결성)
-  if (!byId.has(e.src) || !byId.has(e.dst)) continue;
-  push(outMap, e.src, e);
-  push(inMap, e.dst, e);
-  degree.set(e.src, (degree.get(e.src) ?? 0) + 1);
-  degree.set(e.dst, (degree.get(e.dst) ?? 0) + 1);
+/** 노드/엣지 배열로 인덱스 전체 재구축(리셋 후 채움). DB 적재·모듈로드 공용. */
+function rebuildIndex(nodes: Node[], edges: Edge[]) {
+  NODES = [...nodes];
+  EDGES = [];
+  byId.clear();
+  outMap.clear();
+  inMap.clear();
+  degree.clear();
+  edgeKeySet.clear();
+  for (const n of NODES) byId.set(n.id, n);
+  for (const e of edges) {
+    const key = `${e.src}|${e.rel}|${e.dst}`;
+    if (edgeKeySet.has(key)) continue;
+    edgeKeySet.add(key);
+    if (!byId.has(e.src) || !byId.has(e.dst)) continue; // 양끝 존재 링크만(무결성)
+    EDGES.push(e);
+    push(outMap, e.src, e);
+    push(inMap, e.dst, e);
+    degree.set(e.src, (degree.get(e.src) ?? 0) + 1);
+    degree.set(e.dst, (degree.get(e.dst) ?? 0) + 1);
+  }
 }
 
-/* ────────────────────────── 증분 병합 (incremental ingestion) ──────────────────────────
- * 주의(멀티 레플리카): 이 병합은 "현재 프로세스"의 인메모리 상태만 바꾼다. dev/데모용으로 충분하지만
- * K8s 등에서 여러 레플리카로 띄우면 업로드가 한 파드에만 반영되므로, 클러스터 데모는
- * replicas=1 또는 sticky session 으로 운영할 것. (영속화 시 Postgres 교체 지점) */
+/** data/sources 인제스천(실패·공백 시 seed 폴백). 모듈로드/최초 DB 적재 공용. */
+function ingestOrSeed(): { nodes: Node[]; edges: Edge[]; sources: SourceInfo[] } {
+  try {
+    const ing = ingestAll();
+    if (ing.nodes.length > 0) return { nodes: ing.nodes, edges: ing.edges, sources: ing.sources };
+  } catch {
+    /* fall through */
+  }
+  return { nodes: [...SEED_NODES], edges: [...SEED_EDGES], sources: [] };
+}
 
-/** 노드/엣지 델타를 인덱스에 증분 병합. idempotent — 같은 파일 재병합 시 빈 델타.
- * @returns addedNodes/addedEdges = 실제 새로 들어간 것만, touched = 새 엣지를 얻은 "기존" 노드 id */
-export function mergeDelta(nodes: Node[], edges: Edge[]): { addedNodes: Node[]; addedEdges: Edge[]; touched: string[] } {
+// DATABASE_URL 없으면 지금 즉시 인메모리 구축(기존 동작 — sync 테스트가 ready() 없이 읽는다).
+if (!HAS_DB) {
+  const seed = ingestOrSeed();
+  rebuildIndex(seed.nodes, seed.edges);
+  for (const s of seed.sources) RUNTIME_SOURCES.push(s);
+}
+
+/* ────────────────────────── 부팅(ready) — DB 모드 하이드레이션 ──────────────────────────
+ * 모든 API Route Handler 는 첫 줄에서 await ready(). 동시 첫 요청은 한 프로미스를 공유(싱글턴). */
+let readyPromise: Promise<void> | undefined;
+export function ready(): Promise<void> {
+  if (!HAS_DB) return Promise.resolve(); // 인메모리는 모듈로드에서 이미 구축됨
+  readyPromise ??= hydrate().catch((e) => {
+    readyPromise = undefined; // 실패 캐시 안 함 — 다음 요청이 재시도
+    throw e;
+  });
+  return readyPromise;
+}
+
+async function hydrate(): Promise<void> {
+  await db.ready(); // 스키마 적용 + 메타모델 시드(멱등)
+  if ((await db.nodeCount()) === 0) {
+    // 최초 부팅: 인제스천 결과를 DB 로 승격
+    const seed = ingestOrSeed();
+    rebuildIndex(seed.nodes, seed.edges);
+    RUNTIME_SOURCES.length = 0;
+    for (const s of seed.sources) RUNTIME_SOURCES.push(s);
+    await db.bulkInsertGraph(NODES, EDGES, seed.sources);
+  } else {
+    // 재부팅: DB 가 원본 — 그대로 적재
+    const { nodes, edges, sources, activeDrawing } = await db.loadAll();
+    rebuildIndex(nodes, edges);
+    RUNTIME_SOURCES.length = 0;
+    for (const s of sources) RUNTIME_SOURCES.push(s);
+    ACTIVE_DRAWING = activeDrawing;
+  }
+}
+
+/* ────────────────────────── 증분 병합 (인제스천·도면 추가) ──────────────────────────
+ * write-through: HAS_DB 이면 DB 에 먼저 upsert(ON CONFLICT DO NOTHING) 후 메모리 병합. */
+
+/** 노드/엣지 델타를 병합. idempotent. @returns 실제 새로 들어간 것 + 새 엣지를 얻은 기존 노드 id. */
+export async function mergeDelta(
+  nodes: Node[],
+  edges: Edge[],
+  op: string = "ingest"
+): Promise<{ addedNodes: Node[]; addedEdges: Edge[]; touched: string[] }> {
+  if (HAS_DB) await db.persistUpsertGraph(nodes, edges, op); // DB 먼저(정합 실패 시 여기서 throw → 메모리 미변경)
   const addedNodes: Node[] = [];
   const addedIds = new Set<string>();
   for (const n of nodes) {
-    if (byId.has(n.id)) continue; // 기존 노드 우선(원본 보존) — 새 파일이 기존 객체를 덮어쓰지 않는다
+    if (byId.has(n.id)) continue; // 기존 노드 우선(원본 보존)
     byId.set(n.id, n);
     NODES.push(n);
     addedNodes.push(n);
@@ -67,7 +126,7 @@ export function mergeDelta(nodes: Node[], edges: Edge[]): { addedNodes: Node[]; 
   const addedEdges: Edge[] = [];
   const touchedSet = new Set<string>();
   for (const e of edges) {
-    if (!byId.has(e.src) || !byId.has(e.dst)) continue; // 무결성 — 양끝 존재 시에만 채택
+    if (!byId.has(e.src) || !byId.has(e.dst)) continue;
     const key = `${e.src}|${e.rel}|${e.dst}`;
     if (edgeKeySet.has(key)) continue;
     edgeKeySet.add(key);
@@ -83,11 +142,9 @@ export function mergeDelta(nodes: Node[], edges: Edge[]): { addedNodes: Node[]; 
   return { addedNodes, addedEdges, touched: [...touchedSet] };
 }
 
-// 런타임(업로드) 인제스천 출처 — /api/sources 가 정적 data/sources 목록에 병합해 노출한다.
-const RUNTIME_SOURCES: SourceInfo[] = [];
-
-/** 업로드로 들어온 원천 파일을 출처 목록에 등록(같은 파일명 재업로드 시 최신으로 교체). */
-export function registerSource(s: SourceInfo): void {
+/** 업로드 원천 파일 등록(같은 파일명 재업로드 시 최신 교체). content = DB 보존용 원본 바이트(선택). */
+export async function registerSource(s: SourceInfo, content?: Buffer): Promise<void> {
+  if (HAS_DB) await db.persistSource(s, content);
   const i = RUNTIME_SOURCES.findIndex((x) => x.file === s.file);
   if (i >= 0) RUNTIME_SOURCES[i] = s;
   else RUNTIME_SOURCES.push(s);
@@ -98,7 +155,7 @@ export function getRuntimeSources(): SourceInfo[] {
   return [...RUNTIME_SOURCES];
 }
 
-/* ────────────────── 큐레이션: 삭제·병합 (인메모리 — 재시작 시 원복) ────────────────── */
+/* ────────────────── 큐레이션: 삭제·병합 (write-through) ────────────────── */
 
 function dropEdge(e: Edge): void {
   const key = `${e.src}|${e.rel}|${e.dst}`;
@@ -114,17 +171,19 @@ function dropEdge(e: Edge): void {
 }
 
 /** 관계 1개 삭제. 존재했으면 true. */
-export function removeEdge(src: string, rel: string, dst: string): boolean {
+export async function removeEdge(src: string, rel: string, dst: string): Promise<boolean> {
   const e = (outMap.get(src) ?? []).find((x) => x.rel === rel && x.dst === dst);
   if (!e) return false;
+  if (HAS_DB) await db.persistDeleteEdge(src, rel, dst);
   dropEdge(e);
   return true;
 }
 
 /** 노드 + 부속 엣지 삭제. @returns 지운 엣지 수(없는 노드면 -1). */
-export function removeNode(id: string): number {
+export async function removeNode(id: string): Promise<number> {
   if (!byId.has(id)) return -1;
   const touching = [...(outMap.get(id) ?? []), ...(inMap.get(id) ?? [])];
+  if (HAS_DB) await db.persistDeleteNode(id); // DB 는 엣지 CASCADE
   for (const e of touching) dropEdge(e);
   outMap.delete(id);
   inMap.delete(id);
@@ -134,45 +193,58 @@ export function removeNode(id: string): number {
   return touching.length;
 }
 
-/** from 노드를 into 노드에 병합 — from 의 관계를 into 로 이관(중복·자기루프 제거),
- * from 라벨은 into 의 "병합됨" 속성으로 보존(원본 보존 골든 룰), from 삭제.
+/** from 노드를 into 에 병합 — 관계 이관(중복·자기루프 제거), from 라벨은 into "병합됨" 속성으로 보존, from 삭제.
  * @returns 이관된 엣지 목록(실패 시 null). */
-export function mergeNodes(fromId: string, intoId: string): Edge[] | null {
+export async function mergeNodes(fromId: string, intoId: string): Promise<Edge[] | null> {
   const from = byId.get(fromId);
   const into = byId.get(intoId);
   if (!from || !into || fromId === intoId) return null;
-  const moved: Edge[] = [];
+
+  // 계획(read-only) — 재지정 엣지 + into 새 props 를 먼저 계산(DB-first 를 위해)
   const touching = [...(outMap.get(fromId) ?? []), ...(inMap.get(fromId) ?? [])];
+  const moved: Edge[] = [];
+  const seenKeys = new Set<string>();
   for (const e of touching) {
     const src = e.src === fromId ? intoId : e.src;
     const dst = e.dst === fromId ? intoId : e.dst;
-    dropEdge(e);
     if (src === dst) continue; // 자기 루프 제거
     const key = `${src}|${e.rel}|${dst}`;
-    if (edgeKeySet.has(key)) continue; // into 에 이미 있는 관계면 중복 제거
-    const ne: Edge = { ...e, src, dst };
+    if (edgeKeySet.has(key) || seenKeys.has(key)) continue; // into 기존/배치 내 중복 제거
+    seenKeys.add(key);
+    moved.push({ ...e, src, dst });
+  }
+  const intoProps: [string, string][] = [
+    ...(into.props ?? []),
+    ["병합됨", `${from.label} (${from.id})`], // 원본 보존 골든 룰
+  ];
+
+  if (HAS_DB) await db.persistMergeNodes(fromId, intoId, moved, intoProps);
+
+  // 메모리 적용
+  for (const e of touching) dropEdge(e);
+  for (const ne of moved) {
+    const key = `${ne.src}|${ne.rel}|${ne.dst}`;
     edgeKeySet.add(key);
     EDGES.push(ne);
-    push(outMap, src, ne);
-    push(inMap, dst, ne);
-    degree.set(src, (degree.get(src) ?? 0) + 1);
-    degree.set(dst, (degree.get(dst) ?? 0) + 1);
-    moved.push(ne);
+    push(outMap, ne.src, ne);
+    push(inMap, ne.dst, ne);
+    degree.set(ne.src, (degree.get(ne.src) ?? 0) + 1);
+    degree.set(ne.dst, (degree.get(ne.dst) ?? 0) + 1);
   }
-  into.props ??= [];
-  into.props.push(["병합됨", `${from.label} (${from.id})`]); // 원본 보존
+  into.props = intoProps;
   byId.delete(fromId);
   const i = NODES.findIndex((n) => n.id === fromId);
   if (i >= 0) NODES.splice(i, 1);
   return moved;
 }
 
-// "이 도면/이 커넥터"의 지시 대상 — 마지막으로 분석·추가된 도면 프로젝트 id (대화 컨텍스트).
-let ACTIVE_DRAWING: string | null = null;
-export function setActiveDrawing(projId: string): void { ACTIVE_DRAWING = projId; }
+export async function setActiveDrawing(projId: string): Promise<void> {
+  if (HAS_DB) await db.persistMeta("active_drawing", projId);
+  ACTIVE_DRAWING = projId;
+}
 export function getActiveDrawing(): string | null { return ACTIVE_DRAWING; }
 
-// ── 원시 접근자 (search/infer 공용) ──
+// ── 원시 접근자 (search/infer 공용 — 전부 인메모리 캐시에서 sync 읽기) ──
 export function getNode(id: string): Node | undefined { return byId.get(id); }
 export function allNodes(): Node[] { return [...byId.values()]; }
 export function allEdges(): Edge[] { return EDGES.filter((e) => byId.has(e.src) && byId.has(e.dst)); }
@@ -248,3 +320,6 @@ export function getObject(id: string): ObjectDetail | null {
   }
   return { ...n, relations, evidence: evidenceOf(id) };
 }
+
+/** DB 모드에서 임베딩 백필 대상(embedding IS NULL) — admin 백필/부팅이 사용. */
+export function isDbMode(): boolean { return HAS_DB; }

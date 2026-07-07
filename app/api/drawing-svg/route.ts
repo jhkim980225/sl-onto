@@ -3,10 +3,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { parseDxfEntities, dxfToSvg } from "@/lib/ingest/dxf";
+import { ready } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request): Promise<Response> {
+  await ready();
   const url = new URL(req.url);
   const file = url.searchParams.get("file") ?? "";
   if (!/^[^\\/]+\.dxf$/i.test(file)) {

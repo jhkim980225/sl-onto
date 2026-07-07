@@ -21,6 +21,8 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 # 인제스천이 런타임에 읽는 원천 파일 (트레이싱 보완용 명시 복사)
 COPY --from=builder /app/data ./data
+# 스키마 SQL 은 런타임 fs 읽기라 standalone 트레이싱에 안 잡힐 수 있어 명시 복사
+COPY --from=builder /app/lib/db ./lib/db
 
 # 클라우드 런타임이 $PORT 를 주입한다. 없으면 8000.
 ENV PORT=8000

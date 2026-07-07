@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { infer } from "@/lib/infer";
+import { ready } from "@/lib/store";
 import type { DesignInput } from "@/lib/types";
 
 // POST /api/infer — 신규 설계 조건(DesignInput) → 추론 체크리스트
@@ -12,6 +13,7 @@ const InputSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  await ready();
   let body: unknown;
   try {
     body = await req.json();

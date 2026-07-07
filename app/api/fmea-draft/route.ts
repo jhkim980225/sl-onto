@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { buildFmeaWorkbook } from "@/lib/fmea-draft";
+import { ready } from "@/lib/store";
 
 const Body = z.object({
   market: z.string().min(1),
@@ -10,6 +11,7 @@ const Body = z.object({
 
 // POST /api/fmea-draft { DesignInput } → 채워진 DFMEA 초안 xlsx 다운로드
 export async function POST(req: Request) {
+  await ready();
   let input;
   try {
     input = Body.parse(await req.json());

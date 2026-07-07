@@ -11,7 +11,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { ingestOne } from "@/lib/ingest";
 import { parseDxfEntities, parseDrawing } from "@/lib/ingest/dxf";
-import { mergeDelta, registerSource, allNodes, outEdges, getNode, allEdges, setActiveDrawing } from "@/lib/store";
+import { mergeDelta, registerSource, allNodes, outEdges, getNode, allEdges, setActiveDrawing, ready } from "@/lib/store";
 import { featuresFromProps, hasFeatures, parseVent, rankSimilarByShape, type ShapeFeatures } from "@/lib/shape-sim";
 import { assessDrawing } from "@/lib/drawing-risk";
 import type { DesignInput, Edge, Node } from "@/lib/types";
@@ -22,6 +22,7 @@ const MAX_BYTES = 10 * 1024 * 1024;
 const bad = (status: number, error: string) => NextResponse.json({ ok: false, error }, { status });
 
 export async function POST(req: Request) {
+  await ready();
   try {
     let name: string;
     let buf: Buffer;
@@ -54,8 +55,8 @@ export async function POST(req: Request) {
     } finally {
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
     }
-    const delta = mergeDelta(result.nodes, result.edges);
-    registerSource(result.source);
+    const delta = await mergeDelta(result.nodes, result.edges, "drawing.add");
+    await registerSource(result.source, buf);
 
     // 2) 도면 프로젝트 노드(형상 특징 보유) 확정
     const parsedProj = result.nodes.find(
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
         note: "도면에서 프로젝트·형상 특징을 찾지 못해 유사 탐색을 건너뜀(제목블록/NOTE 확인)",
       });
     }
-    setActiveDrawing(parsedProj.id); // 이후 자연어 질의의 "이 도면/이 커넥터" 지시 대상
+    await setActiveDrawing(parsedProj.id); // 이후 자연어 질의의 "이 도면/이 커넥터" 지시 대상
     const projNode = getNode(parsedProj.id) ?? parsedProj;
     // 병합 규칙상 기존 노드는 덮어쓰지 않으므로, 형상 특징은 파싱본에서 우선 취득
     const target: ShapeFeatures = hasFeatures(featuresFromProps(projNode))
@@ -82,7 +83,7 @@ export async function POST(req: Request) {
     const simEdges: Edge[] = ranked
       .filter((r) => r.match.score > 0.3)
       .map((r) => ({ src: parsedProj.id, rel: "SIMILAR", dst: r.node.id, weight: r.match.score }));
-    const simDelta = mergeDelta([], simEdges);
+    const simDelta = await mergeDelta([], simEdges);
 
     // 4) 유사 프로젝트별 고장 이력(OCCURRED_IN) — 큐레이션 fm 우선, 상위 3
     const histOf = (p: Node) => {

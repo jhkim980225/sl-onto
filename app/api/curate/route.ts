@@ -2,13 +2,14 @@
 // body: { op:"deleteNode", id } | { op:"deleteEdge", src, rel, dst } | { op:"merge", from, into }
 // 병합은 from 의 관계를 into 로 이관하고 from 라벨을 into 의 "병합됨" 속성으로 보존(원본 보존).
 import { NextResponse } from "next/server";
-import { removeNode, removeEdge, mergeNodes, allNodes, allEdges, getObject } from "@/lib/store";
+import { removeNode, removeEdge, mergeNodes, allNodes, allEdges, getObject, ready } from "@/lib/store";
 
 export const runtime = "nodejs";
 const bad = (s: number, error: string) => NextResponse.json({ ok: false, error }, { status: s });
 const totals = () => ({ nodes: allNodes().length, edges: allEdges().length });
 
 export async function POST(req: Request) {
+  await ready();
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -18,17 +19,17 @@ export async function POST(req: Request) {
   const op = body.op;
   if (op === "deleteNode") {
     const id = String(body.id ?? "");
-    const n = removeNode(id);
+    const n = await removeNode(id);
     if (n < 0) return bad(404, "노드를 찾을 수 없습니다");
     return NextResponse.json({ ok: true, removedEdges: n, totals: totals() });
   }
   if (op === "deleteEdge") {
-    const okDel = removeEdge(String(body.src ?? ""), String(body.rel ?? ""), String(body.dst ?? ""));
+    const okDel = await removeEdge(String(body.src ?? ""), String(body.rel ?? ""), String(body.dst ?? ""));
     if (!okDel) return bad(404, "관계를 찾을 수 없습니다");
     return NextResponse.json({ ok: true, totals: totals() });
   }
   if (op === "merge") {
-    const moved = mergeNodes(String(body.from ?? ""), String(body.into ?? ""));
+    const moved = await mergeNodes(String(body.from ?? ""), String(body.into ?? ""));
     if (moved === null) return bad(400, "병합 대상이 잘못되었습니다(동일 노드/미존재)");
     return NextResponse.json({
       ok: true, moved: moved.length, movedEdges: moved,
