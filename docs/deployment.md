@@ -38,10 +38,12 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v45 (2026-07-07)**. v24~v45 요약: Postgres+pgvector 영속화(+Python 임베딩 사이드카
+- **현재 배포 = v46 (2026-07-08)**. v24~v45 요약: Postgres+pgvector 영속화(+Python 임베딩 사이드카
   pyservice, `k8s/pyservice.yaml`) · 그래프 포커스/hover 개선 · 부품 앵커 추론(v45).
-  **v46 예정(빌드 검증 완료, 서버 회복 대기)**: BOM 파서+정합성 검증 · 전역 모순 스캔 배지 ·
-  마스터 대조 audit · 품질 감사(🧹) · 확신도 breakdown · 오케스트레이터 v0 · 임베딩 자동 백필.
+  v46: BOM 파서+정합성 검증 · 전역 모순 스캔 배지 · 마스터 대조 audit · 품질 감사(🧹) ·
+  확신도 breakdown · 오케스트레이터 v0 · 임베딩 자동 백필. 신규 원천 3개(BOM 2·결로 마스터)는
+  `/api/ingest` 업로드로 DB 병합 완료(179 노드/2198 엣지, 임베딩 179/179). 프로덕션 스모크 17/17
+  (`npx tsx scripts/smoke.ts http://192.168.0.100:30494`).
 - 이하 v2~v23 상세 변경 이력:
   v2(자연어 검색·그래프 인터랙션·라이트 SL 테마·견고 파싱) + v3(FMEA 초안 다운로드)
   + v4(백본 우선 초기화면·전체 보기 토글·라벨 LOD) + v5(인스펙터 뒤로가기·이동 경로) + v6(증분 인제스천 탭)
