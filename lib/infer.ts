@@ -280,10 +280,15 @@ function synonymGroup(tok: string): string[] {
 /** 필수 항목이 텍스트 코퍼스에 커버되는 비율: 1=완전 일치(covered), 0<x<1=부분(unknown), 0=전무(missing).
  * 오탐보다 안전 — 애매하면(부분 일치) unknown 으로 두고 covered 를 단정하지 않는다. */
 function coverageRatio(req: string, corpus: string): number {
-  const toks = norm(req)
-    .split(/\s+/)
-    .filter((t) => t.length >= 2 && !STOP_TOKENS.has(t) && !isNumericTok(t));
-  if (toks.length === 0) toks.push(norm(req));
+  const whole = norm(req).trim();
+  if (!whole) return 0; // 공백 항목은 판정 불가 — missing 처리 (리뷰 지적)
+  const toks = whole.split(/\s+/).filter((t) => t.length >= 2 && !STOP_TOKENS.has(t) && !isNumericTok(t));
+  // 전부 불용어/숫자면 통짜 문자열로 폴백하되, 불용어 단독("이상" 등)이 코퍼스 아무데나
+  // 걸리는 오탐을 막기 위해 3자 미만이면 판정 포기(missing).
+  if (toks.length === 0) {
+    if (whole.length < 3 || STOP_TOKENS.has(whole)) return 0;
+    toks.push(whole);
+  }
   let hit = 0;
   for (const t of toks) if (synonymGroup(t).some((s) => corpus.includes(s))) hit++;
   return hit / toks.length;
