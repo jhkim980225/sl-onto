@@ -71,6 +71,20 @@ async function main() {
     contra.items.every((i: { evidence: string[]; trace: string[] }) => i.evidence.length > 0 && i.trace.length > 0)
   );
 
+  // 5.5) 품질 감사 + 확신도 breakdown
+  const qual = await getJson("/api/quality");
+  check("quality scan 응답", Array.isArray(qual.items), `${qual.items.length}건`);
+  const withBd = fog.checklist.filter((c: { breakdown?: object }) => c.breakdown);
+  check("confidence breakdown 존재", withBd.length === fog.checklist.length, `${withBd.length}/${fog.checklist.length}`);
+  check(
+    "breakdown 합계 == confidence",
+    fog.checklist.every((c: { confidence: number; breakdown?: Record<string, number> }) => {
+      if (!c.breakdown) return false;
+      const s = c.breakdown.sim + c.breakdown.evid + c.breakdown.sev + c.breakdown.master + c.breakdown.boost;
+      return Math.abs(s - c.confidence / 100) <= 0.011;
+    })
+  );
+
   // 6) 자연어 검색
   const nl = await postJson("/api/nlsearch", { query: "북미에서 결로 문제 대책이 있었나" });
   check("nlsearch hits", nl.hits.length >= 1, `${nl.hits.length}`);
