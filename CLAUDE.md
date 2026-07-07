@@ -24,7 +24,8 @@ pgvector 384-dim + Python 임베딩 사이드카 pyservice) · 규칙기반 그�
 ## 레포 구조
 ```
 app/            Next.js App Router (페이지 + api/ Route Handlers)
-  api/          /ontology /object/[id] /search /nlsearch /infer /sources /condensation
+  api/          /ontology /object/[id] /search /nlsearch /infer /fmea-draft /sources /ingest
+                /condensation /drawing-input /bom-check /contradictions /curate /admin/embed-backfill
 components/     클라이언트 컴포넌트 (Graph·Inspector·Checklist·SourcePanel·NLSearchPanel·
                 Condensation{Panel,Drawing}·typeStyles 등)
 lib/            도메인 로직 (store, search, nlsearch, infer, seed, types) — 프레임워크 비의존

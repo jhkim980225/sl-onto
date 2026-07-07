@@ -1,0 +1,33 @@
+# feature: contradictions — 전역 모순 스캔
+
+## 책임
+질문해야만 보이던 모순(nlsearch 답변에 흩어져 있던 판정)을 **온톨로지 전역 스캔**으로 상시 노출.
+헤더 "⚠ 모순 N건" 배지 → 목록 패널 → 항목 클릭 시 그래프 포커스. 시연 오프닝의 훅.
+
+## 모듈: `lib/contradictions.ts` (순수 함수)
+```ts
+scanContradictions(): Contradiction[]
+// Contradiction = { kind, title, detail, projects: string[], evidence: string[], trace: string[], confidence: number }
+```
+
+## 규칙 3종
+| kind | 판정 | 예 (시드 실측) |
+|---|---|---|
+| `record-gap` | 커뮤니티 언급 있는데 FMEA `OCCURRED_IN` 이력 없음 | PJ 2020-HL09 85% |
+| `market-env` | 고온다습 시장인데 형상 유사(SIMILAR) 프로젝트에 결로 이력 | PJ 2026-HL21 93% |
+| `master-missing` | 심각도≥6 fm이 `REF_MASTER` 미참조 | 5건 |
+
+폭주 방지: 규칙당 상한 5건 + confidence 플로어 40%.
+골든 룰: 전 항목 근거(evidence)·실존 엣지 trace·confidence 필수.
+
+## nlsearch 와의 관계
+판정 헬퍼(`findConsumerMentions`)를 nlsearch 와 **공유** — 시연 대본의 검증된 답변 문구는 불변
+(문구 조립은 nlsearch에 남김). [nlsearch.md](nlsearch.md).
+
+## API / UI
+- `GET /api/contradictions` → `{ items, scannedAt }` (스키마: [../data-model.md](../data-model.md))
+- `components/ContradictionsPanel.tsx` — 경고 톤, confidence 바, 근거·trace 칩(체크리스트 trace 렌더 헬퍼 재사용)
+- Workbench: 구축 완료 후 fetch, N>0일 때만 배지 렌더
+
+## 테스트
+`lib/contradictions.test.ts` — PJ 2020-HL09 record-gap 검출, 전 항목 trace 실존 엣지, 규칙당 상한 준수.
