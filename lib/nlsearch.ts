@@ -6,6 +6,7 @@ import { allNodes, getNode, neighbors, deg, outEdges, evidenceOf, getActiveDrawi
 import { featuresFromProps, hasFeatures, rankSimilarByShape } from "./shape-sim";
 import { dbEnabled, semanticSearch } from "./db";
 import { embedEnabled, embedOne } from "./embed";
+import { findConsumerMentions } from "./contradictions";
 
 // 임베딩 후보 합류 시 부여하는 고정 시드 점수(플로어). 직접 라벨 매칭(1.7+)보다 낮게 둬 실제 라벨 히트가 항상 우선하되,
 // 라벨이 안 걸린 의미 유사 노드도 후보로 살아남게 한다.
@@ -215,18 +216,9 @@ const CONSUMER_INTENT = /(소비자|커뮤니티|카페|게시판|온라인|포�
 
 function answerConsumerCross(qn: string): NLSearchResponse | null {
   if (!CONSUMER_INTENT.test(qn)) return null;
-  const mentions: { proj: Node; symptom: string; detail: string; hasFmea: boolean }[] = [];
-  for (const p of allNodes()) {
-    if (p.type !== "proj" || !p.props) continue;
-    for (const [k, v] of p.props) {
-      if (!k.startsWith("소비자언급.")) continue;
-      const hasFmea = outEdges(p.id).some((e) => {
-        const fm = getNode(e.dst);
-        return e.rel === "OCCURRED_IN" && !!fm && /결로|습기/.test(fm.label);
-      });
-      mentions.push({ proj: p, symptom: k.slice("소비자언급.".length), detail: v, hasFmea });
-    }
-  }
+  // 판정(어느 프로젝트가 기록과 괴리인지)은 lib/contradictions.ts 와 공유 — 전역 모순 스캔의
+  // record-gap 규칙과 동일 로직. 문구 조립(아래)은 이 함수에 그대로 남긴다(시연 문구 불변).
+  const mentions = findConsumerMentions();
   if (!mentions.length) return null;
   mentions.sort((a, b) => Number(a.hasFmea) - Number(b.hasFmea)); // 모순(기록 없음) 먼저
   const gap = mentions.find((m) => !m.hasFmea);

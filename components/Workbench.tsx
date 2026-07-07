@@ -14,11 +14,14 @@ import CondensationPanel from "./CondensationPanel";
 import NLSearchPanel from "./NLSearchPanel";
 import IngestPanel from "./IngestPanel";
 import DrawingPanel, { type DrawingResult } from "./DrawingPanel";
+import ContradictionsPanel from "./ContradictionsPanel";
 import { buildNodeIndex, type NodeIndex } from "./nodeIndex";
 import type { SourceInfo, SourcesResponse } from "./sourceTypes";
 import type { IngestResponse } from "./ingestTypes";
 import type { RegionsResponse, RegionSummary } from "./condensationTypes";
 import type {
+  Contradiction,
+  ContradictionsResponse,
   DesignInput,
   Edge,
   GraphResponse,
@@ -142,8 +145,12 @@ export default function Workbench() {
   const [lastInferInput, setLastInferInput] = useState<DesignInput | null>(null);
 
   const [rightPanelMode, setRightPanelMode] = useState<
-    "inspector" | "checklist" | "source" | "condensation" | "nlsearch" | "ingest" | "drawing"
+    "inspector" | "checklist" | "source" | "condensation" | "nlsearch" | "ingest" | "drawing" | "contradictions"
   >("inspector");
+  // 전역 모순 스캔 — 온톨로지 구축 완료 후 상시 조회(질문 없이도 노출).
+  const [contradictions, setContradictions] = useState<Contradiction[]>([]);
+  const [contradictionsLoading, setContradictionsLoading] = useState(false);
+  const [contradictionsError, setContradictionsError] = useState<string | null>(null);
   const [condensationRegions, setCondensationRegions] = useState<RegionSummary[] | null>(null);
   const [condensationLoading, setCondensationLoading] = useState(false);
   const [condensationError, setCondensationError] = useState<string | null>(null);
@@ -206,6 +213,30 @@ export default function Workbench() {
       cancelled = true;
     };
   }, []);
+
+  // 온톨로지 구축 완료 후 전역 모순을 한 번 스캔 — 배지("⚠ 모순 N건")로 상시 노출.
+  useEffect(() => {
+    if (!ontologyBuilt) return;
+    let cancelled = false;
+    setContradictionsLoading(true);
+    fetch("/api/contradictions")
+      .then((res) => {
+        if (!res.ok) throw new Error(`모순 스캔 실패 (${res.status})`);
+        return res.json() as Promise<ContradictionsResponse>;
+      })
+      .then((data) => {
+        if (!cancelled) setContradictions(data.items);
+      })
+      .catch((err) => {
+        if (!cancelled) setContradictionsError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setContradictionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ontologyBuilt]);
 
   const handleSelectSource = useCallback(
     (file: string) => {
@@ -326,6 +357,12 @@ export default function Workbench() {
   // 결로 분석 패널의 객체 링크 클릭.
   const handleCondensationSelect = useCallback(
     (id: string) => handleNodeClick(id, { via: "결로 분석" }),
+    [handleNodeClick]
+  );
+
+  // 모순 스캔 패널의 객체/근거 링크 클릭.
+  const handleContradictionSelect = useCallback(
+    (id: string) => handleNodeClick(id, { via: "모순 스캔", fresh: true }),
     [handleNodeClick]
   );
 
@@ -931,6 +968,17 @@ export default function Workbench() {
         >
           📥 문서 인제스천
         </button>
+        {contradictions.length > 0 && (
+          <button
+            className="btn btn-ghost"
+            id="btnContradictions"
+            style={{ color: "#b3453c", borderColor: "#f3d5d2" }}
+            title="전 프로젝트/고장모드를 순회한 근거 기반 모순 스캔 결과"
+            onClick={() => setRightPanelMode("contradictions")}
+          >
+            ⚠ 모순 {contradictions.length}건
+          </button>
+        )}
         <button className="btn btn-ghost" id="btnReset" onClick={handleReset}>
           처음부터
         </button>
@@ -1143,6 +1191,15 @@ export default function Workbench() {
               onClose={() => setRightPanelMode("inspector")}
               onPickFile={() => drawingInputRef.current?.click()}
               onSample={() => handleDrawingFile({ sample: true })}
+            />
+          ) : rightPanelMode === "contradictions" ? (
+            <ContradictionsPanel
+              loading={contradictionsLoading}
+              error={contradictionsError}
+              items={contradictions}
+              nodeIndex={nodeIndex}
+              onSelectObject={handleContradictionSelect}
+              onClose={() => setRightPanelMode("inspector")}
             />
           ) : rightPanelMode === "source" && selectedSource ? (
             <SourcePreview source={selectedSource} onClose={() => setRightPanelMode("inspector")} />

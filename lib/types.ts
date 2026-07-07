@@ -82,6 +82,23 @@ export interface NLSearchResponse {
   mode: "llm" | "fallback";  // llm 실패 시 키워드 폴백
 }
 
+/** 전역 모순 스캔(lib/contradictions.ts) 항목 — 질문 없이도 상시 노출되는 근거 기반 모순. */
+export interface Contradiction {
+  kind: "record-gap" | "market-env" | "master-missing";
+  title: string;
+  detail: string;
+  projects: string[];         // 관련 프로젝트 라벨
+  evidence: string[];         // 근거 문서·객체 라벨 칩
+  trace: string[];            // 근거 경로 "PJ26→SIMILAR→PJ21" (실존 엣지만)
+  confidence: number;         // %
+}
+
+/** GET /api/contradictions */
+export interface ContradictionsResponse {
+  items: Contradiction[];
+  scannedAt?: string;
+}
+
 /** POST /api/infer 입력 */
 export interface DesignInput {
   market: string;             // 예: "북미"
