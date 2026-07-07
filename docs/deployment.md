@@ -38,7 +38,12 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v8 (2026-07-06)** — v2(자연어 검색·그래프 인터랙션·라이트 SL 테마·견고 파싱) + v3(FMEA 초안 다운로드)
+- **현재 배포 = v45 (2026-07-07)**. v24~v45 요약: Postgres+pgvector 영속화(+Python 임베딩 사이드카
+  pyservice, `k8s/pyservice.yaml`) · 그래프 포커스/hover 개선 · 부품 앵커 추론(v45).
+  **v46 예정(빌드 검증 완료, 서버 회복 대기)**: BOM 파서+정합성 검증 · 전역 모순 스캔 배지 ·
+  마스터 대조 audit · 품질 감사(🧹) · 확신도 breakdown · 오케스트레이터 v0 · 임베딩 자동 백필.
+- 이하 v2~v23 상세 변경 이력:
+  v2(자연어 검색·그래프 인터랙션·라이트 SL 테마·견고 파싱) + v3(FMEA 초안 다운로드)
   + v4(백본 우선 초기화면·전체 보기 토글·라벨 LOD) + v5(인스펙터 뒤로가기·이동 경로) + v6(증분 인제스천 탭)
   + v7(결로·습기 기본 데모 조건 + 인스펙터 FMEA 요약 카드·관계명 한글화·포커스 1-hop 제한·
   브레드크럼·"신규 설계 조건에 반영" 액션 + 복합 pptx 원천(13슬라이드) + 시연 문구 제거)
@@ -71,9 +76,11 @@ docker run -p 8000:8000 sl-ontoground
   도면 분석 패널 "설계 취약점 검사" 카드) + 병합·삭제 버튼 obj-head 상단 이동 + 테스트 도면 2종 추가(턴시그널 HL27·헤드램프개선 HL28))**.
 - **직행 URL: `http://192.168.0.100:30494/?update=1`** — 카오스·구축 버튼·스폰 연출 없이 곧바로
   STAGE 2 완료 상태(검색·인스펙터·추론 버튼 즉시 사용 가능). 기본 URL은 3단계 스토리 연출 유지.
-- **replicas = 1 (v6부터)** — 증분 인제스천이 인메모리 병합이라 파드 간 불일치 방지용.
-  업로드 상태는 파드 재시작 시 초기화(`kubectl -n sl-ontoground rollout restart deploy/sl-ontoground` = 데모 리셋).
-- **이미지 정리(용량):** 마스터 로컬 docker 는 **현재 + 롤백용 1개**만 유지(2026-07-06 기준 v21·v20), 이전 태그·배포 tar 는 삭제.
+- **replicas = 1** — 읽기 캐시(인메모리 인덱스)의 파드 간 정합 때문에 유지. 업로드분은 이제
+  **Postgres 영속**이라 파드 재시작에도 보존 — `rollout restart` 는 더 이상 데모 리셋이 아님
+  (리셋하려면 DB 그래프 테이블 비우고 재기동 → `data/sources` 재인제스천).
+- **이미지 정리(용량):** 마스터 로컬 docker·원격 tar 는 **최신 3개 v태그만 유지**(deploy 스크립트 prune —
+  v번호 단조 증가 전제. 다음 번호는 반드시 마스터 `docker images` + `kubectl get rs` 로 확인).
   레지스트리(`:5000`, 공용 `registry:2`)는 **삭제 비활성(HTTP 405)** — 태그 v1/v2 가 남아 있으나 레이어가
   버전 간 공유(dedup)라 실 점유는 작음. 진짜 제거하려면 관리자가 `REGISTRY_STORAGE_DELETE_ENABLED` + GC 실행 필요
   (공용 인프라라 임의 재시작 금지).
@@ -85,9 +92,11 @@ docker run -p 8000:8000 sl-ontoground
   ```
   (LLM 자연어 검색을 켜려면 Deployment 에 `NL_USE_LLM=1` + `LLM_BASE_URL`/`LLM_MODEL` env 주입 — 기본 OFF.)
 
-## 확장 시 주의
-- 저장소를 Postgres로 바꾸면(`lib/store.ts`) 상태가 생김 → 외부 DB 연결·시크릿 필요.
-- Docling 등 Python 사이드카는 별도 이미지/서비스로 두고 앱이 HTTP 호출.
+## 상태 구성 (Postgres 전환 완료)
+- 앱 Deployment 에 `DATABASE_URL`(클러스터 내 Postgres) 주입 — DB=원본, 인메모리=읽기 캐시.
+- `PYSERVICE_URL=http://pyservice.sl-ontoground:8000` — 임베딩 사이드카(`k8s/pyservice.yaml`,
+  sentence-transformers 다국어 MiniLM). 임베딩 백필은 부팅·병합 후 자동(재트리거 `POST /api/admin/embed-backfill`).
+- Docling 등 추가 Python 기능도 같은 사이드카 패턴으로 확장.
 
 ## 원천 파일 포함
 - `next.config.mjs`의 `outputFileTracingIncludes`가 `data/sources/**`를 standalone에 포함.
