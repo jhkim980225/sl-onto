@@ -97,7 +97,7 @@ export default function Checklist({
   }
   if (!result) return null;
 
-  const { checklist, traversed, masterAudit } = result;
+  const { checklist, traversed, masterAudit, pipeline } = result;
 
   return (
     <>
@@ -135,6 +135,16 @@ export default function Checklist({
           </div>
         </div>
       ) : null}
+      {pipeline && pipeline.length > 0 && (
+        <div className="pipe-strip" title="추론 파이프라인 실행 로그 — 각 단계는 확장 시 에이전트로 교체되는 슬롯">
+          {pipeline.map((s, i) => (
+            <span className="pipe-step" key={i} title={s.summary}>
+              <b>{s.name}</b>
+              {s.ms > 0 ? ` ${s.ms}ms` : ""} ✓
+            </span>
+          ))}
+        </div>
+      )}
       <div className="stats">
         <span className="stat">
           탐색 객체 <b>{traversed.objects}</b>

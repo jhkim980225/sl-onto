@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { infer } from "@/lib/infer";
+import { runPipeline } from "@/lib/orchestrator";
 import { ready } from "@/lib/store";
 import type { DesignInput } from "@/lib/types";
 
@@ -31,5 +31,6 @@ export async function POST(req: Request) {
   }
 
   const input: DesignInput = parsed.data;
-  return NextResponse.json(infer(input));
+  // 오케스트레이터 경유 — infer 결과 + 단계별 실행 로그(pipeline). 체크리스트는 infer 와 동일.
+  return NextResponse.json(runPipeline(input));
 }

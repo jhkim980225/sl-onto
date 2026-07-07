@@ -346,6 +346,10 @@ svg#graph.fullview .edge.dim{opacity:.03}
 .conf-stack{display:flex;height:6px;border-radius:3px;overflow:hidden;background:#eef2f8}
 .conf-stack i{display:block;height:100%}
 .conf-formula{font-family:var(--mono);font-size:10px;margin-top:6px;color:var(--ink-faint)}
+/* 추론 파이프라인 스트립 — 단계별 실행 로그 칩 (오케스트레이터 v0) */
+.pipe-strip{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 2px}
+.pipe-step{font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);background:#f5f8fc;border:1px solid var(--line);border-radius:5px;padding:2px 7px;cursor:default}
+.pipe-step b{color:var(--ink);font-weight:600}
 .trace-chain{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-bottom:8px}
 .trace-node{font-family:var(--mono);font-size:10.5px;color:var(--ink);background:#f5f8fc;border:1px solid var(--line);border-radius:5px;padding:3px 8px;cursor:pointer;transition:border-color .15s,color .15s}
 .trace-node:hover{color:var(--amber);border-color:#cdd8e6}

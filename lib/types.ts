@@ -149,4 +149,6 @@ export interface InferResponse {
   total?: number; // 캡 이전 전체 관련 항목 수(체크리스트는 상위 N개만)
   traversed: { objects: number; edges: number; docs: number };
   masterAudit?: MasterAudit[]; // 도달한 fm/원인 기준 마스터 대조(옵셔널 — 기존 소비자 무영향)
+  /** 오케스트레이터 파이프라인 실행 로그(옵셔널) — lib/orchestrator.ts. counts 는 전부 실측. */
+  pipeline?: { name: string; ms: number; summary: string; counts?: Record<string, number> }[];
 }
