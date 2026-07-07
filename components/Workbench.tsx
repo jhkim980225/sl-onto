@@ -386,13 +386,13 @@ export default function Workbench() {
     [buildStarted]
   );
 
-  // ── ?update=1 → 구축 완료 상태로 직행(카오스·버튼·연출 스킵) ──
+  // ── 기본 진입 = 구축 완료 화면 직행(카오스·구축버튼·연출 스킵) ──
+  // DB 가 원본이라 매 진입마다 구축 연출은 불필요. (구 ?update=1 은 하위호환으로 동일 동작)
   const autoBuildRef = useRef(false);
   useEffect(() => {
     if (autoBuildRef.current) return;
     autoBuildRef.current = true;
-    const sp = new URLSearchParams(window.location.search);
-    if (sp.get("update") === "1") handleBuildOntology(true);
+    handleBuildOntology(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1021,9 +1021,7 @@ export default function Workbench() {
                   </>
                 )}
               </div>
-              <button className="btn btn-primary" id="btnBuild" disabled={buildStarted} onClick={() => handleBuildOntology()}>
-                ✦ 온톨로지 구축 시작 →
-              </button>
+              {/* 온톨로지 구축 버튼 제거 — 기본 진입이 구축 완료 화면 직행(DB 원본) */}
             </div>
           )}
           {ontologyError && (

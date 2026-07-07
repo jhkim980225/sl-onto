@@ -34,9 +34,10 @@ spec:
           resources:
             requests:
               cpu: 250m
-              memory: 512Mi
-            limits:
               memory: 1Gi
+            limits:
+              # torch + MiniLM 로드 시 RSS ~1.5Gi → 1Gi 는 OOMKilled(exit137). 2Gi 로 상향.
+              memory: 2Gi
 ---
 apiVersion: v1
 kind: Service
