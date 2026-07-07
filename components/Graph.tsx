@@ -723,7 +723,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
       nodes.forEach((n) => {
         if (!n.el) return;
         const near = n.id === id || nb.has(n.id);
-        n.el.classList.toggle("dim", on && !near);
+        // hover 시 나머지 노드는 dim 하지 않는다(포커스와 동일 — 강조만, 가림 없음).
         // PHASE 1 LOD: 전체 보기에서 hover한 노드+이웃은 라벨을 임시로 켠다.
         n.el.classList.toggle("lbl-on", on && near);
         if (n.type === "doc") n.el.classList.toggle("showlbl", on && near);
