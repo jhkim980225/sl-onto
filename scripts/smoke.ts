@@ -85,6 +85,16 @@ async function main() {
     })
   );
 
+  // 5.7) 유도 관계 (pyservice /reason — 미가용이면 빈 배열 폴백이 정상)
+  const reason = await getJson("/api/reason");
+  check("reason 응답(200+배열)", Array.isArray(reason.items), `${reason.items.length}건`);
+  if (reason.items.length > 0) {
+    check(
+      "reason via 근거 (골든 룰)",
+      reason.items.every((i: { via: string[] }) => i.via.length > 0)
+    );
+  }
+
   // 6) 자연어 검색
   const nl = await postJson("/api/nlsearch", { query: "북미에서 결로 문제 대책이 있었나" });
   check("nlsearch hits", nl.hits.length >= 1, `${nl.hits.length}`);

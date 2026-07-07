@@ -16,11 +16,13 @@ import IngestPanel from "./IngestPanel";
 import DrawingPanel, { type DrawingResult } from "./DrawingPanel";
 import ContradictionsPanel from "./ContradictionsPanel";
 import QualityPanel from "./QualityPanel";
+import ReasonPanel from "./ReasonPanel";
 import { buildNodeIndex, type NodeIndex } from "./nodeIndex";
 import type { SourceInfo, SourcesResponse } from "./sourceTypes";
 import type { IngestResponse } from "./ingestTypes";
 import type { RegionsResponse, RegionSummary } from "./condensationTypes";
 import type { QualityIssue, QualityResponse } from "@/lib/quality";
+import type { DerivedEdge } from "@/lib/reason";
 import type {
   Contradiction,
   ContradictionsResponse,
@@ -156,6 +158,7 @@ export default function Workbench() {
     | "drawing"
     | "contradictions"
     | "quality"
+    | "reason"
   >("inspector");
   // 전역 모순 스캔 — 온톨로지 구축 완료 후 상시 조회(질문 없이도 노출).
   const [contradictions, setContradictions] = useState<Contradiction[]>([]);
@@ -165,6 +168,10 @@ export default function Workbench() {
   const [quality, setQuality] = useState<QualityIssue[]>([]);
   const [qualityLoading, setQualityLoading] = useState(false);
   const [qualityError, setQualityError] = useState<string | null>(null);
+  // pyservice /reason 유도 관계 — 온톨로지 구축 완료 후 상시 조회(배지, DB 미반영 조회 전용 오버레이).
+  const [derivedRelations, setDerivedRelations] = useState<DerivedEdge[]>([]);
+  const [reasonLoading, setReasonLoading] = useState(false);
+  const [reasonError, setReasonError] = useState<string | null>(null);
   const [condensationRegions, setCondensationRegions] = useState<RegionSummary[] | null>(null);
   const [condensationLoading, setCondensationLoading] = useState(false);
   const [condensationError, setCondensationError] = useState<string | null>(null);
@@ -269,6 +276,28 @@ export default function Workbench() {
   useEffect(() => {
     if (!ontologyBuilt) return;
     void refreshQuality();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ontologyBuilt]);
+
+  // 유도 관계(pyservice /reason) — 배지("🔗 유도 관계 N")로 상시 노출. pyservice 미가용이면 조용히 빈 배열.
+  const refreshReason = useCallback(() => {
+    setReasonLoading(true);
+    return fetch("/api/reason")
+      .then((res) => {
+        if (!res.ok) throw new Error(`유도 관계 조회 실패 (${res.status})`);
+        return res.json() as Promise<{ items: DerivedEdge[] }>;
+      })
+      .then((data) => {
+        setDerivedRelations(data.items);
+        setReasonError(null);
+      })
+      .catch((err) => setReasonError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setReasonLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!ontologyBuilt) return;
+    void refreshReason();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ontologyBuilt]);
 
@@ -403,6 +432,12 @@ export default function Workbench() {
   // 품질 스캔 패널의 객체 링크 클릭.
   const handleQualitySelect = useCallback(
     (id: string) => handleNodeClick(id, { via: "품질 스캔", fresh: true }),
+    [handleNodeClick]
+  );
+
+  // 유도 관계 패널의 객체 링크 클릭.
+  const handleReasonSelect = useCallback(
+    (id: string) => handleNodeClick(id, { via: "유도 관계", fresh: true }),
     [handleNodeClick]
   );
 
@@ -1064,6 +1099,17 @@ export default function Workbench() {
             🧹 정리 {quality.length}건
           </button>
         )}
+        {derivedRelations.length > 0 && (
+          <button
+            className="btn btn-ghost"
+            id="btnReason"
+            style={{ color: "#00789e", borderColor: "#b3e2f2" }}
+            title="온톨로지가 기존 관계 조합으로 스스로 유도한 관계(검토용, DB 미반영)"
+            onClick={() => setRightPanelMode("reason")}
+          >
+            🔗 유도 관계 {derivedRelations.length}건
+          </button>
+        )}
         <button className="btn btn-ghost" id="btnReset" onClick={handleReset}>
           처음부터
         </button>
@@ -1295,6 +1341,15 @@ export default function Workbench() {
               onSelectObject={handleQualitySelect}
               onMerge={handleQualityMerge}
               onDelete={handleQualityDelete}
+              onClose={() => setRightPanelMode("inspector")}
+            />
+          ) : rightPanelMode === "reason" ? (
+            <ReasonPanel
+              loading={reasonLoading}
+              error={reasonError}
+              items={derivedRelations}
+              nodeIndex={nodeIndex}
+              onSelectObject={handleReasonSelect}
               onClose={() => setRightPanelMode("inspector")}
             />
           ) : rightPanelMode === "source" && selectedSource ? (

@@ -18,6 +18,7 @@ const REL_KO: Record<string, string> = {
   SPEC_OF: "고객 스펙",
   NEW_DESIGN_OF: "신규 설계",
   TARGET_MARKET: "타깃 시장",
+  POTENTIAL_FAILURE: "잠재 고장(유도)",
 };
 
 /** 짧은 한글 관계 라벨. 미등록 관계는 원문 유지. */
