@@ -13,14 +13,29 @@ import { backfillEmbeddings } from "./embed";
 
 const HAS_DB = db.dbEnabled();
 
-/** 임베딩 백필을 백그라운드로(부팅·병합 비차단, 실패 무해 — backfillEmbeddings 자체가 멱등·no-throw). */
+/** 임베딩 백필을 백그라운드로(부팅·병합 비차단, 실패 무해 — backfillEmbeddings 자체가 멱등·no-throw).
+ * 동시 실행 1개로 제한 — 실행 중 재요청은 완료 후 1회 재실행(그 사이 추가된 노드 커버). */
+let backfillRunning = false;
+let backfillAgain = false;
 function scheduleEmbedBackfill() {
   if (!HAS_DB) return;
+  if (backfillRunning) {
+    backfillAgain = true;
+    return;
+  }
+  backfillRunning = true;
   void backfillEmbeddings()
     .then((r) => {
       if (!r.skipped && r.embedded > 0) console.log(`[embed] auto-backfill: ${r.embedded}개 임베딩 생성`);
     })
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => {
+      backfillRunning = false;
+      if (backfillAgain) {
+        backfillAgain = false;
+        scheduleEmbedBackfill();
+      }
+    });
 }
 
 // ── 인메모리 인덱스 ──

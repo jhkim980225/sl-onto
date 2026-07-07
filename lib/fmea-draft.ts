@@ -27,7 +27,10 @@ function targetItems(input: DesignInput): Node[] {
   // 부품 앵커가 명시되면 그 부품(+구성)만 대상 — components 는 소프트 힌트.
   const names = input.anchorItem ? [input.anchorItem] : (input.components ?? []);
   for (const nm of names) {
-    const hit = allNodes().find((n) => n.type === "item" && (n.label.includes(nm) || nm.includes(n.label)));
+    // 정확 일치 우선(짧은 라벨이 includes 로 먼저 잡히는 순서 의존 방지), 없으면 포함 매칭.
+    const hit =
+      allNodes().find((n) => n.type === "item" && n.label === nm) ??
+      allNodes().find((n) => n.type === "item" && (n.label.includes(nm) || nm.includes(n.label)));
     add(hit);
     if (hit) for (const c of neighbors(hit.id, { rel: "CONSISTS_OF", dir: "out" })) add(c);
   }

@@ -369,8 +369,10 @@ export function infer(input: DesignInput): InferResponse {
   // 부품 노드를 클릭하고 추론하면 그 부품의 고장 이력만 체크리스트로(그 부품에 맞는 검토).
   // anchorItem 없으면 기존 "유사 프로젝트" 기반(신규 설계 기본 조건 흐름 — components 는 소프트 부스트만).
   const ITEM_ANCHOR_SIM = 0.9; // 부품 직접 앵커는 관련도 높게
+  // 정확 일치 우선 — includes 만 쓰면 "LED" 같은 짧은 라벨이 노드 순서 따라 먼저 잡힌다(리뷰 지적).
   const anchorItem = safe.anchorItem
-    ? allNodes().find(
+    ? allNodes().find((n) => n.type === "item" && n.label === safe.anchorItem) ??
+      allNodes().find(
         (n) => n.type === "item" && (n.label.includes(safe.anchorItem!) || safe.anchorItem!.includes(n.label))
       )
     : undefined;
