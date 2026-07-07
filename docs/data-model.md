@@ -97,4 +97,14 @@ CREATE INDEX idx_objects_type ON objects(type);
       "confidence":91,
       "trace":["PJ26→SIMILAR→PJ21","PJ21→OCCURRED_IN→FMGAP","FMGAP→REF_MASTER→MGAP"] } ],
   "traversed": { "objects":34, "edges":41, "docs":12 } }
+
+// GET /api/contradictions — 전역 모순 스캔(상시 노출용, 규칙당 상한 5 · confidence 플로어 40%)
+{ "items":[
+    { "kind":"record-gap",          // record-gap | market-env | master-missing
+      "title":"PJ 2020-HL09 — 커뮤니티 언급 vs FMEA 기록 괴리",
+      "detail":"…", "projects":["PJ09"],
+      "evidence":["소비자반응_커뮤니티.xlsx"],
+      "trace":["PJ09→OCCURRED_IN→…"],  // 실존 엣지만 (근거 우선 골든 룰)
+      "confidence":85 } ],
+  "scannedAt":"2026-07-07T…" }
 ```

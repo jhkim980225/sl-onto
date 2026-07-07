@@ -4,8 +4,9 @@
 // 관계를 CAUSED_BY 등 내부 관계명 나열이 아니라 대상 품목/주요 원인/추천 조치/근거 문서 등
 // 업무 언어 그룹으로 번역해 보여준다(내부 데이터는 그대로, 표시만 치환 — relLabels.ts).
 // + 탐색 히스토리(뒤로 가기 / 경유 관계 브레드크럼) 내비게이션.
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { ObjectDetail, Rel } from "@/lib/types";
+import type { BomFinding } from "@/lib/bom-consistency";
 import { TYPES, TYPE_NAMES } from "./typeStyles";
 import { groupRelations, relKo } from "./relLabels";
 
@@ -290,6 +291,8 @@ export default function Inspector({
         <RelGroupSection key={g.title} group={g} onGo={onGo} onDeleteRel={onDeleteRel} currentId={obj.id} />
       ))}
 
+      {obj.type === "item" ? <BomCheckSection obj={obj} onGo={onGo} /> : null}
+
       {otherProps.length > 0 ? (
         <>
           <div className="sec-label">속성</div>
@@ -408,5 +411,108 @@ function RelGroupSection({
         </button>
       ) : null}
     </>
+  );
+}
+
+/** BOM 정합성 — 이 부품(item)의 CONSISTS_OF 구성으로 /api/bom-check 를 조회해 근거·확신도가
+ * 붙은 finding 목록을 보여준다. 구성(CONSISTS_OF)이 없는 item이면 렌더하지 않음(부모가 obj.type
+ * 으로 이미 1차 필터링하지만, 실제 CONSISTS_OF 보유 여부는 relations 로 재확인). */
+function BomCheckSection({ obj, onGo }: { obj: ObjectDetail; onGo: (id: string, via?: string) => void }) {
+  const hasBom = (obj.relations ?? []).some((r) => r.rel === "CONSISTS_OF" && r.dir === "out");
+  const [findings, setFindings] = useState<BomFinding[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!hasBom) {
+      setFindings(null);
+      return;
+    }
+    let live = true;
+    setLoading(true);
+    fetch(`/api/bom-check?item=${encodeURIComponent(obj.id)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((data) => {
+        if (live) setFindings(Array.isArray(data.findings) ? data.findings : []);
+      })
+      .catch(() => {
+        if (live) setFindings([]);
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [obj.id, hasBom]);
+
+  if (!hasBom) return null;
+
+  // 노드 id → 라벨: 이 인스펙터가 이미 로드한 1-hop 이웃(obj.relations) 범위에서 해석.
+  // ponytail: BOM 정합성 trace는 item→CONSISTS_OF→자식이 대부분이라 1-hop 안에서 해석된다.
+  // 그 밖(자식의 HAS_FAILURE/CAUSED_BY 대상)은 로컬에 없으면 id를 그대로 보여준다 — 클릭 시
+  // onGo가 실제 객체를 불러와 다음 화면에서 라벨이 채워진다(전체 nodeIndex 로딩 없이 가벼운 절충).
+  const localLabel = new Map<string, string>([[obj.id, obj.label]]);
+  for (const r of obj.relations ?? []) localLabel.set(r.other, r.otherLabel);
+
+  return (
+    <>
+      <div className="sec-label">BOM 정합성{findings ? ` ${findings.length}` : ""}</div>
+      {loading ? <div className="insp-empty">부품 구성 점검 중…</div> : null}
+      {!loading && findings && findings.length === 0 ? (
+        <div className="insp-empty">구성 부품 간 정합성 이슈가 발견되지 않았습니다.</div>
+      ) : null}
+      {(findings ?? []).map((f, i) => (
+        <div className="chk show" style={{ cursor: "default" }} key={i}>
+          <span
+            className="cond-risk-badge"
+            style={{
+              background: (f.level === "risk" ? "var(--c-fm)" : "var(--c-cause)") + "22",
+              color: f.level === "risk" ? "var(--c-fm)" : "var(--c-cause)",
+            }}
+          >
+            {f.level === "risk" ? "위험" : "주의"}
+          </span>
+          <h3>{f.title}</h3>
+          <p>{f.detail}</p>
+          <div className="cf">
+            <div className="bar">
+              <i style={{ width: `${f.confidence}%` }} />
+            </div>
+            <span className="cv">{f.confidence}%</span>
+          </div>
+          {f.evidence.length > 0 ? (
+            <div className="evs">
+              {f.evidence.map((e, j) => (
+                <span className="evc" key={j}>
+                  {e}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {f.trace.length > 0 ? (
+            <div className="trace-chain">
+              {f.trace.map((hop, hi) => {
+                const [a, rel, b] = hop.split("→");
+                return (
+                  <Fragment key={hi}>
+                    {hi === 0 ? <TraceChip id={a} label={localLabel.get(a)} onGo={onGo} /> : null}
+                    <span className="trace-rel">—{relKo(rel)}→</span>
+                    <TraceChip id={b} label={localLabel.get(b)} onGo={onGo} />
+                  </Fragment>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </>
+  );
+}
+
+function TraceChip({ id, label, onGo }: { id: string; label?: string; onGo: (id: string, via?: string) => void }) {
+  return (
+    <span className="trace-node" onClick={() => onGo(id)}>
+      {label ?? id}
+    </span>
   );
 }

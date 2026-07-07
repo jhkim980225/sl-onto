@@ -9,12 +9,12 @@ export interface DrawingRisk {
   detail: string;
 }
 
-// 소재 열팽창 계수(CTE, µm/m·K) — 대표값(도메인 상수)
-const CTE: Record<string, number> = {
+// 소재 열팽창 계수(CTE, µm/m·K) — 대표값(도메인 상수). BOM 정합성 검사(lib/bom-consistency.ts)도 재사용.
+export const CTE: Record<string, number> = {
   PC: 65, "PC+ABS": 75, PMMA: 70, PA6: 80, "FR-4": 16,
   EPDM: 160, 실리콘: 250, 고무: 150,
 };
-const cteOf = (s?: string) => {
+export const cteOf = (s?: string) => {
   if (!s) return undefined;
   const key = Object.keys(CTE).find((k) => s.toUpperCase().includes(k.toUpperCase()));
   return key ? CTE[key] : undefined;
