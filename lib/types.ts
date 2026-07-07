@@ -88,6 +88,9 @@ export interface DesignInput {
   lightSource: string;        // 예: "LED"
   shape: string[];            // 예: ["분리형 DRL","슬림 하우징"]
   components?: string[];
+  /** 명시적 부품 앵커 — 사용자가 그래프에서 부품(item) 노드를 선택하고 추론한 경우.
+   * 설정 시 그 부품의 고장 이력만으로 체크리스트를 스코프한다(components 소프트 부스트와 구분). */
+  anchorItem?: string;
   /** 유사 탐색 시드 프로젝트 id (도면 업로드 흐름 — 없으면 기존 시나리오 노드 사용) */
   seedProject?: string;
 }

@@ -255,6 +255,7 @@ export function infer(input: DesignInput): InferResponse {
     lightSource: norm(input?.lightSource),
     shape: (Array.isArray(input?.shape) ? input.shape : []).map(norm),
     components: (Array.isArray(input?.components) ? input.components : []).map(norm),
+    anchorItem: input?.anchorItem ? norm(input.anchorItem) : undefined,
     seedProject: input?.seedProject ? norm(input.seedProject) : undefined,
   };
 
@@ -268,123 +269,147 @@ export function infer(input: DesignInput): InferResponse {
   const shapeToks = shapeTokens(safe.shape);
   const marketKeys = marketKeywords(safe.market);
 
-  // ── 1단계: 유사 프로젝트 스코어링 ──
-  const seed = findSeedProject(safe);
-  const projScores = scoreProjects(seed, safe, tv);
+  // ── 2~5단계: 고장모드 수집 + 확장 + 근거 ──
+  // 고장모드 하나를 concern 으로 확장(원인·마스터·조치·법규·근거·부스트).
+  // 프로젝트 앵커(유사 프로젝트의 OCCURRED_IN)와 부품 앵커(선택 부품의 HAS_FAILURE) 공용.
+  function expandFm(fm: Node, baseTrace: string[], sim: number, originLabel: string, originKind: "proj" | "item") {
+    if (fm.type !== "fm") return;
 
-  // ── 2~5단계: 각 유사 프로젝트의 고장모드 수집 + 확장 + 근거 ──
-  for (const ps of projScores) {
-    // 2단계: OCCURRED_IN 고장모드
-    for (const fmStep of follow(ps.proj.id, isRel("OCCURRED_IN"), tv)) {
-      const fm = fmStep.node;
-      if (fm.type !== "fm") continue;
+    // 기존 concern 병합 (중복 고장모드는 유사도 max)
+    let c = concerns.get(fm.id);
+    if (!c) {
+      c = {
+        anchor: fm.id,
+        category: "failure-mode",
+        title: "",
+        desc: "",
+        evidence: [],
+        trace: [],
+        sim,
+        severity: severityOf(fm),
+        hasMaster: false,
+        docCount: 0,
+        boost: 0,
+      };
+      concerns.set(fm.id, c);
+    }
+    c.sim = Math.max(c.sim, sim);
+    for (const t of baseTrace) pushUnique(c.trace, t);
 
-      const baseTrace: string[] = [];
-      if (ps.simEdge) pushUnique(baseTrace, hopStr(ps.simEdge)); // seed→SIMILAR→proj
-      pushUnique(baseTrace, hopStr(fmStep.edge)); // proj→OCCURRED_IN→fm
+    // 3단계: 원인 / 마스터 / 조치 / 법규 확장
+    const causes = sortByEvidenceOverlap(follow(fm.id, isRel("CAUSED_BY"), tv), fm.id);
+    let masters = follow(fm.id, isRel("REF_MASTER"), tv);
+    let actions = follow(fm.id, isRel("MITIGATED_BY"), tv);
+    const regs = follow(fm.id, isRel("UNDER_REG"), tv);
+    // 원인의 마스터·조치도 (예: FMBEAM→CTHERM→MTHERM/ARIB)
+    for (const cs of causes) {
+      for (const m of follow(cs.node.id, isRel("REF_MASTER"), tv)) masters.push(m);
+      for (const a of follow(cs.node.id, isRel("MITIGATED_BY"), tv)) actions.push(a);
+    }
+    // 대표 마스터·조치는 이 고장모드와 근거 문서를 공유하는 것 우선 (공동언급 노이즈 배제)
+    masters = sortByEvidenceOverlap(masters, fm.id);
+    actions = sortByEvidenceOverlap(actions, fm.id);
 
-      // 기존 concern 병합 (중복 고장모드는 유사도 max)
-      let c = concerns.get(fm.id);
-      if (!c) {
-        c = {
-          anchor: fm.id,
-          category: "failure-mode",
-          title: "",
-          desc: "",
-          evidence: [],
-          trace: [],
-          sim: ps.sim,
-          severity: severityOf(fm),
-          hasMaster: false,
-          docCount: 0,
-          boost: 0,
-        };
-        concerns.set(fm.id, c);
-      }
-      c.sim = Math.max(c.sim, ps.sim);
-      for (const t of baseTrace) pushUnique(c.trace, t);
+    const master = masters[0]?.node;
+    const action = actions[0]?.node;
+    if (master) c.hasMaster = true;
 
-      // 3단계: 원인 / 마스터 / 조치 / 법규 확장
-      const causes = sortByEvidenceOverlap(follow(fm.id, isRel("CAUSED_BY"), tv), fm.id);
-      let masters = follow(fm.id, isRel("REF_MASTER"), tv);
-      let actions = follow(fm.id, isRel("MITIGATED_BY"), tv);
-      const regs = follow(fm.id, isRel("UNDER_REG"), tv);
-      // 원인의 마스터·조치도 (예: FMBEAM→CTHERM→MTHERM/ARIB)
-      for (const cs of causes) {
-        for (const m of follow(cs.node.id, isRel("REF_MASTER"), tv)) masters.push(m);
-        for (const a of follow(cs.node.id, isRel("MITIGATED_BY"), tv)) actions.push(a);
-      }
-      // 대표 마스터·조치는 이 고장모드와 근거 문서를 공유하는 것 우선 (공동언급 노이즈 배제)
-      masters = sortByEvidenceOverlap(masters, fm.id);
-      actions = sortByEvidenceOverlap(actions, fm.id);
+    // 5단계: 근거 부착 (고장모드 문서 + 원인 문서 + 마스터/조치/앵커 라벨)
+    const docChips = collectDocs(fm.id, tv, 2);
+    for (const chip of docChips) pushUnique(c.evidence, chip);
+    if (causes[0]) for (const chip of collectDocs(causes[0].node.id, tv, 1)) pushUnique(c.evidence, chip);
+    if (master) pushUnique(c.evidence, master.label);
+    if (action) pushUnique(c.evidence, action.label);
+    pushUnique(c.evidence, originLabel);
+    c.docCount = Math.max(c.docCount, evidenceOf(fm.id).length);
 
-      const master = masters[0]?.node;
-      const action = actions[0]?.node;
-      if (master) c.hasMaster = true;
+    // 제목·설명 (데이터 기반 생성)
+    const causeLabels = causes.slice(0, 3).map((x) => x.node.label).join(", ");
+    c.title = `${fm.label} 검토${master ? ` — ${master.label} 적용` : action ? ` — ${action.label}` : ""}`;
+    const head =
+      originKind === "item"
+        ? `선택 부품 ${originLabel} 고장 이력 (관련도 ${(c.sim * 100) | 0}%). `
+        : `유사 프로젝트 ${originLabel} 발생 이력 (유사도 ${(c.sim * 100) | 0}%). `;
+    c.desc =
+      head +
+      `심각도 S=${c.severity}${causeLabels ? ` · 원인 경로: ${causeLabels}` : ""}.` +
+      (master ? ` 표준 마스터 ${master.label} 필수 참조 — 누락 방지.` : "");
 
-      // 5단계: 근거 부착 (고장모드 문서 + 원인 문서 + 마스터/조치/프로젝트 라벨)
-      const docChips = collectDocs(fm.id, tv, 2);
-      for (const chip of docChips) pushUnique(c.evidence, chip);
-      if (causes[0]) for (const chip of collectDocs(causes[0].node.id, tv, 1)) pushUnique(c.evidence, chip);
-      if (master) pushUnique(c.evidence, master.label);
-      if (action) pushUnique(c.evidence, action.label);
-      pushUnique(c.evidence, ps.proj.label);
-      c.docCount = Math.max(c.docCount, evidenceOf(fm.id).length);
-
-      // 제목·설명 (데이터 기반 생성)
-      const causeLabels = causes.slice(0, 3).map((x) => x.node.label).join(", ");
-      c.title = `${fm.label} 검토${master ? ` — ${master.label} 적용` : action ? ` — ${action.label}` : ""}`;
+    // ── 4단계 부분: 시장 법규 부스트 (북미 → FMVSS 108(RUS) 활성, 유럽 전용 배제) ──
+    const marketReg = regs.map((r) => r.node).find((rn) => textMatchesAny(nodeText(rn), marketKeys));
+    if (marketReg) {
+      const regEdge = findEdge(fm.id, isRel("UNDER_REG"), marketReg.id);
+      if (regEdge) pushUnique(c.trace, hopStr(regEdge)); // fm→UNDER_REG→reg
+      pushUnique(c.evidence, marketReg.label); // 예: "FMVSS 108"
+      for (const chip of collectDocs(marketReg.id, tv, 1)) pushUnique(c.evidence, chip);
+      c.category = "regulatory";
+      c.boost += BOOST_MARKET;
+      c.title = `${safe.market} ${fm.label} 법규 적합성 — ${marketReg.label}`;
       c.desc =
-        `유사 프로젝트 ${ps.proj.label} 발생 이력 (유사도 ${(c.sim * 100) | 0}%). ` +
-        `심각도 S=${c.severity}${causeLabels ? ` · 원인 경로: ${causeLabels}` : ""}.` +
-        (master ? ` 표준 마스터 ${master.label} 필수 참조 — 누락 방지.` : "");
+        `${safe.market}향 조건 자동 감지 → ${marketReg.label} 적용. ` +
+        `타 시장(유럽 ECE 등)과 배광 기준 상이 — 시뮬레이션 조건 분리 필수. 심각도 S=${c.severity}.`;
+    }
 
-      // ── 4단계 부분: 시장 법규 부스트 (북미 → FMVSS 108(RUS) 활성, 유럽 전용 배제) ──
-      const marketReg = regs.map((r) => r.node).find((rn) => textMatchesAny(nodeText(rn), marketKeys));
-      if (marketReg) {
-        const regEdge = findEdge(fm.id, isRel("UNDER_REG"), marketReg.id);
-        if (regEdge) pushUnique(c.trace, hopStr(regEdge)); // fm→UNDER_REG→reg
-        pushUnique(c.evidence, marketReg.label); // 예: "FMVSS 108"
-        for (const chip of collectDocs(marketReg.id, tv, 1)) pushUnique(c.evidence, chip);
-        c.category = "regulatory";
-        c.boost += BOOST_MARKET;
-        c.title = `${safe.market} ${fm.label} 법규 적합성 — ${marketReg.label}`;
-        c.desc =
-          `${safe.market}향 조건 자동 감지 → ${marketReg.label} 적용. ` +
-          `타 시장(유럽 ECE 등)과 배광 기준 상이 — 시뮬레이션 조건 분리 필수. 심각도 S=${c.severity}.`;
-      }
+    // 형상 키워드 관련성 부스트 (예: 분리형 DRL → 휘도)
+    if (shapeToks.length && textMatchesAny(nodeText(fm), shapeToks)) c.boost += BOOST_SHAPE;
 
-      // 형상 키워드 관련성 부스트 (예: 분리형 DRL → 휘도)
-      if (shapeToks.length && textMatchesAny(nodeText(fm), shapeToks)) c.boost += BOOST_SHAPE;
-
-      // 부품 일치 부스트 (fm 을 가진 item 이 입력 부품과 일치)
-      if (safe.components && safe.components.length) {
-        const owners = inEdges(fm.id)
-          .filter((e) => e.rel === "HAS_FAILURE")
-          .map((e) => getNode(e.src))
-          .filter((n): n is Node => !!n);
-        if (owners.some((o) => safe.components!.some((cp) => o.label.includes(cp) || cp.includes(o.label)))) {
-          c.boost += BOOST_COMPONENT;
-        }
+    // 부품 일치 부스트 (fm 을 가진 item 이 입력 부품과 일치)
+    if (safe.components && safe.components.length) {
+      const owners = inEdges(fm.id)
+        .filter((e) => e.rel === "HAS_FAILURE")
+        .map((e) => getNode(e.src))
+        .filter((n): n is Node => !!n);
+      if (owners.some((o) => safe.components!.some((cp) => o.label.includes(cp) || cp.includes(o.label)))) {
+        c.boost += BOOST_COMPONENT;
       }
     }
   }
 
-  // ── 4단계: 슬림 → 수축 원인 concern (CSHRINK) ──
-  if (slimActive) addCauseConcern(concerns, tv, "수축", "shrink-slim", BOOST_SLIM, "(슬림 형상)");
+  // ── 앵커 선택: anchorItem(사용자가 그래프에서 명시 선택한 부품)이 있으면 "부품 중심" 모드. ──
+  // 부품 노드를 클릭하고 추론하면 그 부품의 고장 이력만 체크리스트로(그 부품에 맞는 검토).
+  // anchorItem 없으면 기존 "유사 프로젝트" 기반(신규 설계 기본 조건 흐름 — components 는 소프트 부스트만).
+  const ITEM_ANCHOR_SIM = 0.9; // 부품 직접 앵커는 관련도 높게
+  const anchorItem = safe.anchorItem
+    ? allNodes().find(
+        (n) => n.type === "item" && (n.label.includes(safe.anchorItem!) || safe.anchorItem!.includes(n.label))
+      )
+    : undefined;
+  const itemScoped = !!anchorItem;
 
-  // ── 4단계: LED → 방열 인과사슬 concern (CTHERM→FMBEAM) ──
-  if (ledActive) addCauseConcern(concerns, tv, "방열|발열|열", "led-thermal", BOOST_LED, "(LED 방열)");
-
-  // ── 4단계: 밀폐·방수 형상 → 결로·습기 고장모드 가중 (내부 습기가 빠지지 못함) ──
-  // 프로젝트 루프 밖에서 concern당 1회만 적용 — 발생 프로젝트 수만큼 중복 누적되지 않게.
-  if (fogActive) {
-    for (const c of concerns.values()) {
-      const anchorNode = getNode(c.anchor);
-      if (anchorNode?.type === "fm" && /결로|습기/.test(norm(anchorNode.label))) c.boost += BOOST_FOG;
+  if (anchorItem) {
+    // 부품 중심: 선택 부품의 HAS_FAILURE 고장모드에서 직접 시드.
+    tv.objects.add(anchorItem.id);
+    for (const fmStep of follow(anchorItem.id, isRel("HAS_FAILURE"), tv)) {
+      expandFm(fmStep.node, [hopStr(fmStep.edge)], ITEM_ANCHOR_SIM, anchorItem.label, "item"); // item→HAS_FAILURE→fm
     }
-    // 벤트·씰링 원인 concern (CVENT→FMFOG 인과)
-    addCauseConcern(concerns, tv, "벤트|씰링", "fog-vent", BOOST_FOG, "(밀폐 하우징)");
+  } else {
+    // 기본: 유사 프로젝트 스코어링 → 각 프로젝트의 OCCURRED_IN 고장모드.
+    const seed = findSeedProject(safe);
+    const projScores = scoreProjects(seed, safe, tv);
+    for (const ps of projScores) {
+      for (const fmStep of follow(ps.proj.id, isRel("OCCURRED_IN"), tv)) {
+        const baseTrace: string[] = [];
+        if (ps.simEdge) pushUnique(baseTrace, hopStr(ps.simEdge)); // seed→SIMILAR→proj
+        pushUnique(baseTrace, hopStr(fmStep.edge)); // proj→OCCURRED_IN→fm
+        expandFm(fmStep.node, baseTrace, ps.sim, ps.proj.label, "proj");
+      }
+    }
+  }
+
+  // ── 조건 기반 원인 concern(수축/방열/결로) — 기본 모드에서만. 부품 중심에선 그 부품 fm 으로 한정. ──
+  if (!itemScoped) {
+    // 슬림 → 수축 원인(CSHRINK)
+    if (slimActive) addCauseConcern(concerns, tv, "수축", "shrink-slim", BOOST_SLIM, "(슬림 형상)");
+    // LED → 방열 인과사슬(CTHERM→FMBEAM)
+    if (ledActive) addCauseConcern(concerns, tv, "방열|발열|열", "led-thermal", BOOST_LED, "(LED 방열)");
+    // 밀폐·방수 형상 → 결로·습기 가중 + 벤트·씰링 원인
+    if (fogActive) {
+      for (const c of concerns.values()) {
+        const anchorNode = getNode(c.anchor);
+        if (anchorNode?.type === "fm" && /결로|습기/.test(norm(anchorNode.label))) c.boost += BOOST_FOG;
+      }
+      addCauseConcern(concerns, tv, "벤트|씰링", "fog-vent", BOOST_FOG, "(밀폐 하우징)");
+    }
   }
 
   // ── 6단계: 확신도 계산 + 조립 + 정렬 ──

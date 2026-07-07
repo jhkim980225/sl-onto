@@ -160,6 +160,8 @@ export default function Workbench() {
   const [nodeIndex, setNodeIndex] = useState<NodeIndex>(() => new Map());
   // id→label 조회를 handleNodeClick(의존성 없는 콜백) 안에서도 쓰기 위한 ref 미러.
   const nodeIndexRef = useRef<NodeIndex>(new Map());
+  // 마지막으로 선택한 노드({id,label,type}) — 신규 설계 추론을 선택 부품(item) 기준으로 돌리기 위함.
+  const selectedNodeRef = useRef<{ id: string; label: string; type: ObjType } | null>(null);
 
   // ── 탐색 히스토리 — 선택할 때마다 {id, label, via} push. 뒤로/크럼 점프는 push 없이 재선택. ──
   const [navHistory, setNavHistory] = useState<NavEntry[]>([]);
@@ -264,6 +266,8 @@ export default function Workbench() {
       setInspectorLoading(true);
       setInspectorError(null);
       graphRef.current?.selectNode(id);
+      const meta = nodeIndexRef.current.get(id);
+      selectedNodeRef.current = meta ? { id, label: meta.label, type: meta.type } : null;
       if (opts?.push !== false) {
         const via = opts?.via ?? "선택";
         const fresh = opts?.fresh ?? false;
@@ -410,7 +414,14 @@ export default function Workbench() {
 
   // ── STAGE 2 → 3: 신규 설계 추론 시연 ──
   const handleRunScenario = useCallback(() => {
-    if (scenarioTriggered || !ontologyBuilt) return;
+    if (!ontologyBuilt) return;
+    const firstRun = !scenarioTriggered; // 최초만 그래프 웨이브 연출, 재실행은 체크리스트만 갱신
+    // 선택한 노드가 부품(item)이면 그 부품 기준으로 추론(anchorItem 명시). 없으면 기본 조건.
+    const sel = selectedNodeRef.current;
+    const inferInput: DesignInput =
+      sel && sel.type === "item" ? { ...condition, anchorItem: sel.label } : condition;
+    staggerTimeoutsRef.current.forEach(clearTimeout); // 재실행 시 이전 stagger 타이머 정리
+    staggerTimeoutsRef.current = [];
     setScenarioTriggered(true);
     setStage(3);
     setInferLoading(true);
@@ -422,7 +433,7 @@ export default function Workbench() {
     fetch("/api/infer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(condition),
+      body: JSON.stringify(inferInput),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`추론 API 실패 (${res.status})`);
@@ -440,7 +451,7 @@ export default function Workbench() {
             staggerTimeoutsRef.current.push(t);
           });
         };
-        if (gd && scenarioNode) {
+        if (firstRun && gd && scenarioNode) {
           const idSet = new Set(gd.nodes.map((n) => n.id));
           const waves = [[scenarioNode.id], ...data.checklist.map((c) => parseTraceIds(c.trace, idSet))];
           graphRef.current?.runScenario(scenarioNode.id, scenEdges, waves, {
@@ -448,7 +459,7 @@ export default function Workbench() {
             onDone: reveal,
           });
         } else {
-          // 그래프가 아직 구축되지 않았거나 시나리오 노드를 찾지 못한 경우에도 체크리스트는 보여준다.
+          // 재실행이거나 시나리오 노드를 못 찾은 경우: 웨이브 없이 체크리스트만 갱신.
           reveal();
         }
       })
@@ -923,10 +934,15 @@ export default function Workbench() {
         <button
           className="btn btn-primary"
           id="btnScenario"
-          disabled={!ontologyBuilt || scenarioTriggered}
+          disabled={!ontologyBuilt}
+          title={
+            inspectorObj?.type === "item"
+              ? `선택 부품 '${inspectorObj.label}' 기준으로 검토 체크리스트 생성`
+              : "기본 설계 조건으로 검토 체크리스트 생성 (부품 노드를 선택하면 그 부품 기준)"
+          }
           onClick={handleRunScenario}
         >
-          ▶ 신규 설계 추론
+          {inspectorObj?.type === "item" ? `▶ '${inspectorObj.label}' 설계 검토` : "▶ 신규 설계 추론"}
         </button>
       </header>
 

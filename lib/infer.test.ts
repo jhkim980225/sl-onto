@@ -139,3 +139,27 @@ test("traversed 카운트가 채워진다", () => {
   assert.ok(r.traversed.objects > 0, "traversed.objects 가 0");
   assert.ok(r.traversed.edges > 0, "traversed.edges 가 0");
 });
+
+test("anchorItem 지정 시 그 부품의 고장 이력으로 스코프된다 (부품 중심 모드)", () => {
+  // store 에서 실제 부품(HAS_FAILURE src)을 하나 골라 앵커로 사용 — 하드코딩 라벨 회피.
+  const hasFailure = allEdges().find((e) => e.rel === "HAS_FAILURE");
+  assert.ok(hasFailure, "HAS_FAILURE 엣지가 없음");
+  const item = getNode(hasFailure!.src);
+  assert.ok(item && item.type === "item", "HAS_FAILURE src 가 부품이 아님");
+  const r = infer({ ...DEMO, anchorItem: item!.label });
+  assert.ok(r.checklist.length > 0, "부품 앵커 체크리스트가 비어있음");
+  // 부품 중심: "유사 프로젝트" 근거는 없고(프로젝트 루프 스킵), "선택 부품" 프레이즈가 등장한다.
+  // (규제 항목 desc 는 시장 문구로 덮이므로 all 이 아닌 some 으로 검증)
+  assert.ok(!r.checklist.some((c) => /유사 프로젝트/.test(c.desc)), "부품 중심인데 유사 프로젝트 근거가 섞임");
+  assert.ok(r.checklist.some((c) => /선택 부품/.test(c.desc)), "선택 부품 프레이즈가 없음");
+  // trace 에 부품→HAS_FAILURE→고장모드 홉이 존재 (실제 엣지 경로)
+  assert.ok(
+    r.checklist.some((c) => c.trace.some((t) => t.includes("HAS_FAILURE"))),
+    "trace 에 부품→HAS_FAILURE 홉이 없음"
+  );
+});
+
+test("anchorItem 없으면 유사 프로젝트 기반 유지 (기존 동작 회귀 방지)", () => {
+  const r = infer(DEMO);
+  assert.ok(r.checklist.some((c) => /유사 프로젝트/.test(c.desc)), "기본 모드인데 유사 프로젝트 근거가 없음");
+});

@@ -10,6 +10,7 @@ const InputSchema = z.object({
   lightSource: z.string().min(1),
   shape: z.array(z.string()).min(1),
   components: z.array(z.string()).optional(),
+  anchorItem: z.string().optional(),
 });
 
 export async function POST(req: Request) {
