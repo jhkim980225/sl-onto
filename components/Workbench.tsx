@@ -15,10 +15,12 @@ import NLSearchPanel from "./NLSearchPanel";
 import IngestPanel from "./IngestPanel";
 import DrawingPanel, { type DrawingResult } from "./DrawingPanel";
 import ContradictionsPanel from "./ContradictionsPanel";
+import QualityPanel from "./QualityPanel";
 import { buildNodeIndex, type NodeIndex } from "./nodeIndex";
 import type { SourceInfo, SourcesResponse } from "./sourceTypes";
 import type { IngestResponse } from "./ingestTypes";
 import type { RegionsResponse, RegionSummary } from "./condensationTypes";
+import type { QualityIssue, QualityResponse } from "@/lib/quality";
 import type {
   Contradiction,
   ContradictionsResponse,
@@ -145,12 +147,24 @@ export default function Workbench() {
   const [lastInferInput, setLastInferInput] = useState<DesignInput | null>(null);
 
   const [rightPanelMode, setRightPanelMode] = useState<
-    "inspector" | "checklist" | "source" | "condensation" | "nlsearch" | "ingest" | "drawing" | "contradictions"
+    | "inspector"
+    | "checklist"
+    | "source"
+    | "condensation"
+    | "nlsearch"
+    | "ingest"
+    | "drawing"
+    | "contradictions"
+    | "quality"
   >("inspector");
   // 전역 모순 스캔 — 온톨로지 구축 완료 후 상시 조회(질문 없이도 노출).
   const [contradictions, setContradictions] = useState<Contradiction[]>([]);
   const [contradictionsLoading, setContradictionsLoading] = useState(false);
   const [contradictionsError, setContradictionsError] = useState<string | null>(null);
+  // 온톨로지 품질 스캔 — 중복 후보·고립 노드·근거 누락(질문 없이도 배지로 노출, 액션 후 재스캔).
+  const [quality, setQuality] = useState<QualityIssue[]>([]);
+  const [qualityLoading, setQualityLoading] = useState(false);
+  const [qualityError, setQualityError] = useState<string | null>(null);
   const [condensationRegions, setCondensationRegions] = useState<RegionSummary[] | null>(null);
   const [condensationLoading, setCondensationLoading] = useState(false);
   const [condensationError, setCondensationError] = useState<string | null>(null);
@@ -236,6 +250,28 @@ export default function Workbench() {
     return () => {
       cancelled = true;
     };
+  }, [ontologyBuilt]);
+
+  // 온톨로지 품질 스캔 — 배지("🧹 정리 N건")로 상시 노출. 큐레이션 액션 후 재스캔에도 재사용.
+  const refreshQuality = useCallback(() => {
+    setQualityLoading(true);
+    return fetch("/api/quality")
+      .then((res) => {
+        if (!res.ok) throw new Error(`품질 스캔 실패 (${res.status})`);
+        return res.json() as Promise<QualityResponse>;
+      })
+      .then((data) => {
+        setQuality(data.items);
+        setQualityError(null);
+      })
+      .catch((err) => setQualityError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setQualityLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!ontologyBuilt) return;
+    void refreshQuality();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ontologyBuilt]);
 
   const handleSelectSource = useCallback(
@@ -363,6 +399,12 @@ export default function Workbench() {
   // 모순 스캔 패널의 객체/근거 링크 클릭.
   const handleContradictionSelect = useCallback(
     (id: string) => handleNodeClick(id, { via: "모순 스캔", fresh: true }),
+    [handleNodeClick]
+  );
+
+  // 품질 스캔 패널의 객체 링크 클릭.
+  const handleQualitySelect = useCallback(
+    (id: string) => handleNodeClick(id, { via: "품질 스캔", fresh: true }),
     [handleNodeClick]
   );
 
@@ -654,6 +696,36 @@ export default function Workbench() {
     [mergeSource, curate, handleNodeClick]
   );
   handleMergeIntoRef.current = handleMergeInto;
+
+  // ── 품질 패널 액션: 중복 후보 병합 / 고립·근거없음 노드 삭제 — curate() 경유, 액션 후 재스캔 ──
+  const handleQualityMerge = useCallback(
+    (fromId: string, fromLabel: string, intoId: string) => {
+      if (!window.confirm(`"${fromLabel}" 을(를) 병합할까요?\n(인메모리 편집 — 서버 재시작 시 원복)`)) return;
+      curate({ op: "merge", from: fromId, into: intoId })
+        .then((d) => {
+          graphRef.current?.removeFromCanvas([fromId], []);
+          if (d.movedEdges?.length) graphRef.current?.addDelta([], d.movedEdges);
+          setFullTotals({ nodes: d.totals.nodes, edges: d.totals.edges });
+          void refreshQuality();
+        })
+        .catch((e) => setQualityError(e instanceof Error ? e.message : String(e)));
+    },
+    [curate, refreshQuality]
+  );
+
+  const handleQualityDelete = useCallback(
+    (id: string, label: string) => {
+      if (!window.confirm(`"${label}" 객체와 연결 관계를 삭제할까요?\n(인메모리 편집 — 서버 재시작 시 원복)`)) return;
+      curate({ op: "deleteNode", id })
+        .then((d) => {
+          graphRef.current?.removeFromCanvas([id], []);
+          setFullTotals({ nodes: d.totals.nodes, edges: d.totals.edges });
+          void refreshQuality();
+        })
+        .catch((e) => setQualityError(e instanceof Error ? e.message : String(e)));
+    },
+    [curate, refreshQuality]
+  );
 
   // ── 다음 액션: 인스펙터의 고장모드/원인을 신규 설계 조건에 리스크로 반영 ──
   // 추론이 이미 실행된 상태(STAGE 3)라면 새 조건으로 체크리스트를 즉시 재계산한다
@@ -979,6 +1051,17 @@ export default function Workbench() {
             ⚠ 모순 {contradictions.length}건
           </button>
         )}
+        {quality.length > 0 && (
+          <button
+            className="btn btn-ghost"
+            id="btnQuality"
+            style={{ color: "#8a6d1f", borderColor: "#eee0b3" }}
+            title="자동 생성 중복 후보·고립 노드·근거 누락 스캔 결과"
+            onClick={() => setRightPanelMode("quality")}
+          >
+            🧹 정리 {quality.length}건
+          </button>
+        )}
         <button className="btn btn-ghost" id="btnReset" onClick={handleReset}>
           처음부터
         </button>
@@ -1199,6 +1282,17 @@ export default function Workbench() {
               items={contradictions}
               nodeIndex={nodeIndex}
               onSelectObject={handleContradictionSelect}
+              onClose={() => setRightPanelMode("inspector")}
+            />
+          ) : rightPanelMode === "quality" ? (
+            <QualityPanel
+              loading={qualityLoading}
+              error={qualityError}
+              items={quality}
+              nodeIndex={nodeIndex}
+              onSelectObject={handleQualitySelect}
+              onMerge={handleQualityMerge}
+              onDelete={handleQualityDelete}
               onClose={() => setRightPanelMode("inspector")}
             />
           ) : rightPanelMode === "source" && selectedSource ? (
