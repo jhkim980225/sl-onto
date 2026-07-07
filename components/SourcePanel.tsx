@@ -32,6 +32,10 @@ interface SourcePanelProps {
   sourcesLoading: boolean;
   sourcesError: string | null;
   onSelectSource: (file: string) => void;
+  /** 객체 타입 탐색기 — 현재 필터 타입(null=전체 앵커) */
+  activeType?: ObjType | null;
+  /** 타입 클릭 시 그래프를 그 타입으로 필터(같은 타입 재클릭=해제) */
+  onSelectType?: (t: ObjType | null) => void;
 }
 
 export default function SourcePanel({
@@ -40,6 +44,8 @@ export default function SourcePanel({
   sourcesLoading,
   sourcesError,
   onSelectSource,
+  activeType = null,
+  onSelectType,
 }: SourcePanelProps) {
   const byType = new Map<string, number>();
   for (const s of sources) byType.set(s.type, (byType.get(s.type) ?? 0) + 1);
@@ -126,15 +132,32 @@ export default function SourcePanel({
           <b>지식 온톨로지</b> 실시간 적재
         </div>
       </div>
-      <div className="sec-label">온톨로지 객체 유형</div>
+      <div className="sec-label">
+        객체 타입 · 클릭해 탐색
+        {activeType && onSelectType ? (
+          <button className="type-clear" onClick={() => onSelectType(null)}>
+            ✕ 전체
+          </button>
+        ) : null}
+      </div>
       <div className="legend">
-        {LEGEND.map((l) => (
-          <div className="lg" key={l.t}>
-            <span className="dot" style={{ background: l.color }} />
-            {l.label}
-            <span className="n">{counts.byType[l.t] ?? 0}</span>
-          </div>
-        ))}
+        {LEGEND.map((l) => {
+          const n = counts.byType[l.t] ?? 0;
+          const active = activeType === l.t;
+          return (
+            <button
+              className={"lg lg-btn" + (active ? " active" : "")}
+              key={l.t}
+              disabled={!onSelectType || n === 0}
+              onClick={() => onSelectType?.(active ? null : l.t)}
+              title={`${l.label} ${n}개만 그래프에 표시`}
+            >
+              <span className="dot" style={{ background: l.color }} />
+              {l.label}
+              <span className="n">{n}</span>
+            </button>
+          );
+        })}
       </div>
       <div className="sec-label">연결 유형</div>
       <div style={{ fontSize: 11, color: "var(--ink-faint)", lineHeight: 2 }}>

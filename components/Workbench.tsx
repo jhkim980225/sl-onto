@@ -24,6 +24,7 @@ import type {
   GraphResponse,
   InferResponse,
   NLSearchResponse,
+  ObjType,
   ObjectDetail,
   SearchHit,
   SearchResponse,
@@ -127,6 +128,8 @@ export default function Workbench() {
   const [graphCounts, setGraphCounts] = useState<GraphCounts>({ nodes: 0, edges: 0, byType: {} });
   // PHASE 1: 전체 온톨로지 규모(뷰와 무관) + 현재 표시 중인 노드 수/뷰 모드.
   const [fullTotals, setFullTotals] = useState<{ nodes: number; edges: number } | null>(null);
+  // 객체 타입 탐색기 — 그래프를 특정 타입으로 파고들기(null=기본 앵커 뷰)
+  const [activeType, setActiveType] = useState<ObjType | null>(null);
   const [viewInfo, setViewInfo] = useState<ViewInfo | null>(null);
   const [focusInfo, setFocusInfo] = useState<FocusInfo | null>(null);
   const [ingestVisible, setIngestVisible] = useState(false);
@@ -928,6 +931,11 @@ export default function Workbench() {
           sourcesLoading={sourcesLoading}
           sourcesError={sourcesError}
           onSelectSource={handleSelectSource}
+          activeType={activeType}
+          onSelectType={(t) => {
+            setActiveType(t);
+            graphRef.current?.filterByType(t);
+          }}
         />
 
         <section className="canvas-wrap" id="cw">

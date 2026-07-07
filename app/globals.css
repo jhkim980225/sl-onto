@@ -89,10 +89,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .pipe .arrow{color:var(--amber);font-size:16px;line-height:1}
 .pipe .t{font-size:12px;color:var(--ink-dim);margin-top:4px}
 .pipe .t b{color:var(--ink)}
-.legend{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px}
 .lg{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-dim)}
 .lg .dot{width:10px;height:10px;border-radius:3px;flex:none}
 .lg .n{font-family:var(--mono);font-size:11px;color:var(--ink-faint);margin-left:auto}
+/* 객체 타입 탐색기 버튼 — 클릭해 그래프 타입 필터 */
+.lg-btn{appearance:none;background:transparent;border:1px solid transparent;border-radius:7px;padding:5px 8px;cursor:pointer;text-align:left;transition:background .12s,border-color .12s;font:inherit}
+.lg-btn:hover:not(:disabled){background:var(--panel-2,#f1f5fa);border-color:var(--line)}
+.lg-btn.active{background:rgba(0,162,229,.1);border-color:var(--accent,#00a2e5);color:var(--ink)}
+.lg-btn.active .n{color:var(--accent,#00a2e5)}
+.lg-btn:disabled{opacity:.4;cursor:default}
+.type-clear{float:right;appearance:none;background:transparent;border:none;color:var(--accent,#00a2e5);font-family:var(--mono);font-size:10px;letter-spacing:.06em;cursor:pointer;text-transform:none;padding:0}
+.type-clear:hover{text-decoration:underline}
 
 /* ── 캔버스 ── */
 .canvas-wrap{position:relative;overflow:hidden;background:radial-gradient(1200px 700px at 50% 46%,#ffffff 0%,#eef3f9 62%)}

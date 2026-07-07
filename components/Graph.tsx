@@ -135,6 +135,8 @@ export interface GraphHandle {
   zoomFit: () => void;
   /** PHASE 1: 전체 보기(true) ↔ 핵심(백본)만 보기(false) 전환 */
   setFullView: (on: boolean) => void;
+  /** 객체 타입 탐색기: 특정 타입만 표시(null=기본 앵커 뷰) */
+  filterByType: (t: string | null) => void;
   /** 인제스천 델타 합류: 새 노드/엣지를 기존 엔진에 등록·마운트(스폰+펄스). doc 노드는 제외. */
   addDelta: (nodes: Node[], edges: Edge[]) => void;
   /** 포커스 확장: 기본 1-hop 제한(핵심 관계 + 근거 일부)을 풀고 모든 이웃 표시 */
@@ -191,6 +193,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
     zoomBy: GraphHandle["zoomBy"];
     zoomFit: GraphHandle["zoomFit"];
     setFullView: GraphHandle["setFullView"];
+    filterByType: GraphHandle["filterByType"];
     addDelta: GraphHandle["addDelta"];
     setFocusExpand: GraphHandle["setFocusExpand"];
     removeFromCanvas: GraphHandle["removeFromCanvas"];
@@ -208,6 +211,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
       zoomBy: (f: number) => controllerRef.current?.zoomBy(f),
       zoomFit: () => controllerRef.current?.zoomFit(),
       setFullView: (on: boolean) => controllerRef.current?.setFullView(on),
+      filterByType: (t: string | null) => controllerRef.current?.filterByType(t),
       addDelta: (...args) => controllerRef.current?.addDelta(...args),
       setFocusExpand: (on: boolean) => controllerRef.current?.setFocusExpand(on),
       removeFromCanvas: (...args) => controllerRef.current?.removeFromCanvas(...args),
@@ -509,6 +513,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
     // 전체 170개는 "전체 보기" 토글로 명시적으로 연다. 숨긴 노드는 물리(반발/스프링)에서도 제외.
     let built = false; // 구축(spawn 스트리밍) 완료 후에만 뷰 규칙 적용
     let fullView = false;
+    let typeFilter: string | null = null; // 객체 타입 탐색기 — 특정 타입만 표시(팔란티어식 파고들기)
     // 백본 밖에서 임시 공개된 노드(검색/체크리스트 선택, 시나리오 근거 문서). 포커스 해제 시 다시 접는다.
     const revealed = new Set<string>();
     // 인제스천 델타로 이 세션에 합류한 노드(대부분 AUTO_ id) + 델타 엣지가 닿은 기존 숨김 노드.
@@ -523,6 +528,8 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
     }
     function nodeVisibleNow(n: GNode): boolean {
       if (!n.added || n.hidden) return false; // n.hidden = 시나리오 공개 전(PJ26)
+      // 타입 탐색기 활성 시: 그 타입 객체만(+ 포커스 공개·세션 추가). 앵커 백본보다 우선.
+      if (typeFilter) return n.type === typeFilter || revealed.has(n.id) || sessionAdded.has(n.id);
       if (!built || fullView) return true;
       return isBackbone(n) || revealed.has(n.id) || sessionAdded.has(n.id);
     }
@@ -1347,6 +1354,23 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
       notifyView();
     }
 
+    // 객체 타입 탐색기: 특정 타입만 표시(null = 기본 앵커 뷰 복귀). 팔란티어 Object Explorer 파고들기.
+    function filterByType(t: string | null) {
+      if (!built || scenarioAnimating || typeFilter === t) return;
+      typeFilter = t;
+      revealed.clear();
+      if (focusId) clearSelection();
+      applyView(true);
+      alpha = Math.max(alpha, 0.7);
+      if (reduced) {
+        for (let i = 0; i < 250; i++) tick();
+        render();
+      } else {
+        start();
+      }
+      notifyView();
+    }
+
     // ── 인제스천 델타 합류 ──
     // 새 노드/엣지를 초기 로드와 동일한 자료구조(nodes/nmap/edges/adj)에 등록하고,
     // 타입 존 중심 둘레의 결정론적 황금각 나선(reseedNode)으로 시딩한 뒤 스폰+펄스로 마운트한다.
@@ -1487,6 +1511,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
         clearFocus();
       },
       setFullView,
+      filterByType,
       addDelta,
       setFocusExpand,
       removeFromCanvas,
