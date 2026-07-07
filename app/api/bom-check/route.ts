@@ -17,6 +17,8 @@ export async function GET(req: Request) {
   const { item } = parsed.data;
   const obj = getObject(item);
   if (!obj) return NextResponse.json({ error: "not found", item }, { status: 404 });
+  // 비 item 객체에 빈 findings 200을 주면 "이상 없음"으로 오독 — 명시적 400 (리뷰 지적)
+  if (obj.type !== "item") return NextResponse.json({ error: "not an item", item }, { status: 400 });
 
   const findings = checkBom(item);
   return NextResponse.json({ findings, item: obj });

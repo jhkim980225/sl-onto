@@ -16,7 +16,10 @@ export const CTE: Record<string, number> = {
 };
 export const cteOf = (s?: string) => {
   if (!s) return undefined;
-  const key = Object.keys(CTE).find((k) => s.toUpperCase().includes(k.toUpperCase()));
+  const up = s.toUpperCase();
+  // 정확 일치 우선, 부분 매칭은 긴 키부터 — "PC+ABS"가 "PC"(65)로 잘못 잡히는 것 방지(리뷰 지적).
+  const keys = Object.keys(CTE).sort((a, b) => b.length - a.length);
+  const key = keys.find((k) => up === k.toUpperCase()) ?? keys.find((k) => up.includes(k.toUpperCase()));
   return key ? CTE[key] : undefined;
 };
 

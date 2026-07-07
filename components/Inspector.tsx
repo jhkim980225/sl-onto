@@ -421,6 +421,7 @@ function BomCheckSection({ obj, onGo }: { obj: ObjectDetail; onGo: (id: string, 
   const hasBom = (obj.relations ?? []).some((r) => r.rel === "CONSISTS_OF" && r.dir === "out");
   const [findings, setFindings] = useState<BomFinding[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasBom) {
@@ -429,13 +430,18 @@ function BomCheckSection({ obj, onGo }: { obj: ObjectDetail; onGo: (id: string, 
     }
     let live = true;
     setLoading(true);
+    setError(null);
     fetch(`/api/bom-check?item=${encodeURIComponent(obj.id)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((data) => {
         if (live) setFindings(Array.isArray(data.findings) ? data.findings : []);
       })
-      .catch(() => {
-        if (live) setFindings([]);
+      .catch((err) => {
+        // 실패를 빈 findings 로 위장하면 "이상 없음"으로 오독된다(리뷰 지적) — 구분 표기.
+        if (live) {
+          setFindings(null);
+          setError(err instanceof Error ? err.message : String(err));
+        }
       })
       .finally(() => {
         if (live) setLoading(false);
@@ -458,7 +464,12 @@ function BomCheckSection({ obj, onGo }: { obj: ObjectDetail; onGo: (id: string, 
     <>
       <div className="sec-label">BOM 정합성{findings ? ` ${findings.length}` : ""}</div>
       {loading ? <div className="insp-empty">부품 구성 점검 중…</div> : null}
-      {!loading && findings && findings.length === 0 ? (
+      {!loading && error ? (
+        <div className="insp-empty">
+          정합성 검사 실패 <span className="k">({error})</span>
+        </div>
+      ) : null}
+      {!loading && !error && findings && findings.length === 0 ? (
         <div className="insp-empty">구성 부품 간 정합성 이슈가 발견되지 않았습니다.</div>
       ) : null}
       {(findings ?? []).map((f, i) => (
