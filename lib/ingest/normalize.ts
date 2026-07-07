@@ -58,6 +58,7 @@ const VOCAB: Entry[] = [
   { id: "MGAP", type: "master", label: "간극·단차 마스터", syn: ["간극 단차 마스터"] },
   { id: "MTHERM", type: "master", label: "LED 방열 마스터", syn: ["방열 마스터"] },
   { id: "MBEAM", type: "master", label: "배광 법규 마스터", syn: ["배광 마스터"] },
+  { id: "MFOG", type: "master", label: "결로 방지 설계 마스터", syn: ["결로 마스터", "결로 방지 마스터"] },
 ];
 
 // 비표준 원본 코드 → 표준 id + 확신도 (매핑 시연용)

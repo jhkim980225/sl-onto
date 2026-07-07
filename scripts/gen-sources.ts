@@ -958,6 +958,34 @@ function buildReference() {
   ]);
 }
 
+/* ══════════ 4b. 결로 마스터(설계표준) — --master 전용 경로 ══════════
+ * 신규 마스터(MFOG, seed 미포함 — normalize.ts VOCAB 에 별도 등록). 필수 항목 5개를 항목1..5
+ * 컬럼에 실어 REF_MASTER(FMFOG→MFOG)로 연결한다("설계표준" 접두어 → 기존 마스터 파싱 분기 재사용,
+ * 항목1..N 컬럼은 그 분기의 확장분이 처리). "하부 드레인 홀"은 온톨로지의 원인/조치 어디에도
+ * 실리지 않는 항목 — masterAudit 누락(missing) 시연의 고정점. */
+function buildMaster() {
+  writeXlsx("설계표준_결로체크리스트.xlsx", [
+    {
+      name: "마스터",
+      rows: [
+        {
+          id: "MFOG",
+          label: "결로 방지 설계 마스터",
+          sub: "",
+          성격: "결로·습기 방지 필수 체크",
+          항목1: "벤트 2개소 이상",
+          항목2: "하부 드레인 홀",
+          항목3: "발수 코팅",
+          항목4: "개스킷 내습 등급",
+          항목5: "기밀 시험 조건",
+          참조원id: "FMFOG",
+          관계: "REF_MASTER",
+        },
+      ],
+    },
+  ]);
+}
+
 /* ══════════ 5. 소비자 반응 (커뮤니티·카페 크롤링 대체 합성 데이터) ══════════
  * 4단계 "소비자 반응 교차" 시연용. PJ 2020-HL09 는 FMEA 에 결로 이력이 없는데 커뮤니티 언급이
  * 있는 케이스 — "내부 기록과 실사용 간 괴리(모순)"를 만드는 데이터. 실 크롤러는 확장 슬롯. */
@@ -1021,9 +1049,13 @@ async function main() {
 }
 
 // --bom: BOM 파일만 추가로 쓴다(전체 재생성으로 기존 파일을 건드리지 않기 위한 별도 실행 경로).
+// --master: 결로 마스터(설계표준_결로체크리스트.xlsx) 파일만 추가로 쓴다(동일 패턴).
 if (process.argv.includes("--bom")) {
   buildBom();
   console.log("완료(BOM only)");
+} else if (process.argv.includes("--master")) {
+  buildMaster();
+  console.log("완료(MASTER only)");
 } else {
   main().catch((e) => {
     console.error(e);

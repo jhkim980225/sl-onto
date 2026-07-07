@@ -102,6 +102,26 @@ test("밀폐형 → 벤트·씰링 원인 검토 항목이 등장한다", () => 
   assert.ok(it, "밀폐형 조건에 대한 벤트·씰링 검토 항목이 없음 — 결로 원인 부스트 미작동");
 });
 
+test("결로 기본 조건(아시아·LED·슬림·밀폐) → masterAudit에 결로 마스터 존재 + 누락 항목 있음", () => {
+  const r = infer(FOG_DEMO);
+  assert.ok(r.masterAudit && r.masterAudit.length > 0, "masterAudit이 비어있음(마스터 대조 미작동)");
+  const fog = r.masterAudit!.find((m) => /결로/.test(m.master.label));
+  assert.ok(fog, "결로 마스터(MFOG) audit이 없음 — FMFOG→REF_MASTER→MFOG 경로 미도달");
+  assert.ok(fog!.required.length > 0, "결로 마스터 필수 항목(항목1..N)이 비어있음");
+  assert.ok(
+    fog!.missing.length >= 1,
+    "결로 마스터에 누락 항목이 없음 — 온톨로지에 없는 항목(예: 하부 드레인)도 커버로 오탐한 것으로 의심"
+  );
+  assert.ok(fog!.evidence.length > 0, "결로 마스터 audit의 evidence가 비어있음(근거 우선 골든 룰)");
+});
+
+test("북미 조건(DEMO) → masterAudit에 MBEAM(배광 법규 마스터) audit이 존재한다", () => {
+  const r = infer(DEMO);
+  assert.ok(r.masterAudit && r.masterAudit.length > 0, "masterAudit이 비어있음(마스터 대조 미작동)");
+  const beam = r.masterAudit!.find((m) => m.master.id === "MBEAM");
+  assert.ok(beam, "MBEAM(배광 법규 마스터) audit이 없음 — FMBEAM→REF_MASTER→MBEAM 경로 미도달");
+});
+
 test("모든 항목은 비어있지 않은 evidence 를 가진다 (근거 우선 골든 룰)", () => {
   const r = infer(DEMO);
   for (const it of r.checklist) {

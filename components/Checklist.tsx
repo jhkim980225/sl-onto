@@ -97,7 +97,7 @@ export default function Checklist({
   }
   if (!result) return null;
 
-  const { checklist, traversed } = result;
+  const { checklist, traversed, masterAudit } = result;
 
   return (
     <>
@@ -163,6 +163,41 @@ export default function Checklist({
           />
         ))}
       </div>
+      {masterAudit && masterAudit.length > 0 && (
+        <>
+          <div className="sec-label">마스터 대조</div>
+          {masterAudit.map((ma) => (
+            <div className="master-audit" key={ma.master.id}>
+              <div className="master-audit-head">
+                <b>{ma.master.label}</b>
+                <span className="m">
+                  필수 {ma.required.length}항목 중 {ma.covered.length} 커버
+                  {ma.missing.length > 0
+                    ? ` — '${ma.missing[0]}'${ma.missing.length > 1 ? ` 외 ${ma.missing.length - 1}건` : ""} 누락`
+                    : ""}
+                </span>
+              </div>
+              <div className="ma-chips">
+                {ma.covered.map((r) => (
+                  <span key={"c:" + r} className="ma-chip" title="체크리스트에서 확인됨">
+                    ✓ {r}
+                  </span>
+                ))}
+                {ma.missing.map((r) => (
+                  <span key={"m:" + r} className="ma-chip ma-miss" title="체크리스트에서 확인되지 않음 — 검토 필요">
+                    ⚠ {r}
+                  </span>
+                ))}
+                {ma.unknown.map((r) => (
+                  <span key={"u:" + r} className="ma-chip ma-unknown" title="부분 근거 — 확신 없음, 직접 확인 필요">
+                    {r} 미확인
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
       <div
         style={{
           fontSize: 11,

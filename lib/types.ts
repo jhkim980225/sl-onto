@@ -122,9 +122,22 @@ export interface CheckItem {
   trace: string[];            // 근거 경로 "PJ26→SIMILAR→PJ21"
 }
 
+/** 마스터 대조(masterAudit) — 도달한 마스터별 설계표준 필수 항목 커버리지.
+ * covered/missing/unknown 은 required 를 분할한다(각 항목은 정확히 하나에만 속함).
+ * missing = 커버 근거 전무(확신), unknown = 부분/애매(오탐 방지 — 미확인으로 보수적 표기). */
+export interface MasterAudit {
+  master: { id: string; label: string };
+  required: string[];
+  covered: string[];
+  missing: string[];
+  unknown: string[];
+  evidence: string[]; // 마스터로 도달한 concern 들의 근거 칩(문서·조치 등)
+}
+
 /** POST /api/infer 출력 */
 export interface InferResponse {
   checklist: CheckItem[];
   total?: number; // 캡 이전 전체 관련 항목 수(체크리스트는 상위 N개만)
   traversed: { objects: number; edges: number; docs: number };
+  masterAudit?: MasterAudit[]; // 도달한 fm/원인 기준 마스터 대조(옵셔널 — 기존 소비자 무영향)
 }

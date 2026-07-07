@@ -2,8 +2,9 @@
 // 신규 설계 조건(DesignInput) → 온톨로지 그래프 탐색 → 근거·확신도가 붙은 설계 검토 체크리스트.
 // 하드코딩 금지: 모든 항목은 store 그래프에서 계산되고, trace 는 실제 엣지 경로다.
 // 참조: docs/features/inference.md, docs/data-model.md, FMEA_온톨로지_시연_v2.html
-import type { DesignInput, InferResponse, CheckItem, Node, Edge } from "./types";
+import type { DesignInput, InferResponse, CheckItem, Node, Edge, MasterAudit } from "./types";
 import { getNode, allNodes, outEdges, inEdges, evidenceOf } from "./store";
+import { SYNONYMS } from "./nlsearch";
 
 /* ────────────────────────── 확신도 가중치 (튜닝 상수) ────────────────────────── */
 // confidence = clamp( w1*유사도 + w2*근거수정규화 + w3*심각도정규화 + w4*마스터일치 + 조건부스트 ) * 100
@@ -227,6 +228,7 @@ interface Concern {
   sim: number;
   severity: number;
   hasMaster: boolean;
+  masterNode?: Node; // REF_MASTER 로 도달한 마스터 노드(마스터 대조용 — hasMaster 는 boolean 요약)
   docCount: number;
   boost: number;
 }
@@ -245,6 +247,83 @@ function collectDocs(id: string, tv: Traversal, limit = 3): string[] {
 
 function pushUnique(arr: string[], v: string | undefined | null) {
   if (v && !arr.includes(v)) arr.push(v);
+}
+
+/* ────────────────────────── 마스터 대조(masterAudit) ────────────────────────── */
+// 마스터 노드의 "항목"/"항목N" props 를 필수 항목 문자열로 분해("·"/","로 병기된 값 지원 —
+// 기존 MGAP/MTHERM/MBEAM 은 단일 "항목" 안에 "·"로 여러 항목을 담고, 신규 마스터는 항목1..N 컬럼).
+function requiredItemsOf(m: Node): string[] {
+  const out: string[] = [];
+  if (!m.props) return out;
+  for (const [k, v] of m.props) {
+    if (!/^항목\d*$/.test(k)) continue;
+    for (const part of v.split(/[·,]/).map((s) => s.trim()).filter(Boolean)) {
+      if (!out.includes(part)) out.push(part);
+    }
+  }
+  return out;
+}
+
+const STOP_TOKENS = new Set(["이상", "이하", "이내"].map(norm));
+const isNumericTok = (t: string) => /^[0-9]/.test(t);
+
+// SYNONYMS(lib/nlsearch.ts) 그룹에서 토큰이 속한 동의어 집합(자기 자신 포함)을 반환.
+function synonymGroup(tok: string): string[] {
+  const t = norm(tok);
+  for (const [base, syns] of SYNONYMS) {
+    const all = [base, ...syns].map(norm);
+    if (all.includes(t)) return all;
+  }
+  return [t];
+}
+
+/** 필수 항목이 텍스트 코퍼스에 커버되는 비율: 1=완전 일치(covered), 0<x<1=부분(unknown), 0=전무(missing).
+ * 오탐보다 안전 — 애매하면(부분 일치) unknown 으로 두고 covered 를 단정하지 않는다. */
+function coverageRatio(req: string, corpus: string): number {
+  const toks = norm(req)
+    .split(/\s+/)
+    .filter((t) => t.length >= 2 && !STOP_TOKENS.has(t) && !isNumericTok(t));
+  if (toks.length === 0) toks.push(norm(req));
+  let hit = 0;
+  for (const t of toks) if (synonymGroup(t).some((s) => corpus.includes(s))) hit++;
+  return hit / toks.length;
+}
+
+function concernCorpus(c: Concern): string {
+  return norm(`${c.title} ${c.desc} ${c.evidence.join(" ")}`);
+}
+
+/** 이번 추론에서 도달한 concern 들을 REF_MASTER 마스터별로 묶어 필수 항목 커버리지를 계산. */
+function buildMasterAudit(items: { c: Concern }[]): MasterAudit[] {
+  const byMaster = new Map<string, { master: Node; corpus: string[]; evidence: string[] }>();
+  for (const { c } of items) {
+    if (!c.masterNode) continue;
+    let g = byMaster.get(c.masterNode.id);
+    if (!g) {
+      g = { master: c.masterNode, corpus: [], evidence: [] };
+      byMaster.set(c.masterNode.id, g);
+    }
+    g.corpus.push(concernCorpus(c));
+    for (const e of c.evidence) pushUnique(g.evidence, e);
+  }
+
+  const audits: MasterAudit[] = [];
+  for (const g of byMaster.values()) {
+    const required = requiredItemsOf(g.master);
+    if (required.length === 0) continue; // 항목 없는 마스터는 대조 대상 아님
+    const corpus = g.corpus.join(" ");
+    const covered: string[] = [];
+    const missing: string[] = [];
+    const unknown: string[] = [];
+    for (const req of required) {
+      const ratio = coverageRatio(req, corpus);
+      if (ratio >= 1) covered.push(req);
+      else if (ratio > 0) unknown.push(req);
+      else missing.push(req);
+    }
+    audits.push({ master: { id: g.master.id, label: g.master.label }, required, covered, missing, unknown, evidence: g.evidence });
+  }
+  return audits;
 }
 
 /* ────────────────────────── 메인 파이프라인 ────────────────────────── */
@@ -312,7 +391,10 @@ export function infer(input: DesignInput): InferResponse {
 
     const master = masters[0]?.node;
     const action = actions[0]?.node;
-    if (master) c.hasMaster = true;
+    if (master) {
+      c.hasMaster = true;
+      c.masterNode = master;
+    }
 
     // 5단계: 근거 부착 (고장모드 문서 + 원인 문서 + 마스터/조치/앵커 라벨)
     const docChips = collectDocs(fm.id, tv, 2);
@@ -421,6 +503,9 @@ export function infer(input: DesignInput): InferResponse {
 
   items.sort((a, b) => b.confidence - a.confidence || b.c.severity - a.c.severity);
 
+  // 마스터 대조 — 캡 이전 전체 도달 concern 기준(체크리스트에 안 실린 항목도 커버리지 판단에 반영).
+  const masterAudit = buildMasterAudit(items);
+
   // 대규모 온톨로지에선 관련 concern 이 수십 개 나온다 → 확신도 상위 N개만 체크리스트로.
   const MAX_ITEMS = 8;
   const total = items.length;
@@ -439,6 +524,7 @@ export function infer(input: DesignInput): InferResponse {
     checklist,
     total, // 캡 이전 전체 관련 항목 수 (UI 에서 "상위 N / total" 표기용)
     traversed: { objects: tv.objects.size, edges: tv.edges.size, docs: tv.docs.size },
+    masterAudit: masterAudit.length > 0 ? masterAudit : undefined,
   };
 }
 
@@ -536,6 +622,7 @@ function addCauseConcern(
     sim: sourceSim,
     severity: sev,
     hasMaster: !!master,
+    masterNode: master,
     docCount: evidenceOf(cause.id).length,
     boost,
   });

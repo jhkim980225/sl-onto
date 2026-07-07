@@ -321,6 +321,16 @@ svg#graph.fullview .edge.dim{opacity:.03}
 .chk .bar i{display:block;height:100%;background:linear-gradient(90deg,#0b4ea0,var(--amber));border-radius:2px}
 .chk .cv{font-family:var(--mono);font-size:10.5px;color:var(--amber)}
 
+/* 마스터 대조(masterAudit) — 커버(암청)/누락(경고, 빨강)/미확인(회색) 칩 */
+.master-audit{margin-bottom:12px}
+.master-audit-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.master-audit-head b{font-size:12.5px;color:var(--ink)}
+.master-audit-head .m{font-size:11px;color:var(--ink-dim)}
+.ma-chips{display:flex;gap:5px;flex-wrap:wrap}
+.ma-chip{font-family:var(--mono);font-size:9.5px;color:var(--ink-dim);background:#eef2f8;border-radius:4px;padding:3px 7px}
+.ma-chip.ma-miss{background:#fdeceb;color:#c81e14;font-weight:600}
+.ma-chip.ma-unknown{color:var(--ink-faint)}
+
 /* 체크리스트 항목 상세(아코디언) — 클릭 시 전체 설명·근거 경로 공개 */
 .chk{cursor:pointer;transition:opacity .5s,transform .5s,border-color .15s}
 .chk:hover{border-color:#cdd8e6}

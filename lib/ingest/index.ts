@@ -235,6 +235,8 @@ function ingestXlsx(file: string, full: string, ctx: XlsxCtx) {
       if (!EMPTY(r["sub"])) n.sub = r["sub"];
       addProp(n, "성격", r["성격"]);
       addProp(n, "항목", r["항목"]);
+      // 항목1..N 컬럼(신규 마스터의 필수 항목 나열 — 결로체크리스트 등): 있는 만큼 props 로.
+      for (const k of Object.keys(r)) if (/^항목\d+$/.test(k)) addProp(n, k, r[k]);
       link(resolve(r["참조원id"]), r["관계"] || "REF_MASTER", id);
     }
     return;

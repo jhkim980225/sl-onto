@@ -38,7 +38,7 @@ const TYPE_TERMS: [string, ObjType][] = [
 ];
 
 // 도메인 동의어(엔티티 라벨 substring 매칭 보강) — 사용자의 일상 표현 → 온톨로지 개념 테마.
-const SYNONYMS: [string, string[]][] = [
+export const SYNONYMS: [string, string[]][] = [
   ["결로", ["습기", "김서림", "성에", "물맺힘", "fog"]],
   ["간극", ["갭", "틈", "벌어짐", "맞물", "매칭", "끼워맞춤", "gap"]],
   ["단차", ["step", "턱", "맞물", "매칭"]],
