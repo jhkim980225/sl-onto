@@ -4,7 +4,7 @@
 // 모든 값은 파라미터 바인딩($n)으로만 전달(문자열 보간 금지 — 보안). JSONB 는 JSON.stringify 후 바인딩.
 // 설계: docs/superpowers/specs/2026-07-07-postgres-python-1차-design.md
 import * as fs from "node:fs";
-import { fileURLToPath } from "node:url";
+import * as path from "node:path";
 import pg from "pg";
 import type { Pool, PoolClient } from "pg";
 import type { Node, Edge } from "./types";
@@ -38,7 +38,9 @@ export function ready(): Promise<void> {
 
 async function doReady(): Promise<void> {
   const p = getPool();
-  const schemaPath = fileURLToPath(new URL("./db/schema.sql", import.meta.url));
+  // cwd 기준 경로 — Next standalone(cwd=/app, Dockerfile 이 lib/db 복사)·테스트(cwd=repo root) 양쪽 안전.
+  // import.meta.url/new URL 방식은 Next 번들에서 깨진다("path must be string/URL" TypeError).
+  const schemaPath = path.join(process.cwd(), "lib", "db", "schema.sql");
   await p.query(fs.readFileSync(schemaPath, "utf8"));
   const { rows } = await p.query<{ c: number }>("SELECT count(*)::int AS c FROM object_types");
   if (rows[0].c === 0) await seedMetamodel(p);

@@ -66,7 +66,9 @@ spec:
           app: postgres
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: longhorn
+        # longhorn 은 이 클러스터에서 미가동(longhorn-system 네임스페이스 없음) → 클러스터의
+        # 다른 Postgres(dagster·campaign-db·feda-db-dev)가 쓰는 검증된 ceph RBD 블록 SC 사용.
+        storageClassName: ceph-rbd-sc
         resources:
           requests:
             storage: 5Gi

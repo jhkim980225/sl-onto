@@ -21,3 +21,4 @@ data/real-samples/
 
 # scratch
 *.tmp
+.gstack/
