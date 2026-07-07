@@ -24,7 +24,8 @@ const priorityOf = (rpn: number) => (rpn >= 125 ? "높음" : rpn >= 60 ? "중" :
 function targetItems(input: DesignInput): Node[] {
   const items = new Map<string, Node>();
   const add = (n?: Node) => { if (n && n.type === "item") items.set(n.id, n); };
-  const names = input.components ?? [];
+  // 부품 앵커가 명시되면 그 부품(+구성)만 대상 — components 는 소프트 힌트.
+  const names = input.anchorItem ? [input.anchorItem] : (input.components ?? []);
   for (const nm of names) {
     const hit = allNodes().find((n) => n.type === "item" && (n.label.includes(nm) || nm.includes(n.label)));
     add(hit);
@@ -124,7 +125,7 @@ export function buildFmeaWorkbook(input: DesignInput, meta: { date: string }): B
   const cond = `${input.market} · ${input.lightSource} · ${input.shape.join(", ")}`;
   const aoa: (string | number)[][] = [
     ["설계 FMEA (DFMEA) 초안 — SL OntoGround 자동 생성"],
-    ["대상", (input.components ?? ["헤드램프 어셈블리"]).join(", "), "설계조건", cond, "작성일", meta.date],
+    ["대상", (input.anchorItem ? [input.anchorItem] : input.components ?? ["헤드램프 어셈블리"]).join(", "), "설계조건", cond, "작성일", meta.date],
     [`총 ${rows.length}개 고장모드-원인 라인 · RPN = S×O×D · 확신도 검토용 초안(최종 판단은 설계 엔지니어)`],
     [],
     HEADER,

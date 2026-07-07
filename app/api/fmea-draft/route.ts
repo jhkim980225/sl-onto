@@ -7,6 +7,7 @@ const Body = z.object({
   lightSource: z.string().min(1),
   shape: z.array(z.string()).default([]),
   components: z.array(z.string()).optional(),
+  anchorItem: z.string().optional(),
 });
 
 // POST /api/fmea-draft { DesignInput } → 채워진 DFMEA 초안 xlsx 다운로드
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
   const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const buf = buildFmeaWorkbook(input, { date });
 
-  const fnameKo = `FMEA초안_${input.market}_${input.lightSource}_${date.replace(/-/g, "")}.xlsx`;
+  const fnameKo = `FMEA초안_${input.anchorItem ?? input.market}_${input.lightSource}_${date.replace(/-/g, "")}.xlsx`;
   const encoded = encodeURIComponent(fnameKo);
   return new Response(new Uint8Array(buf), {
     status: 200,

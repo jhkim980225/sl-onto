@@ -138,6 +138,8 @@ export default function Workbench() {
 
   const [scenarioTriggered, setScenarioTriggered] = useState(false);
   const [condition, setCondition] = useState<DesignInput>(DEFAULT_CONDITION);
+  // 마지막 추론에 실제 사용한 입력(anchorItem 포함) — 체크리스트 헤더·FMEA 초안이 이걸 쓴다.
+  const [lastInferInput, setLastInferInput] = useState<DesignInput | null>(null);
 
   const [rightPanelMode, setRightPanelMode] = useState<
     "inspector" | "checklist" | "source" | "condensation" | "nlsearch" | "ingest" | "drawing"
@@ -420,6 +422,7 @@ export default function Workbench() {
     const sel = selectedNodeRef.current;
     const inferInput: DesignInput =
       sel && sel.type === "item" ? { ...condition, anchorItem: sel.label } : condition;
+    setLastInferInput(inferInput);
     staggerTimeoutsRef.current.forEach(clearTimeout); // 재실행 시 이전 stagger 타이머 정리
     staggerTimeoutsRef.current = [];
     setScenarioTriggered(true);
@@ -1102,7 +1105,7 @@ export default function Workbench() {
               loading={inferLoading}
               error={inferError}
               result={inferResult}
-              condition={condition}
+              condition={lastInferInput ?? condition}
               revealedCount={revealedChecklistCount}
               nodeIndex={nodeIndex}
               onSelectObject={handleChecklistSelect}

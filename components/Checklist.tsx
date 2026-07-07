@@ -105,8 +105,9 @@ export default function Checklist({
       <div className="chk-head">
         <h2>설계 검토 체크리스트</h2>
         <div className="m">
-          {(condition.components ?? []).join(", ")} · {condition.market}향 {condition.lightSource}{" "}
-          {condition.shape.join(" · ")} — 온톨로지 탐색으로 도출
+          {condition.anchorItem
+            ? `선택 부품 '${condition.anchorItem}' 고장 이력 기준 · ${condition.market}향 ${condition.lightSource} — 온톨로지 탐색으로 도출`
+            : `${(condition.components ?? []).join(", ")} · ${condition.market}향 ${condition.lightSource} ${condition.shape.join(" · ")} — 온톨로지 탐색으로 도출`}
         </div>
       </div>
       <button className="fmea-dl" onClick={() => setVulnOpen(true)} disabled={dl} title="취약점 분석 리포트를 확인하고 DFMEA 워크시트를 내려받습니다">
