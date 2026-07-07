@@ -88,7 +88,8 @@ CREATE TABLE nodes (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX ON nodes (type);
-CREATE INDEX ON nodes USING ivfflat (embedding vector_cosine_ops);  -- 데이터 적재 후 생성
+-- 벡터 인덱스(ivfflat)는 1차 미적용: 노드 ~170개, seq scan 이 더 빠름.
+-- ponytail: 수천 노드 넘으면 CREATE INDEX ... ivfflat 추가.
 
 CREATE TABLE edges (
   src   TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
@@ -121,10 +122,11 @@ CREATE TABLE change_log (
   at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   actor   TEXT NOT NULL DEFAULT 'system',
   op      TEXT NOT NULL,               -- 'ingest','curate.delete','curate.merge','drawing.add','embed.rebuild'
-  payload JSONB NOT NULL DEFAULT '{}'::jsonb   -- 변경 전후 스냅샷(차기 undo 기반)
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb   -- 1차: {ids:[], summary}. 전후 스냅샷은 undo 구현(차기) 때
 );
 ```
 모든 쓰기 함수가 같은 트랜잭션에서 `change_log`에 1행 기록. 1차엔 기록만(조회/undo UI는 차기).
+**payload는 1차엔 `{ids, summary}` 만**(170노드 ingest 전후 스냅샷은 과함). 컬럼은 JSONB라 차기 확장 시 스키마 불변.
 
 ### ⑤ 시스템 층
 ```sql
@@ -184,11 +186,14 @@ POST /embed  {texts: string[]}    → {vectors: number[][]}   # 384차원, 정�
 - 최초 부팅 적재 후, `embedding IS NULL` 노드를 배치로 `POST /embed` → `UPDATE nodes SET embedding`.
 - write-through로 새 노드가 들어오면 백필 큐에 넣고 비동기 임베딩(검색엔 즉시 반영 안 돼도 됨 — 로그 남김).
 - Python 서비스 미가용 시: 임베딩 없이 진행(검색은 기존 키워드/동의어로 폴백). **부팅 자체는 막지 않는다.**
+- **재트리거**: 부팅 때 pyservice 아직 안 떠서 백필 스킵되면 검색이 계속 degraded 되므로,
+  `POST /api/admin/embed-backfill` 로 `embedding IS NULL` 노드를 다시 임베딩(멱등). 배포 순서상 pyservice 를 앱보다 먼저 Ready.
 
 **검색 경로 (`lib/nlsearch.ts` 확장, 시그니처 유지)**:
 1. 질의문 → `POST /embed` → 질의 벡터
 2. `SELECT id, 1-(embedding <=> $1) AS score FROM nodes WHERE embedding IS NOT NULL ORDER BY embedding <=> $1 LIMIT k`
-3. 기존 키워드/동의어 점수와 **가중 결합**(하이브리드) → 기존 `SearchHit[]`/답변 파이프라인에 합류.
+3. **후보 합집합(가중치 없음)**: 임베딩 top-k id 를 기존 규칙 후보에 합치고, **최종 랭킹은 기존 규칙 스코어러**가 수행.
+   임베딩은 "후보를 넓히는" 역할만(가중합 튜닝 회피). ponytail: 가중치 필요해지면 그때 도입.
 - Python 미가용 또는 `DATABASE_URL` 없음 → 2단계 생략, 기존 규칙기반 검색 그대로(무결한 폴백).
 - 골든 룰 유지: 답변은 여전히 근거·확신도 표기. 임베딩은 "후보를 넓히는" 역할, 최종 근거는 온톨로지 경로.
 
@@ -200,7 +205,8 @@ POST /embed  {texts: string[]}    → {vectors: number[][]}   # 384차원, 정�
 - `lib/db/seed-metamodel.ts` — object_types/relation_types 시드(현 하드코딩 정의 이관)
 - `lib/embed.ts` — Python `/embed` 클라이언트 + 백필/하이브리드 결합 유틸
 - `pyservice/` — `main.py`(FastAPI), `requirements.txt`, `Dockerfile`
-- `k8s/postgres.yaml` — Secret + StatefulSet(postgres:16 + pgvector) + longhorn PVC 5Gi + ClusterIP
+- `k8s/postgres.yaml` — Secret + StatefulSet(**이미지 `pgvector/pgvector:pg16`** — pgvector 내장) + longhorn PVC 5Gi + ClusterIP
+- `app/api/admin/embed-backfill/route.ts` — `embedding IS NULL` 재임베딩(멱등, 부팅 백필 재트리거)
 - `k8s/pyservice.yaml` — Deployment + ClusterIP
 - `lib/db.test.ts` — 로컬 Postgres 있을 때 스키마·CRUD·부팅(빈 DB 적재→재로드 일치) 검증, 없으면 skip
 
@@ -232,7 +238,7 @@ POST /embed  {texts: string[]}    → {vectors: number[][]}   # 384차원, 정�
 
 ## 배포 (FEDA K8s, ns `sl-ontoground`)
 
-- `k8s/postgres.yaml`: `postgres:16` + pgvector, Secret 비밀번호, longhorn PVC 5Gi, ClusterIP(내부 전용).
+- `k8s/postgres.yaml`: 이미지 **`pgvector/pgvector:pg16`**(pgvector 내장), Secret 비밀번호, longhorn PVC 5Gi, ClusterIP(내부 전용).
 - `k8s/pyservice.yaml`: FastAPI Deployment(replicas=1) + ClusterIP.
 - 앱: `DATABASE_URL=postgres://…@postgres.sl-ontoground:5432/slonto`,
   `PYSERVICE_URL=http://pyservice.sl-ontoground:8000`. **replicas=1 유지.**
