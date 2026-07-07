@@ -707,12 +707,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
         n.fy = n.y;
         alpha = Math.max(alpha, 0.6);
       });
-      g.addEventListener("mouseenter", () => {
-        // 겹친 노드끼리 DOM 순서상 위가 클릭을 먹는 문제 → hover 한 노드를 맨 앞으로 올려
-        // 클릭이 항상 "지금 가리키는" 노드에 꽂히게 한다(좌표는 render 루프가 관리 → z만 바뀜).
-        if (!dragN && g.parentNode) g.parentNode.appendChild(g);
-        hover(n.id, true);
-      });
+      g.addEventListener("mouseenter", () => hover(n.id, true));
       g.addEventListener("mouseleave", () => hover(n.id, false));
     }
 
