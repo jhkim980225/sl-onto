@@ -38,7 +38,11 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v47 (2026-07-08, pyservice v2)** — v47: pyservice `/reason` RDF 리즈닝
+- **현재 배포 = v48 (2026-07-08, pyservice v3)** — v48: pyservice `/llm`(vLLM 게이트웨이,
+  qwen3-32b-finance, 동시 1 세마포어) + **AI 종합 소견(RAG)** — 체크리스트 `[🤖 AI 종합 소견]` 버튼,
+  [CHECK n] 인용 강제, Postgres `ai_opinions` 캐시(첫 생성 실측 60.4초 → 캐시 0.12초, 기본 조건
+  pre-warm 완료). nlsearch LLM 경로도 pyservice 경유(NL_USE_LLM 게이트 불변).
+- v47 (2026-07-08, pyservice v2) — pyservice `/reason` RDF 리즈닝
   (rdflib, 유도 관계 오버레이 — 전이 구성·유사 대칭·고장 전파, via 근거 체인) + "🔗 유도 관계" 배지.
   프로덕션 실측 유도 81건, 스모크 20 불변식 PASS.
 - v46 (2026-07-08). v24~v45 요약: Postgres+pgvector 영속화(+Python 임베딩 사이드카
