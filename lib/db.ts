@@ -73,7 +73,8 @@ async function seedMetamodel(p: Pool): Promise<void> {
   for (const s of OBJECT_SUBTYPES) {
     await p.query(
       `INSERT INTO object_subtypes (type_id, st_id, label_ko, keywords, description)
-       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (type_id, st_id) DO NOTHING`,
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (type_id, st_id) DO UPDATE SET keywords = EXCLUDED.keywords`, // keywords 만 갱신(라벨·설명 보존) — 기존 DB 도 확장 키워드로 백필되게
       [s.type_id, s.st_id, s.label_ko, s.keywords, s.description ?? null]
     );
   }
@@ -352,6 +353,29 @@ export async function nodesMissingEmbedding(): Promise<{ id: string; text: strin
 
 export async function setEmbedding(id: string, vector: number[]): Promise<void> {
   await getPool().query("UPDATE nodes SET embedding = $2::vector, updated_at = now() WHERE id = $1", [id, toVectorLiteral(vector)]);
+}
+
+// 같은 타입(doc 제외) 노드 쌍 중 임베딩 코사인 거리가 maxDist 미만인 최근접 쌍(품질 스캔 dup-semantic 용).
+// LATERAL 로 노드별 최근접 동타입 이웃 1개만 뽑고, id > a.id 조건으로 (a,b)/(b,a) 중복을 제거한다.
+// ponytail: O(n × index-scan) — 노드 수백 개 규모엔 충분, 수만 개면 HNSW 인덱스 + 배치로 전환.
+export interface NearPairRow { id: string; other: string; dist: number }
+export async function nearestSameTypePairs(maxDist: number, limit: number): Promise<NearPairRow[]> {
+  const { rows } = await getPool().query<{ id: string; other: string; dist: number }>(
+    `SELECT a.id, b.id AS other, (a.embedding <=> b.embedding)::float8 AS dist
+       FROM nodes a
+       JOIN LATERAL (
+         SELECT n.id, n.embedding FROM nodes n
+          WHERE n.type = a.type AND n.id > a.id AND n.embedding IS NOT NULL
+          ORDER BY n.embedding <=> a.embedding
+          LIMIT 1
+       ) b ON true
+      WHERE a.embedding IS NOT NULL AND a.type <> 'doc'
+        AND (a.embedding <=> b.embedding) < $1
+      ORDER BY dist
+      LIMIT $2`,
+    [maxDist, limit]
+  );
+  return rows.map((r) => ({ id: r.id, other: r.other, dist: Number(r.dist) }));
 }
 
 // 코사인 거리(embedding <=> $1) 오름차순 상위 k 노드 id. 후보 확장용(최종 랭킹은 기존 규칙 스코어러).

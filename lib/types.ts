@@ -68,7 +68,7 @@ export interface SearchHit {
   label: string;
   type: ObjType;
   score: number;
-  matched: ("label" | "sub" | "prop" | "evidence")[];
+  matched: ("label" | "sub" | "prop" | "evidence" | "semantic")[];
 }
 export interface SearchResponse {
   hits: SearchHit[];

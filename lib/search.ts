@@ -2,7 +2,7 @@
 // 프레임워크 무관(lib). 결정적. docs/features/search.md
 // 확장 이음새: 키워드→임베딩 교체 시 이 함수 내부만 바꾸고 시그니처·계약 유지.
 import type { Node, SearchHit, SearchResponse } from "./types";
-import { allNodes, evidenceOf, neighbors, deg } from "./store";
+import { allNodes, evidenceOf, neighbors, deg, getNode } from "./store";
 
 // 필드 가중치: label(3) > sub(2) > props(1.5) > evidence filename(1)
 const W = { label: 3, sub: 2, prop: 1.5, evidence: 1 } as const;
@@ -106,4 +106,60 @@ export function search(q: string): SearchResponse {
   }
 
   return { hits, neighbors: nbrIds };
+}
+
+/* ───────── 하이브리드: 키워드 히트 + 임베딩 의미 후보(보수적 통합) ─────────
+ * 기존 search() 결과(순위·점수)는 불변. 임베딩 top-k 중 키워드에 안 걸린 노드만
+ * 낮은 점수(matched: ["semantic"])로 뒤에 덧붙인다. 미가용·오류·빈 결과면 search() 그대로. */
+
+// 키워드 최저 가중치(evidence=1)보다 항상 낮게 — 의미 후보는 절대 키워드 히트를 앞지르지 않는다.
+const SEMANTIC_SCORE = 0.5;
+const SEMANTIC_K = 10;
+
+/** 기본 의미 후보 소스: 질의 임베딩 → pgvector 코사인 top-k id. 미가용이면 []. */
+async function defaultSemanticIds(q: string): Promise<string[]> {
+  // ponytail: env 직접 확인 — DB/pyservice 미가용(테스트 포함)이면 pg 모듈 로드 자체를 피한다
+  if (!process.env.DATABASE_URL || !process.env.PYSERVICE_URL) return [];
+  const [{ semanticSearch }, { embedOne }] = await Promise.all([import("./db"), import("./embed")]);
+  const vec = await embedOne(q);
+  return vec ? semanticSearch(vec, SEMANTIC_K) : [];
+}
+
+/**
+ * 하이브리드 검색: search() 결과에 임베딩 의미 후보를 보수적으로 합류.
+ * semanticIds 는 테스트 주입용(기본 = 질의 임베딩 + pgvector).
+ */
+export async function searchHybrid(
+  q: string,
+  semanticIds: (q: string) => Promise<string[]> = defaultSemanticIds
+): Promise<SearchResponse> {
+  const base = search(q);
+  if (norm(q ?? "").length === 0) return base;
+
+  let ids: string[] = [];
+  try {
+    ids = await semanticIds(q);
+  } catch {
+    return base; // 의미검색 실패는 조용히 폴백 — 키워드 결과는 그대로 낸다
+  }
+  if (!ids.length) return base;
+
+  const seen = new Set(base.hits.map((h) => h.id));
+  const extra: SearchHit[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    const n = getNode(id);
+    if (!n || n.type === "doc") continue;
+    seen.add(id);
+    extra.push({
+      id: n.id,
+      label: n.label,
+      type: n.type,
+      score: SEMANTIC_SCORE - extra.length * 0.01, // 소스 순위 보존용 미세 감쇠
+      matched: ["semantic"],
+    });
+  }
+  if (!extra.length) return base;
+  // neighbors 는 키워드 상위 티어 기준 그대로 — 의미 후보로 그래프 하이라이트를 넓히지 않는다(보수적).
+  return { hits: [...base.hits, ...extra], neighbors: base.neighbors };
 }
