@@ -57,6 +57,31 @@ def test_review_empty_opinion_is_error(monkeypatch):
     assert body["ok"] is False and body["error"]
 
 
+ASK_REQ = {
+    "task": "ask",
+    "question": "이 부품의 주요 고장 원인은?",
+    "context": "객체: 아우터 렌즈 (유형: 부품·구성)\n관계:\nR1: [고장/HAS_FAILURE] 아우터 렌즈 → 황변 (상대 유형: 고장모드)",
+}
+
+
+def test_ask_parses_and_normalizes_cited_rels(monkeypatch):
+    cap = mock_chat(monkeypatch,
+        '<think>추론</think>{"answer":"황변이 주요 고장이다 [R 1].","citedRels":["1", 2, "x"]}')
+    body = client.post("/llm", json=ASK_REQ).json()
+    assert body["ok"] is True
+    assert "[R 1]" in body["result"]["answer"]
+    assert body["result"]["citedRels"] == [1, 2]
+    assert cap["messages"][0]["content"] == main.ASK_SYSTEM
+    user = cap["messages"][1]["content"]
+    assert user.startswith("/no_think") and "R1:" in user and "주요 고장 원인" in user
+
+
+def test_ask_empty_answer_is_error(monkeypatch):
+    mock_chat(monkeypatch, '{"answer":"","citedRels":[1]}')
+    body = client.post("/llm", json=ASK_REQ).json()
+    assert body["ok"] is False and body["error"]
+
+
 def test_vllm_down_returns_ok_false(monkeypatch):
     async def boom(messages):
         raise httpx.ConnectError("connection refused")

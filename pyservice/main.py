@@ -346,6 +346,12 @@ REVIEW_SYSTEM = (
     '종합 검토 소견 3~5문장을 작성하라. 반드시 근거로 삼은 CHECK 번호를 본문에 [CHECK n] 형식으로 인용하라. '
     '데이터에 없는 사실 창작 금지. JSON만 출력: {"opinion":"...","citedChecks":[n,...]} /no_think'
 )
+ASK_SYSTEM = (
+    '너는 FMEA 온톨로지 질의응답 어시스턴트다. 아래 "선택 객체 컨텍스트"(객체 속성·관계 R n·근거 문서)만 '
+    '근거로 사용자 질문에 한국어 3~6문장으로 답하라. 근거로 삼은 관계 번호를 본문에 [R n] 형식으로 인용하라. '
+    '컨텍스트에 없는 사실은 창작하지 말고, 컨텍스트로 답할 수 없으면 그렇게 말하라. '
+    'JSON만 출력: {"answer":"...","citedRels":[n,...]} /no_think'
+)
 
 
 class ChecklistItem(BaseModel):
@@ -365,6 +371,9 @@ class LLMRequest(BaseModel):
     checklist: list[ChecklistItem] = []
     masterAudit: list[str] = []
     contradictions: list[str] = []
+    # ask (객체 Q&A — RAG 컨텍스트는 Next 가 조립)
+    question: str = ""
+    context: str = ""
 
 
 def strip_think(text: str) -> str:
@@ -403,6 +412,11 @@ def _messages(req: LLMRequest) -> list[dict]:
         return [
             {"role": "system", "content": REVIEW_SYSTEM},
             {"role": "user", "content": "/no_think " + "\n".join(lines)},
+        ]
+    if req.task == "ask":
+        return [
+            {"role": "system", "content": ASK_SYSTEM},
+            {"role": "user", "content": f"/no_think 선택 객체 컨텍스트:\n{req.context}\n\n질문: {req.question}"},
         ]
     raise ValueError(f"unknown task: {req.task}")
 
@@ -451,6 +465,11 @@ async def llm(req: LLMRequest) -> dict:
             "interpretation": str(out.get("interpretation") or "").strip(),
             "ids": [str(i) for i in out.get("ids") or [] if str(i).strip()],
         }}
+    if req.task == "ask":
+        answer = str(out.get("answer") or "").strip()
+        if not answer:
+            return {"ok": False, "error": "empty answer"}
+        return {"ok": True, "result": {"answer": answer, "citedRels": _to_int_list(out.get("citedRels"))}}
     opinion = str(out.get("opinion") or "").strip()
     if not opinion:
         return {"ok": False, "error": "empty opinion"}

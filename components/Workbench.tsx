@@ -15,6 +15,7 @@ import NLSearchPanel from "./NLSearchPanel";
 import IngestPanel from "./IngestPanel";
 import DrawingPanel, { type DrawingResult } from "./DrawingPanel";
 import ContradictionsPanel from "./ContradictionsPanel";
+import AskPanel, { type AskEntry } from "./AskPanel";
 import QualityPanel from "./QualityPanel";
 import ReasonPanel from "./ReasonPanel";
 import { buildNodeIndex, type NodeIndex } from "./nodeIndex";
@@ -177,7 +178,10 @@ export default function Workbench() {
     | "contradictions"
     | "quality"
     | "reason"
+    | "ask"
   >("inspector");
+  // 객체 질문(Q&A) 대화 이력 — 패널이 인스펙터로 전환돼도 유지되도록 Workbench 가 보관.
+  const [askHistory, setAskHistory] = useState<AskEntry[]>([]);
   // 전역 모순 스캔 — 온톨로지 구축 완료 후 상시 조회(질문 없이도 노출).
   const [contradictions, setContradictions] = useState<Contradiction[]>([]);
   const [contradictionsLoading, setContradictionsLoading] = useState(false);
@@ -470,6 +474,11 @@ export default function Workbench() {
     (id: string) => handleNodeClick(id, { via: "유도 관계", fresh: true }),
     [handleNodeClick]
   );
+
+  // 질문 패널의 근거 관계/[R n] 클릭 — 그래프 포커스만(패널 유지, 인스펙터 전환 없음).
+  const handleAskFocus = useCallback((id: string) => {
+    graphRef.current?.selectNode(id);
+  }, []);
 
   // ── 뒤로 가기: 현재 항목을 pop하고 직전 항목을 push 없이 재선택(그래프 포커스 포함) ──
   const handleNavBack = useCallback(() => {
@@ -1153,6 +1162,21 @@ export default function Workbench() {
             🧹 정리 {quality.length}건
           </button>
         )}
+        <button
+          className="btn btn-ghost"
+          id="btnAsk"
+          disabled={!ontologyBuilt}
+          title={
+            ontologyBuilt
+              ? inspectorObj
+                ? `선택 객체 '${inspectorObj.label}' 에 대해 사내 LLM에 질문`
+                : "객체를 선택한 뒤 사내 LLM에 질문"
+              : "온톨로지 구축 후 사용 가능"
+          }
+          onClick={() => setRightPanelMode("ask")}
+        >
+          🤖 질문
+        </button>
         {derivedRelations.length > 0 && (
           <button
             className="btn btn-ghost"
@@ -1418,6 +1442,15 @@ export default function Workbench() {
               onMerge={handleQualityMerge}
               onDelete={handleQualityDelete}
               onDeleteEdge={handleQualityDeleteEdge}
+              onClose={() => setRightPanelMode("inspector")}
+            />
+          ) : rightPanelMode === "ask" ? (
+            <AskPanel
+              objectId={inspectorObj?.id ?? null}
+              objectLabel={inspectorObj?.label ?? null}
+              history={askHistory}
+              onAppend={(entry) => setAskHistory((prev) => [...prev, entry])}
+              onFocusNode={handleAskFocus}
               onClose={() => setRightPanelMode("inspector")}
             />
           ) : rightPanelMode === "reason" ? (

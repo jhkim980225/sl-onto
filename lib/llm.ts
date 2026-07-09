@@ -76,3 +76,13 @@ export interface LlmReviewResult {
 export async function llmReview(payload: LlmReviewPayload): Promise<LlmReviewResult | null> {
   return callLlm<LlmReviewResult>({ task: "review", ...payload }, REVIEW_TIMEOUT_MS);
 }
+
+export interface LlmAskResult {
+  answer: string;
+  citedRels: number[];
+}
+
+/** 선택 객체 RAG 컨텍스트 + 질문 → 답변([R n] 관계 인용 포함). 컨텍스트는 lib/ask.ts 가 조립. */
+export async function llmAsk(question: string, context: string): Promise<LlmAskResult | null> {
+  return callLlm<LlmAskResult>({ task: "ask", question, context }, REVIEW_TIMEOUT_MS);
+}
