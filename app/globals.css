@@ -29,7 +29,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .brand .sub{font-size:11.5px;color:var(--ink-dim)}
 .brand .tag{font-family:var(--mono);font-size:10px;color:#ffffff;background:var(--amber);border-radius:3px;padding:2px 6px;font-weight:600}
 .topbar .grow{flex:1}
-.search{position:relative;display:flex;align-items:center;gap:8px;background:var(--bg-raise);border:1px solid var(--line);border-radius:8px;padding:7px 12px;min-width:220px}
+.search{position:relative;display:flex;align-items:center;gap:8px;background:var(--bg-raise);border:1px solid var(--line);border-radius:8px;padding:7px 12px;flex:0 1 220px;min-width:110px}
 .search input{background:none;border:none;color:var(--ink);font-size:13px;width:100%}
 .search input::placeholder{color:var(--ink-faint)}
 
@@ -42,6 +42,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .search-dd-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .search-dd-empty{padding:12px;font-size:12px;color:var(--ink-faint);text-align:center}
 .btn{border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:500;transition:transform .12s,box-shadow .12s}
+.topbar .btn{white-space:nowrap;flex:none}
+@media (max-width:1560px){.brand .sub{display:none}}
 .btn-primary{background:var(--amber);color:#ffffff;font-weight:700;box-shadow:0 0 18px rgba(0,33,87,.10)}
 .btn-primary:hover{transform:translateY(-1px);box-shadow:0 0 26px rgba(0,33,87,.18)}
 .btn-primary:disabled{background:#e6ecf4;color:#93a1b5;box-shadow:none;cursor:not-allowed;transform:none}

@@ -1124,7 +1124,9 @@ export default function Workbench() {
           }
           onClick={handleRunScenario}
         >
-          {inspectorObj?.type === "item" ? `▶ '${inspectorObj.label}' 설계 검토` : "▶ 신규 설계 추론"}
+          {inspectorObj?.type === "item"
+            ? `▶ '${inspectorObj.label.length > 10 ? inspectorObj.label.slice(0, 10) + "…" : inspectorObj.label}' 설계 검토`
+            : "▶ 신규 설계 추론"}
         </button>
       </header>
 
