@@ -121,16 +121,38 @@ if (!HAS_DB) {
   for (const s of seed.sources) RUNTIME_SOURCES.push(s);
 }
 
-/* ────────────────────────── 부팅(ready) — DB 모드 하이드레이션 ──────────────────────────
- * 모든 API Route Handler 는 첫 줄에서 await ready(). 동시 첫 요청은 한 프로미스를 공유(싱글턴). */
+/* ────────────────────────── 부팅(ready) — DB 모드 하이드레이션 + 요청별 재동기화 ──────────────────────────
+ * 모든 API Route Handler 는 첫 줄에서 await ready().
+ * DB 직독 1단계(스펙 2026-07-09-db-first-reads): 첫 요청 = 하이드레이션(스키마·시드·백필 포함),
+ * 이후 요청 = 매번 loadAll() 재동기화 — 인덱스는 "요청 시점 DB 스냅샷". psql 등 외부 변경도 즉시 반영.
+ * 동시 요청은 진행 중 동기화 프로미스를 공유(중복 SELECT 방지). 실패는 캐시하지 않는다. */
 let readyPromise: Promise<void> | undefined;
+let syncInFlight: Promise<void> | undefined;
+
+async function syncFromDb(): Promise<void> {
+  const { nodes, edges, sources, activeDrawing } = await db.loadAll();
+  rebuildIndex(nodes, edges);
+  RUNTIME_SOURCES.length = 0;
+  for (const s of sources) RUNTIME_SOURCES.push(s);
+  ACTIVE_DRAWING = activeDrawing;
+}
+
 export function ready(): Promise<void> {
-  if (!HAS_DB) return Promise.resolve(); // 인메모리는 모듈로드에서 이미 구축됨
-  readyPromise ??= hydrate().catch((e) => {
-    readyPromise = undefined; // 실패 캐시 안 함 — 다음 요청이 재시도
-    throw e;
-  });
-  return readyPromise;
+  if (!HAS_DB) return Promise.resolve(); // 인메모리는 모듈로드에서 이미 구축됨(테스트·로컬 전용)
+  if (!readyPromise) {
+    readyPromise = hydrate().catch((e) => {
+      readyPromise = undefined; // 실패 캐시 안 함 — 다음 요청이 재시도
+      throw e;
+    });
+    return readyPromise;
+  }
+  // 부팅 이후: 요청마다 DB 재동기화(동시 요청은 공유)
+  syncInFlight ??= readyPromise
+    .then(() => syncFromDb())
+    .finally(() => {
+      syncInFlight = undefined;
+    });
+  return syncInFlight;
 }
 
 async function hydrate(): Promise<void> {
