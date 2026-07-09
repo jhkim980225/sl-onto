@@ -135,7 +135,7 @@ export interface GraphHandle {
   zoomFit: () => void;
   /** PHASE 1: 전체 보기(true) ↔ 핵심(백본)만 보기(false) 전환 */
   setFullView: (on: boolean) => void;
-  /** 객체 타입 탐색기: 특정 타입만 표시(null=기본 앵커 뷰) */
+  /** 객체 타입 탐색기: 특정 타입만 표시(null=기본 앵커 뷰). "type:st"=서브타입, st="__none"=미분류 */
   filterByType: (t: string | null) => void;
   /** 인제스천 델타 합류: 새 노드/엣지를 기존 엔진에 등록·마운트(스폰+펄스). doc 노드는 제외. */
   addDelta: (nodes: Node[], edges: Edge[]) => void;
@@ -529,7 +529,14 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
     function nodeVisibleNow(n: GNode): boolean {
       if (!n.added || n.hidden) return false; // n.hidden = 시나리오 공개 전(PJ26)
       // 타입 탐색기 활성 시: 그 타입 객체만(+ 포커스 공개·세션 추가). 앵커 백본보다 우선.
-      if (typeFilter) return n.type === typeFilter || revealed.has(n.id) || sessionAdded.has(n.id);
+      // "type:st" = 서브타입 파고들기(형식 온톨로지 1차) — st "__none" 은 미분류(st 없음) 그룹.
+      if (typeFilter) {
+        const ci = typeFilter.indexOf(":");
+        const ft = ci < 0 ? typeFilter : typeFilter.slice(0, ci);
+        const fst = ci < 0 ? null : typeFilter.slice(ci + 1);
+        const match = n.type === ft && (!fst || (fst === "__none" ? !n.st : n.st === fst));
+        return match || revealed.has(n.id) || sessionAdded.has(n.id);
+      }
       if (!built || fullView) return true;
       // 포커스 중: 클릭 노드 + 연관(focusVisible)만 표시하고 나머지 item 백본은 가린다.
       if (focusId) return focusVisible.has(n.id) || sessionAdded.has(n.id);

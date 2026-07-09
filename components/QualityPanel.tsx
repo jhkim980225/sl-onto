@@ -15,13 +15,20 @@ interface QualityPanelProps {
   onSelectObject: (id: string) => void;
   onMerge: (fromId: string, fromLabel: string, intoId: string) => void;
   onDelete: (id: string, label: string) => void;
+  /** rel-domain 전용 — 제약 위반 관계 삭제(POST /api/curate deleteEdge 경유) */
+  onDeleteEdge: (edge: { src: string; rel: string; dst: string }) => void;
   onClose: () => void;
 }
 
-const KIND_LABEL: Record<QualityIssue["kind"], string> = {
-  "dup-candidate": "중복 후보",
-  orphan: "고립 노드",
-  "no-evidence": "근거 없음",
+// 잡음 정리(기존 3종)=앰버, 스키마 위반(형식 온톨로지 1차 4종)=레드 — 배지·확신도에 같은 색.
+const KIND_META: Record<QualityIssue["kind"], { icon: string; label: string; color: string }> = {
+  "dup-candidate": { icon: "⧉", label: "중복 후보", color: "#8a6d1f" },
+  orphan: { icon: "◌", label: "고립 노드", color: "#8a6d1f" },
+  "no-evidence": { icon: "⚠", label: "근거 없음", color: "#8a6d1f" },
+  "rel-domain": { icon: "⛓", label: "관계 제약 위반", color: "#b3453c" },
+  "bad-subtype": { icon: "🏷", label: "미등록 서브타입", color: "#b3453c" },
+  "missing-prop": { icon: "▢", label: "필수 속성 누락", color: "#b3453c" },
+  "bad-datatype": { icon: "≠", label: "속성 형식 오류", color: "#b3453c" },
 };
 
 export default function QualityPanel({
@@ -32,6 +39,7 @@ export default function QualityPanel({
   onSelectObject,
   onMerge,
   onDelete,
+  onDeleteEdge,
   onClose,
 }: QualityPanelProps) {
   return (
@@ -60,10 +68,11 @@ export default function QualityPanel({
         items.map((it, i) => {
           const label = labelOf(nodeIndex, it.nodeId);
           const known = nodeIndex.has(it.nodeId);
+          const meta = KIND_META[it.kind];
           return (
             <div className="chk show" key={i}>
-              <span className="no" style={{ color: "#8a6d1f" }}>
-                {KIND_LABEL[it.kind]}
+              <span className="no" style={{ color: meta.color }}>
+                {meta.icon} {meta.label}
               </span>
               <h3 className={known ? "clickable" : undefined} onClick={known ? () => onSelectObject(it.nodeId) : undefined}>
                 {it.title}
@@ -73,7 +82,7 @@ export default function QualityPanel({
                 <div className="bar">
                   <i style={{ width: `${it.confidence}%`, background: "linear-gradient(90deg,#e8c33d,#8a6d1f)" }} />
                 </div>
-                <span className="cv" style={{ color: "#8a6d1f" }}>
+                <span className="cv" style={{ color: meta.color }}>
                   {it.confidence}%
                 </span>
               </div>
@@ -99,6 +108,15 @@ export default function QualityPanel({
                     title={`"${label}" 을(를) "${labelOf(nodeIndex, it.mergeInto)}" 로 병합`}
                   >
                     병합 → {labelOf(nodeIndex, it.mergeInto)}
+                  </button>
+                )}
+                {it.kind === "rel-domain" && it.edge && (
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => onDeleteEdge(it.edge!)}
+                    title={`제약 위반 관계 ${it.edge.src} —${it.edge.rel}→ ${it.edge.dst} 삭제`}
+                  >
+                    관계 삭제 ({it.edge.rel})
                   </button>
                 )}
                 <button className="btn btn-ghost" onClick={() => onDelete(it.nodeId, label)}>

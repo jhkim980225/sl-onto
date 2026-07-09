@@ -5,6 +5,7 @@
 // 골든 룰: 확신도 항상 노출(애매하면 낮게 '검토' 톤) / 근거 우선 / 원본 보존(여기선 "제안"만 함).
 import type { Node } from "./types";
 import { allNodes, outEdges, inEdges, evidenceOf } from "./store";
+import { scanSchemaViolations } from "./schema/validate";
 
 export type QualityKind =
   | "dup-candidate" | "orphan" | "no-evidence"
@@ -145,5 +146,5 @@ function scanNoEvidence(): QualityIssue[] {
 
 /** 온톨로지 품질 스캔 — 무엇을 정리할지 찾아만 준다(실행은 /api/curate). */
 export function scanQuality(): QualityIssue[] {
-  return [...scanDupCandidates(), ...scanOrphans(), ...scanNoEvidence()];
+  return [...scanDupCandidates(), ...scanOrphans(), ...scanNoEvidence(), ...scanSchemaViolations()];
 }

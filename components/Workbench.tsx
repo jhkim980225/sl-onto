@@ -31,6 +31,7 @@ import type {
   GraphResponse,
   InferResponse,
   NLSearchResponse,
+  Node,
   ObjType,
   ObjectDetail,
   SearchHit,
@@ -95,6 +96,18 @@ function makeChaosChips(samples: [string, string][] = CHAOS_SAMPLES): ChaosChip[
   return chips;
 }
 
+/** 좌측 탐색기 서브타입 집계 — 타입별 st_id("" = 미분류) → 건수. doc 은 탐색기 대상 아님. */
+function computeStCounts(nodes: Node[]): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  for (const n of nodes) {
+    if (n.type === "doc") continue;
+    const m = (out[n.type] ??= {});
+    const k = n.st ?? "";
+    m[k] = (m[k] ?? 0) + 1;
+  }
+  return out;
+}
+
 /** 체크리스트 항목의 trace(예: "PJ26→SIMILAR→PJ21")에서 실제 그래프 노드 id만 추출. */
 function parseTraceIds(trace: string[], idSet: Set<string>): string[] {
   const found = new Set<string>();
@@ -137,6 +150,11 @@ export default function Workbench() {
   const [fullTotals, setFullTotals] = useState<{ nodes: number; edges: number } | null>(null);
   // 객체 타입 탐색기 — 그래프를 특정 타입으로 파고들기(null=기본 앵커 뷰)
   const [activeType, setActiveType] = useState<ObjType | null>(null);
+  // 서브타입 탐색기(형식 온톨로지 1차) — activeType 아래 st_id 필터("__none"=미분류, null=타입 전체)
+  const [activeSt, setActiveSt] = useState<string | null>(null);
+  const [stCounts, setStCounts] = useState<Record<string, Record<string, number>>>({});
+  // 서브타입 라벨 매핑(GET /api/schema 메타모델) — 구축 완료 후 1회 조회
+  const [subtypeDefs, setSubtypeDefs] = useState<{ type_id: string; st_id: string; label_ko: string }[]>([]);
   const [viewInfo, setViewInfo] = useState<ViewInfo | null>(null);
   const [focusInfo, setFocusInfo] = useState<FocusInfo | null>(null);
   const [ingestVisible, setIngestVisible] = useState(false);
@@ -277,6 +295,18 @@ export default function Workbench() {
     if (!ontologyBuilt) return;
     void refreshQuality();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ontologyBuilt]);
+
+  // 서브타입 라벨 매핑(형식 온톨로지 1차) — 실패해도 탐색기 서브타입 트리만 생략(치명 아님).
+  useEffect(() => {
+    if (!ontologyBuilt) return;
+    fetch("/api/schema")
+      .then((res) => {
+        if (!res.ok) throw new Error(`스키마 조회 실패 (${res.status})`);
+        return res.json() as Promise<{ subtypes: { type_id: string; st_id: string; label_ko: string }[] }>;
+      })
+      .then((d) => setSubtypeDefs(d.subtypes))
+      .catch(() => {});
   }, [ontologyBuilt]);
 
   // 유도 관계(pyservice /reason) — 배지("🔗 유도 관계 N")로 상시 노출. pyservice 미가용이면 조용히 빈 배열.
@@ -489,6 +519,7 @@ export default function Workbench() {
           for (const n of data.nodes) if (n.hero) n.hero = false;
           graphDataRef.current = data;
           setFullTotals({ nodes: data.nodes.length, edges: data.edges.length });
+          setStCounts(computeStCounts(data.nodes));
           const idx = buildNodeIndex(data.nodes);
           nodeIndexRef.current = idx;
           setNodeIndex(idx);
@@ -764,6 +795,28 @@ export default function Workbench() {
     [curate, refreshQuality, refreshContradictions]
   );
 
+  // rel-domain(관계 제약 위반) 전용 — 위반 관계만 삭제(노드는 보존). 기존 deleteEdge 큐레이션 재사용.
+  const handleQualityDeleteEdge = useCallback(
+    (edge: { src: string; rel: string; dst: string }) => {
+      const nm = (id: string) => nodeIndexRef.current.get(id)?.label ?? id;
+      if (
+        !window.confirm(
+          `관계 "${nm(edge.src)} —${edge.rel}→ ${nm(edge.dst)}" 을(를) 삭제할까요?\n(저장소에 반영됩니다 — 되돌리려면 재인제스천 필요)`
+        )
+      )
+        return;
+      curate({ op: "deleteEdge", src: edge.src, rel: edge.rel, dst: edge.dst })
+        .then((d) => {
+          graphRef.current?.removeFromCanvas([], [`${edge.src}|${edge.rel}|${edge.dst}`]);
+          setFullTotals({ nodes: d.totals.nodes, edges: d.totals.edges });
+          void refreshQuality();
+          void refreshContradictions();
+        })
+        .catch((e) => setQualityError(e instanceof Error ? e.message : String(e)));
+    },
+    [curate, refreshQuality, refreshContradictions]
+  );
+
   // ── 다음 액션: 인스펙터의 고장모드/원인을 신규 설계 조건에 리스크로 반영 ──
   // 추론이 이미 실행된 상태(STAGE 3)라면 새 조건으로 체크리스트를 즉시 재계산한다
   // (웨이브 연출 없이 결과만 갱신 — "그래프 탐색"이 다음 설계 행동으로 이어지는 경로).
@@ -951,6 +1004,7 @@ export default function Workbench() {
                 nodes: [...graphDataRef.current.nodes, ...data.delta.nodes],
                 edges: [...graphDataRef.current.edges, ...data.delta.edges],
               };
+              setStCounts(computeStCounts(graphDataRef.current.nodes));
             }
           }
           refreshSources();
@@ -1110,6 +1164,17 @@ export default function Workbench() {
             🔗 유도 관계 {derivedRelations.length}건
           </button>
         )}
+        {ontologyBuilt && (
+          <a
+            className="btn btn-ghost"
+            id="btnExportTtl"
+            href="/api/ontology/export?format=ttl"
+            download
+            title="온톨로지 전체(스키마+인스턴스)를 RDF Turtle 파일로 내보내기"
+          >
+            ⬇ .ttl
+          </a>
+        )}
         <button className="btn btn-ghost" id="btnReset" onClick={handleReset}>
           처음부터
         </button>
@@ -1140,7 +1205,16 @@ export default function Workbench() {
           activeType={activeType}
           onSelectType={(t) => {
             setActiveType(t);
+            setActiveSt(null);
             graphRef.current?.filterByType(t);
+          }}
+          subtypeDefs={subtypeDefs}
+          stCounts={stCounts}
+          activeSubtype={activeSt}
+          onSelectSubtype={(t, st) => {
+            setActiveType(t);
+            setActiveSt(st);
+            graphRef.current?.filterByType(st ? `${t}:${st}` : t);
           }}
         />
 
@@ -1343,6 +1417,7 @@ export default function Workbench() {
               onSelectObject={handleQualitySelect}
               onMerge={handleQualityMerge}
               onDelete={handleQualityDelete}
+              onDeleteEdge={handleQualityDeleteEdge}
               onClose={() => setRightPanelMode("inspector")}
             />
           ) : rightPanelMode === "reason" ? (
