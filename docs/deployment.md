@@ -38,7 +38,12 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v48 (2026-07-08, pyservice v3)** — v48: pyservice `/llm`(vLLM 게이트웨이,
+- **현재 배포 = v49 (2026-07-09, pyservice v4)** — **형식 온톨로지 1차**: 관계 domain/range 14종
+  (기존 DB 빈 제약 자동 백필) · 서브타입 21종 + 키워드 자동 분류(프로덕션 61/139 부여, Postgres 영속) ·
+  스키마 위반 감사 4종(실데이터 rel-domain 8건 검출 — OCCURRED_IN 역방향 등, 관계 삭제 큐레이션) ·
+  RDF Turtle 내보내기(`GET /api/ontology/export?format=ttl` → pyservice `/export`, 실측 3,007 트리플) ·
+  `GET /api/schema` · 탐색기 서브타입 트리 + 탑바 ⬇.ttl. 스모크 PASS. main 병합 완료(e20886e).
+- v48 (2026-07-08, pyservice v3) — pyservice `/llm`(vLLM 게이트웨이,
   qwen3-32b-finance, 동시 1 세마포어) + **AI 종합 소견(RAG)** — 체크리스트 `[🤖 AI 종합 소견]` 버튼,
   [CHECK n] 인용 강제, Postgres `ai_opinions` 캐시(첫 생성 실측 60.4초 → 캐시 0.12초, 기본 조건
   pre-warm 완료). nlsearch LLM 경로도 pyservice 경유(NL_USE_LLM 게이트 불변).
