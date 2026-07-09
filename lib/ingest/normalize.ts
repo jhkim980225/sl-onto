@@ -78,6 +78,11 @@ for (const e of VOCAB) {
   for (const s of e.syn ?? []) BY_SYN.set(nfc(s).toLowerCase(), e);
 }
 
+/** 통제 어휘 카탈로그 텍스트 — LLM 추출(task=extract)이 id 를 재사용할 근거 목록. "type:id=label | ..." */
+export function vocabCatalog(): string {
+  return VOCAB.map((e) => `${e.type}:${e.id}=${e.label}`).join(" | ");
+}
+
 export interface NormResult {
   id: string | null; // 매핑된 표준 id (없으면 null)
   type?: ObjType;

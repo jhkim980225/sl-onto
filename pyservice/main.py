@@ -352,6 +352,16 @@ ASK_SYSTEM = (
     '컨텍스트에 없는 사실은 창작하지 말고, 컨텍스트로 답할 수 없으면 그렇게 말하라. '
     'JSON만 출력: {"answer":"...","citedRels":[n,...]} /no_think'
 )
+EXTRACT_SYSTEM = (
+    '너는 FMEA 문서 개체 추출기다. 문서에서 부품(item)·고장모드(fm)·원인(cause)·조치(action)·프로젝트(proj) '
+    '개체와 관계(HAS_FAILURE/CAUSED_BY/MITIGATED_BY/OCCURRED_IN)만 추출하라. '
+    '개체가 통제 어휘 목록에 있으면 그 id를 쓰고, 없으면 id 없이 label만 반환하라. '
+    '문서에 없는 개체·관계 창작 금지. JSON만 출력: '
+    '{"entities":[{"type":"item","id":"IHL","label":"헤드램프 어셈블리"},{"type":"cause","label":"신규 원인"}],'
+    '"relations":[{"srcLabel":"...","rel":"HAS_FAILURE","dstLabel":"..."}]} /no_think'
+)
+
+EXTRACT_TEXT_MAX = 4000  # 문서 텍스트 절단 — 프롬프트 폭주 방지
 
 
 class ChecklistItem(BaseModel):
@@ -374,6 +384,9 @@ class LLMRequest(BaseModel):
     # ask (객체 Q&A — RAG 컨텍스트는 Next 가 조립)
     question: str = ""
     context: str = ""
+    # extract (인제스천 LLM 보강 — 통제 어휘 카탈로그는 Next lib/ingest/normalize.ts 가 조립)
+    text: str = ""
+    vocab: str = ""
 
 
 def strip_think(text: str) -> str:
@@ -418,22 +431,27 @@ def _messages(req: LLMRequest) -> list[dict]:
             {"role": "system", "content": ASK_SYSTEM},
             {"role": "user", "content": f"/no_think 선택 객체 컨텍스트:\n{req.context}\n\n질문: {req.question}"},
         ]
+    if req.task == "extract":
+        return [
+            {"role": "system", "content": EXTRACT_SYSTEM},
+            {"role": "user", "content": f"/no_think 통제 어휘:\n{req.vocab}\n\n문서:\n{req.text[:EXTRACT_TEXT_MAX]}"},
+        ]
     raise ValueError(f"unknown task: {req.task}")
 
 
-async def _chat(messages: list[dict]) -> str:
+async def _chat(messages: list[dict], max_tokens: int = 400) -> str:
     async with httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
         res = await client.post(
             f"{LLM_BASE_URL}/chat/completions",
-            json={"model": LLM_MODEL, "max_tokens": 400, "temperature": 0, "messages": messages},
+            json={"model": LLM_MODEL, "max_tokens": max_tokens, "temperature": 0, "messages": messages},
         )
         res.raise_for_status()
         return res.json()["choices"][0]["message"]["content"]
 
 
-async def _guarded_chat(messages: list[dict]) -> str:
+async def _guarded_chat(messages: list[dict], max_tokens: int = 400) -> str:
     async with _llm_sem:
-        return await _chat(messages)
+        return await _chat(messages, max_tokens)
 
 
 def _to_int_list(v) -> list[int]:
@@ -446,19 +464,50 @@ def _to_int_list(v) -> list[int]:
     return out
 
 
+def _norm_extract(out: dict) -> dict:
+    """추출 응답 정규화 — 비 dict/빈 필드는 관대하게 버린다(_to_int_list 스타일)."""
+    entities = []
+    for e in out.get("entities") if isinstance(out.get("entities"), list) else []:
+        if not isinstance(e, dict):
+            continue
+        typ = str(e.get("type") or "").strip()
+        label = str(e.get("label") or "").strip()
+        if not typ or not label:
+            continue
+        ent = {"type": typ, "label": label}
+        eid = str(e.get("id") or "").strip()
+        if eid:
+            ent["id"] = eid
+        entities.append(ent)
+    relations = []
+    for r in out.get("relations") if isinstance(out.get("relations"), list) else []:
+        if not isinstance(r, dict):
+            continue
+        src = str(r.get("srcLabel") or "").strip()
+        rel = str(r.get("rel") or "").strip()
+        dst = str(r.get("dstLabel") or "").strip()
+        if src and rel and dst:
+            relations.append({"srcLabel": src, "rel": rel, "dstLabel": dst})
+    return {"entities": entities, "relations": relations}
+
+
 @app.post("/llm")
 async def llm(req: LLMRequest) -> dict:
     try:
         messages = _messages(req)
     except ValueError as e:
         return {"ok": False, "error": str(e)}
+    # extract 는 개체 목록이 길 수 있어 토큰 상한만 넉넉히(다른 task 는 기존 400 유지).
+    max_tokens = 800 if req.task == "extract" else 400
     try:
-        content = await asyncio.wait_for(_guarded_chat(messages), timeout=LLM_TOTAL_TIMEOUT_S)
+        content = await asyncio.wait_for(_guarded_chat(messages, max_tokens), timeout=LLM_TOTAL_TIMEOUT_S)
     except Exception as e:  # timeout, connect error, HTTP error — never 500
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     out = extract_json(content)
     if out is None:
         return {"ok": False, "error": "LLM output is not JSON"}
+    if req.task == "extract":
+        return {"ok": True, "result": _norm_extract(out)}
     if req.task == "nlsearch":
         return {"ok": True, "result": {
             "answer": str(out.get("answer") or "").strip(),

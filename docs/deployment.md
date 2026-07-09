@@ -38,7 +38,17 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v50 (2026-07-09, pyservice v4)** — **DB 직독 1단계**: ready()가 매 요청 Postgres
+- **현재 배포 = v54 (2026-07-09, pyservice v7)** — **인제스천 LLM 구조화 옵트인**: `/api/ingest?llm=1` —
+  규칙 파싱 빈약(객체<3) 시 vLLM(task=extract)로 개체·관계 보강(vocab id 재사용·fold 매칭·AUTO 0.60·
+  실패 관계 폐기·EVIDENCED_BY 연결). 기본 OFF, 실패 시 조용히 규칙 결과 유지.
+- v53 (2026-07-09, pyservice v6) — **PDF 인제스천**: pyservice `POST /parse`(pypdf, docling lazy 옵트인),
+  `.pdf` 업로드 → 자유 텍스트 엔티티 스캔 합류. 한글 합성 PDF e2e 5객체/3관계.
+- v52 (2026-07-09) — **R1 3종**: 하이브리드 검색(`semantic` 후보), 중복해소 강화(정식↔정식 88%·임베딩
+  유사 50%), 서브타입 분류 43.9%→**87.1%**(키워드 확장 + thermal-mgmt 신설, 기존 DB keywords DO UPDATE).
+- v51 (2026-07-09, pyservice v5) — **선택 객체 LLM Q&A(RAG)**: 🤖 질문 탭 → 객체 관계·근거 컨텍스트 →
+  vLLM 답변([R n] 인용 강제, ai_opinions 캐시). e2e 4케이스 PASS(첫 85.2s/캐시 0.1s/환각 거부) —
+  보고서 docs/test-reports/2026-07-09-객체질문-RAG.md.
+- v50 (2026-07-09, pyservice v4) — **DB 직독 1단계**: ready()가 매 요청 Postgres
   `loadAll()` 재동기화 — 조회가 요청 시점 DB 스냅샷. 검증: psql 직접 INSERT/DELETE가 파드 재시작 없이
   다음 API 응답에 즉시 반영/소멸(실측 PASS). 스모크 PASS. 스펙: specs/2026-07-09-db-first-reads-design.md.
 - v49 (2026-07-09, pyservice v4) — **형식 온톨로지 1차**: 관계 domain/range 14종

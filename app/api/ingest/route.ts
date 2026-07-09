@@ -12,6 +12,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as XLSX from "xlsx";
 import { ingestOne, ingestPdfText } from "@/lib/ingest";
+import { llmExtractToDelta } from "@/lib/ingest/llm-assist";
+import { vocabCatalog } from "@/lib/ingest/normalize";
+import { readDeck } from "@/lib/ingest/pptx";
+import { readDoc } from "@/lib/ingest/docx";
+import { llmExtract } from "@/lib/llm";
 import { parseDocument, parseEnabled } from "@/lib/parse";
 import { mergeDelta, registerSource, allNodes, allEdges, ready } from "@/lib/store";
 
@@ -64,6 +69,8 @@ async function handleUpload(req: Request) {
   const form = await req.formData();
   const f = form.get("file");
   if (!(f instanceof File)) return bad(400, 'multipart field "file" 이 없습니다');
+  // 옵트인 LLM 보강 — 기본 OFF. vLLM 이 쿼리당 30~90초라 명시적 ?llm=1 일 때만.
+  const llmOptIn = new URL(req.url).searchParams.get("llm") === "1";
 
   const name = path.basename(f.name || "").normalize("NFC");
   if (!ALLOWED_EXT.test(name)) return bad(400, "지원 형식은 .xlsx / .pptx / .docx / .dxf / .pdf 입니다");
@@ -71,6 +78,7 @@ async function handleUpload(req: Request) {
   if (f.size > MAX_BYTES) return bad(400, "파일이 10MB 를 초과합니다");
 
   const buf = Buffer.from(await f.arrayBuffer());
+  let pdfText = "";
   let result: ReturnType<typeof ingestOne>;
   if (/\.pdf$/i.test(name)) {
     // PDF: 바이너리 파싱은 pyservice(/parse) 담당(스캔 PDF OCR 은 docling 탑재 시).
@@ -79,9 +87,9 @@ async function handleUpload(req: Request) {
     const parsed = await parseDocument(name, buf);
     if (!parsed) return bad(422, "PDF 파싱 실패 — pyservice(/parse) 미가용이거나 추출 오류");
     // 표 셀도 자유 텍스트 스캔 대상에 포함(행 단위로 평탄화).
-    const text = [parsed.text, ...parsed.tables.flatMap((t) => t.map((row) => row.join(" | ")))].join("\n").trim();
-    if (!text) return bad(422, "PDF 에서 텍스트를 추출하지 못했습니다(이미지 전용 스캔 — OCR 은 docling 탑재 필요)");
-    result = ingestPdfText(name, text, buf.length);
+    pdfText = [parsed.text, ...parsed.tables.flatMap((t) => t.map((row) => row.join(" | ")))].join("\n").trim();
+    if (!pdfText) return bad(422, "PDF 에서 텍스트를 추출하지 못했습니다(이미지 전용 스캔 — OCR 은 docling 탑재 필요)");
+    result = ingestPdfText(name, pdfText, buf.length);
   } else {
     try {
       result = ingestBufferAs(name, buf);
@@ -92,13 +100,54 @@ async function handleUpload(req: Request) {
 
   const delta = await mergeDelta(result.nodes, result.edges);
   await registerSource(result.source, buf);
+
+  // 옵트인 LLM 보강 — 규칙 파싱이 빈약할 때(객체 3개 미만)만, 자유 텍스트 문서(pdf/pptx/docx)에 한해.
+  // PYSERVICE_URL 미가용·LLM 실패·비 JSON 응답은 전부 조용히 스킵(규칙 결과 그대로).
+  let llmAssist: { added: { nodes: number; edges: number } } | undefined;
+  if (llmOptIn && result.source.extracted.objects < 3 && /\.(pdf|pptx|docx)$/i.test(name)) {
+    llmAssist = await tryLlmAssist(name, buf, pdfText);
+  }
+
   return NextResponse.json({
     ok: true,
     file: name,
     source: result.source,
     delta: { nodes: delta.addedNodes, edges: delta.addedEdges, updated: delta.touched },
     totals: totals(),
+    ...(llmAssist ? { llmAssist } : {}),
   });
+}
+
+/** 문서 텍스트를 LLM(task=extract)에 보내 개체·관계 델타를 병합. 어떤 실패도 undefined(스킵). */
+async function tryLlmAssist(name: string, buf: Buffer, pdfText: string) {
+  try {
+    const text = pdfText || extractProseText(name, buf);
+    if (!text.trim()) return undefined;
+    const extracted = await llmExtract(text.slice(0, 4000), vocabCatalog());
+    if (!extracted) return undefined; // pyservice 미가용/실패 — 규칙 결과 그대로
+    const delta = llmExtractToDelta(extracted, `doc:${name}`, allNodes());
+    const merged = await mergeDelta(delta.nodes, delta.edges, "llm-assist");
+    return { added: { nodes: merged.addedNodes.length, edges: merged.addedEdges.length } };
+  } catch (err) {
+    console.warn("[ingest] LLM 보강 스킵:", err instanceof Error ? err.message : String(err));
+    return undefined;
+  }
+}
+
+/** pptx/docx 산문 텍스트 추출(파서는 파일 경로를 받으므로 임시파일 경유). */
+function extractProseText(name: string, buf: Buffer): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slonto-llm-"));
+  const tmp = path.join(dir, `upload${path.extname(name).toLowerCase()}`);
+  try {
+    fs.writeFileSync(tmp, buf);
+    if (/\.pptx$/i.test(name)) return readDeck(tmp).slides.flatMap((s) => s.lines).join("\n");
+    if (/\.docx$/i.test(name)) return readDoc(tmp).paragraphs.join("\n");
+    return "";
+  } finally {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {}
+  }
 }
 
 // 샘플 인제스천 — 매 클릭마다 새 현장 보고(차수 증가)가 결로·습기(FMFOG)에 정확히 3개 노드

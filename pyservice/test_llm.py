@@ -10,8 +10,9 @@ client = TestClient(main.app)
 def mock_chat(monkeypatch, content: str):
     captured = {}
 
-    async def fake(messages):
+    async def fake(messages, max_tokens=400):
         captured["messages"] = messages
+        captured["max_tokens"] = max_tokens
         return content
 
     monkeypatch.setattr(main, "_chat", fake)
@@ -82,8 +83,47 @@ def test_ask_empty_answer_is_error(monkeypatch):
     assert body["ok"] is False and body["error"]
 
 
+EXTRACT_REQ = {
+    "task": "extract",
+    "text": "벤트 어셈블리에서 결로·습기 발생. 원인: 습기 유입 경로 미확인.",
+    "vocab": "fm:FMFOG=결로·습기 | item:IHL=헤드램프 어셈블리",
+}
+
+
+def test_extract_parses_and_normalizes(monkeypatch):
+    cap = mock_chat(monkeypatch,
+        '<think>추론</think>{"entities":[{"type":"fm","id":"FMFOG","label":"결로·습기"},'
+        '{"type":"cause","label":"습기 유입 경로 미확인"},{"type":"item","label":""},"문자열"],'
+        '"relations":[{"srcLabel":"결로·습기","rel":"CAUSED_BY","dstLabel":"습기 유입 경로 미확인"},'
+        '{"srcLabel":"","rel":"HAS_FAILURE","dstLabel":"x"},[1]]}')
+    body = client.post("/llm", json=EXTRACT_REQ).json()
+    assert body["ok"] is True
+    # 빈 label 개체·비 dict 항목·빈 srcLabel 관계는 관대하게 폐기
+    assert body["result"]["entities"] == [
+        {"type": "fm", "label": "결로·습기", "id": "FMFOG"},
+        {"type": "cause", "label": "습기 유입 경로 미확인"},
+    ]
+    assert body["result"]["relations"] == [
+        {"srcLabel": "결로·습기", "rel": "CAUSED_BY", "dstLabel": "습기 유입 경로 미확인"}]
+    # 프롬프트 계약: extract 시스템 프롬프트 + vocab·문서 포함 + 토큰 상한 800
+    assert cap["messages"][0]["content"] == main.EXTRACT_SYSTEM
+    user = cap["messages"][1]["content"]
+    assert user.startswith("/no_think") and "fm:FMFOG=결로·습기" in user and "벤트 어셈블리" in user
+    assert cap["max_tokens"] == 800
+
+
+def test_extract_truncates_text_and_tolerates_missing_fields(monkeypatch):
+    cap = mock_chat(monkeypatch, '{"entities":"아님"}')  # entities 가 list 아님, relations 없음
+    long_req = dict(EXTRACT_REQ, text="가" * 5000)
+    body = client.post("/llm", json=long_req).json()
+    assert body == {"ok": True, "result": {"entities": [], "relations": []}}
+    # 4000자 절단 — 프롬프트에 5000자가 통째로 들어가지 않는다
+    assert "가" * 4000 in cap["messages"][1]["content"]
+    assert "가" * 4001 not in cap["messages"][1]["content"]
+
+
 def test_vllm_down_returns_ok_false(monkeypatch):
-    async def boom(messages):
+    async def boom(messages, max_tokens=400):
         raise httpx.ConnectError("connection refused")
 
     monkeypatch.setattr(main, "_chat", boom)

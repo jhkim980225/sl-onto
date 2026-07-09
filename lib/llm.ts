@@ -77,6 +77,28 @@ export async function llmReview(payload: LlmReviewPayload): Promise<LlmReviewRes
   return callLlm<LlmReviewResult>({ task: "review", ...payload }, REVIEW_TIMEOUT_MS);
 }
 
+export interface LlmExtractEntity {
+  type: string;
+  id?: string; // 통제 어휘 id(있을 때만 — 없으면 label 로 fold 매칭/auto-create)
+  label: string;
+}
+
+export interface LlmExtractRelation {
+  srcLabel: string;
+  rel: string;
+  dstLabel: string;
+}
+
+export interface LlmExtractResult {
+  entities: LlmExtractEntity[];
+  relations: LlmExtractRelation[];
+}
+
+/** 자유 텍스트 문서 + 통제 어휘 카탈로그 → 개체·관계 추출(인제스천 옵트인 보강). 프롬프트는 pyservice 쪽. */
+export async function llmExtract(text: string, vocab: string): Promise<LlmExtractResult | null> {
+  return callLlm<LlmExtractResult>({ task: "extract", text, vocab }, REVIEW_TIMEOUT_MS);
+}
+
 export interface LlmAskResult {
   answer: string;
   citedRels: number[];

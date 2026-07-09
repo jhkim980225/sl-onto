@@ -7,6 +7,7 @@ import type { Node } from "./types";
 import { allNodes, outEdges, inEdges, evidenceOf, deg } from "./store";
 import { dbEnabled, nearestSameTypePairs } from "./db";
 import { scanSchemaViolations } from "./schema/validate";
+import { foldKey } from "./fold";
 
 export type QualityKind =
   | "dup-candidate" | "orphan" | "no-evidence"
@@ -35,9 +36,6 @@ const MAX_PER_RULE = 8;
 const MIN_CONFIDENCE = 40;
 
 const nfc = (s: string) => (s ?? "").normalize("NFC").trim();
-
-/** 공백·가운뎃점·기호를 접어 비교하는 폴드 키 — 대소문자·띄어쓰기 차이만 있는 표기 변형을 잡는다. */
-const foldKey = (s: string) => nfc(s).toLowerCase().replace(/[\s·\-_/()]/g, "");
 
 /** 2글자 미만 토큰(조사·기호 잔재)은 제외 — 너무 일반적인 한 글자 토큰의 우연 일치 방지. */
 function tokenSet(s: string): Set<string> {
