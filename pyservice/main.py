@@ -476,6 +476,84 @@ async def llm(req: LLMRequest) -> dict:
     return {"ok": True, "result": {"opinion": opinion, "citedChecks": _to_int_list(out.get("citedChecks"))}}
 
 
+# ---------------------------------------------------------------------------
+# /parse — document (PDF) text extraction for ingestion. Stateless: bytes in,
+# text/tables out. Engine: docling if installed (scanned-PDF OCR + table
+# structure; lazy import like torch), else pypdf (text-layer PDFs only).
+# Failures are HTTP 200 {"ok": false, ...} — Next fails that one file, never 500.
+# ---------------------------------------------------------------------------
+
+import base64  # noqa: E402
+import io  # noqa: E402
+
+
+class ParseRequest(BaseModel):
+    filename: str = ""
+    content_base64: str
+
+
+class ParseResponse(BaseModel):
+    ok: bool
+    text: str = ""
+    tables: list[list[list[str]]] = []  # [table][row][cell]
+    pages: int = 0
+    engine: str = ""
+    error: str = ""
+
+
+@lru_cache(maxsize=1)
+def get_docling_converter():
+    # ponytail: docling 미설치가 1차 기본(이미지 +3GB 회피) — 설치돼 있으면 자동 사용.
+    from docling.document_converter import DocumentConverter
+
+    return DocumentConverter()
+
+
+def _parse_docling(filename: str, data: bytes) -> tuple[str, list[list[list[str]]], int]:
+    from docling.datamodel.base_models import DocumentStream
+
+    res = get_docling_converter().convert(DocumentStream(name=filename or "upload.pdf", stream=io.BytesIO(data)))
+    doc = res.document
+    tables: list[list[list[str]]] = []
+    for t in getattr(doc, "tables", []) or []:
+        try:
+            grid = t.data.grid  # TableData.grid: rows of TableCell
+            tables.append([[(c.text or "") for c in row] for row in grid])
+        except Exception:
+            continue  # 표 하나 실패는 격리
+    return doc.export_to_markdown(), tables, doc.num_pages()
+
+
+def _parse_pypdf(data: bytes) -> tuple[str, int]:
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(data))
+    pages = [(p.extract_text() or "") for p in reader.pages]
+    return "\n".join(pages).strip(), len(reader.pages)
+
+
+@app.post("/parse", response_model=ParseResponse)
+def parse(req: ParseRequest) -> ParseResponse:
+    try:
+        data = base64.b64decode(req.content_base64, validate=True)
+    except Exception:
+        return ParseResponse(ok=False, error="invalid base64")
+    if not data:
+        return ParseResponse(ok=False, error="empty content")
+    try:
+        text, tables, pages = _parse_docling(req.filename, data)
+        return ParseResponse(ok=True, text=text, tables=tables, pages=pages, engine="docling")
+    except ImportError:
+        pass  # docling 미설치 → pypdf 폴백
+    except Exception:
+        pass  # docling 이 이 파일에서 실패 → pypdf 재시도
+    try:
+        text, pages = _parse_pypdf(data)
+    except Exception as e:  # 손상 PDF 등 — never 500
+        return ParseResponse(ok=False, error=f"{type(e).__name__}: {e}")
+    return ParseResponse(ok=True, text=text, tables=[], pages=pages, engine="pypdf")
+
+
 if __name__ == "__main__":
     import uvicorn
 

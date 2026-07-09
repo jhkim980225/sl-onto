@@ -11,13 +11,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as XLSX from "xlsx";
-import { ingestOne } from "@/lib/ingest";
+import { ingestOne, ingestPdfText } from "@/lib/ingest";
+import { parseDocument, parseEnabled } from "@/lib/parse";
 import { mergeDelta, registerSource, allNodes, allEdges, ready } from "@/lib/store";
 
 export const runtime = "nodejs";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
-const ALLOWED_EXT = /\.(xlsx|pptx|docx|dxf)$/i;
+const ALLOWED_EXT = /\.(xlsx|pptx|docx|dxf|pdf)$/i;
 
 const bad = (status: number, error: string) => NextResponse.json({ ok: false, error }, { status });
 const totals = () => ({ nodes: allNodes().length, edges: allEdges().length });
@@ -65,16 +66,28 @@ async function handleUpload(req: Request) {
   if (!(f instanceof File)) return bad(400, 'multipart field "file" 이 없습니다');
 
   const name = path.basename(f.name || "").normalize("NFC");
-  if (!ALLOWED_EXT.test(name)) return bad(400, "지원 형식은 .xlsx / .pptx / .docx / .dxf 입니다");
+  if (!ALLOWED_EXT.test(name)) return bad(400, "지원 형식은 .xlsx / .pptx / .docx / .dxf / .pdf 입니다");
   if (f.size === 0) return bad(400, "빈 파일입니다");
   if (f.size > MAX_BYTES) return bad(400, "파일이 10MB 를 초과합니다");
 
   const buf = Buffer.from(await f.arrayBuffer());
   let result: ReturnType<typeof ingestOne>;
-  try {
-    result = ingestBufferAs(name, buf);
-  } catch (err) {
-    return bad(422, `파싱 실패(손상되었거나 지원하지 않는 문서): ${err instanceof Error ? err.message : String(err)}`);
+  if (/\.pdf$/i.test(name)) {
+    // PDF: 바이너리 파싱은 pyservice(/parse) 담당(스캔 PDF OCR 은 docling 탑재 시).
+    // pyservice 미가용이면 이 파일만 실패 — 다른 형식 인제스천은 영향 없음.
+    if (!parseEnabled()) return bad(503, "PDF 인제스천은 pyservice(/parse)가 필요합니다 — PYSERVICE_URL 미설정");
+    const parsed = await parseDocument(name, buf);
+    if (!parsed) return bad(422, "PDF 파싱 실패 — pyservice(/parse) 미가용이거나 추출 오류");
+    // 표 셀도 자유 텍스트 스캔 대상에 포함(행 단위로 평탄화).
+    const text = [parsed.text, ...parsed.tables.flatMap((t) => t.map((row) => row.join(" | ")))].join("\n").trim();
+    if (!text) return bad(422, "PDF 에서 텍스트를 추출하지 못했습니다(이미지 전용 스캔 — OCR 은 docling 탑재 필요)");
+    result = ingestPdfText(name, text, buf.length);
+  } else {
+    try {
+      result = ingestBufferAs(name, buf);
+    } catch (err) {
+      return bad(422, `파싱 실패(손상되었거나 지원하지 않는 문서): ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   const delta = await mergeDelta(result.nodes, result.edges);

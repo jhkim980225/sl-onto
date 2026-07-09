@@ -4,3 +4,8 @@ sentence-transformers==3.3.1
 pydantic==2.10.4
 rdflib==7.1.1
 httpx==0.28.1
+pypdf==5.1.0
+# docling — 스캔(이미지) PDF OCR + 표 구조 인식. 모델 포함 이미지 +3GB·빌드 장시간이라 1차 미탑재.
+# 설치하면 /parse 가 lazy import 로 자동 사용(코드 수정 불요). 탑재 시 Dockerfile 에 모델 프리페치 추가:
+#   RUN python -c "from main import get_docling_converter; get_docling_converter()"
+# docling==2.15.1

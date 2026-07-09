@@ -43,8 +43,9 @@ interface Sink {
 }
 const newSink = (): Sink => ({ nodes: new Map(), edges: [], edgeKeys: new Set() });
 
-/** 파일 하나를 sink 에 인제스트하고 SourceInfo 를 반환. 파싱 실패는 throw(호출측에서 처리). */
-function ingestFileInto(sink: Sink, file: string, full: string): SourceInfo {
+/** 파일 하나를 sink 에 인제스트하고 SourceInfo 를 반환. 파싱 실패는 throw(호출측에서 처리).
+ * pdfText: PDF 는 바이너리 파싱을 pyservice(/parse)가 이미 끝낸 상태 — 추출 텍스트만 받는다. */
+function ingestFileInto(sink: Sink, file: string, full: string, pdfText?: string): SourceInfo {
   const { nodes, edges, edgeKeys } = sink;
 
   const getNode = (id: string): Node => {
@@ -104,7 +105,11 @@ function ingestFileInto(sink: Sink, file: string, full: string): SourceInfo {
   else if (ext === "PPTX") ingestPptx(full, { resolve, link });
   else if (ext === "DOCX") ingestDocx(full, { resolve, link });
   else if (ext === "DXF") ingestDxf(full, { resolve, link, getNode, addProp });
-  else throw new Error(`지원하지 않는 확장자: ${ext}`);
+  else if (ext === "PDF") {
+    // PDF 는 텍스트 추출(pyservice)이 선행 조건 — 여기서는 자유 텍스트 엔티티 링크만(pptx 산문과 동일 경로).
+    if (!pdfText) throw new Error("PDF 는 추출 텍스트가 필요합니다(pyservice /parse 선행)");
+    linkFreeText(pdfText, { resolve, link });
+  } else throw new Error(`지원하지 않는 확장자: ${ext}`);
 
   // 파일 → doc 노드 + EVIDENCED_BY
   const docId = `doc:${file}`;
@@ -161,6 +166,16 @@ export function ingestAll(dir: string = SOURCES_DIR()): IngestResult {
 export function ingestOne(filePath: string, fileName: string): { nodes: Node[]; edges: Edge[]; source: SourceInfo } {
   const sink = newSink();
   const source = ingestFileInto(sink, fileName, filePath);
+  return { nodes: [...sink.nodes.values()], edges: sink.edges, source };
+}
+
+/** PDF 증분 인제스천 — pyservice /parse 가 추출한 텍스트를 자유 텍스트 엔티티 링크 파이프라인에
+ * 태워 노드/엣지 + doc 근거를 만든다. sync(파일 I/O 없음) — 비동기 추출은 호출측(route) 책임.
+ * 부팅 ingestAll() 은 PDF 미대상(베이스라인에 PDF 없음) — 업로드 경로 전용. */
+export function ingestPdfText(fileName: string, text: string, sizeBytes = 0): { nodes: Node[]; edges: Edge[]; source: SourceInfo } {
+  const sink = newSink();
+  const source = ingestFileInto(sink, fileName, "", text);
+  source.sizeBytes = sizeBytes;
   return { nodes: [...sink.nodes.values()], edges: sink.edges, source };
 }
 

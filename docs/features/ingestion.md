@@ -53,9 +53,18 @@ FMEA 행은 총 약 547줄. 인제스천 결과 온톨로지 규모 ≈ **170 �
 - **효과(측정):** `data/real-samples/` 에서 **BEFORE(정형 전용 파서) = 0객체/0관계 → AFTER(견고 파서) = 42객체/36관계**.
   검증 스크립트: `scripts/check-before.ts`(구파서) · `scripts/check-real-samples.ts`(견고파서). 단위 테스트 `lib/ingest/robust.test.ts`.
 
+### PDF 인제스천 (pyservice `/parse`)
+- 업로드 `.pdf` 허용(`POST /api/ingest`). 바이너리 파싱은 pyservice `POST /parse`
+  (입력 `{filename, content_base64}` → 출력 `{ok, text, tables, pages, engine}`) 가 담당하고,
+  Next 는 추출 텍스트(+표 행 평탄화)를 `ingestPdfText()` → `linkFreeText` 폴백 파이프라인에 태운다(pptx 산문과 동일 경로).
+- 엔진: **pypdf**(텍스트 레이어 PDF, 1차 탑재) · **docling**(설치 시 lazy import 로 자동 사용 — 스캔 PDF OCR·표 구조.
+  모델 포함 이미지 +3GB 라 1차 미탑재, `pyservice/requirements.txt` 주석 참조).
+- pyservice 미가용 시 해당 PDF 만 실패(503/422) — 다른 형식 인제스천·부팅 `ingestAll()`(PDF 미대상)은 영향 없음.
+
 ### 정직한 한계 (Docling 경계)
 - 자유 텍스트에서 **과다 링크(over-linking)** 경향(공동언급이 실제 인과가 아닐 수 있음).
-- 여전히 필요: **Docling** — 스캔/이미지 PDF, 표를 찍은 사진, 복잡한 중첩/전치(transposed) 표. 이 범위는 MVP 밖(Python 사이드카).
+- 여전히 필요: **Docling** — 스캔/이미지 PDF OCR, 표를 찍은 사진, 복잡한 중첩/전치(transposed) 표.
+  (텍스트 레이어 PDF 는 위 pypdf 경로로 처리됨 — docling 은 설치만 하면 같은 `/parse` 가 사용.)
 
 ## API
 - `GET /api/sources` — 원천 파일 목록 + 파일별 추출 요약/미리보기(정형화 전→후 시연용).
