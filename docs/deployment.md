@@ -38,7 +38,10 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v49 (2026-07-09, pyservice v4)** — **형식 온톨로지 1차**: 관계 domain/range 14종
+- **현재 배포 = v50 (2026-07-09, pyservice v4)** — **DB 직독 1단계**: ready()가 매 요청 Postgres
+  `loadAll()` 재동기화 — 조회가 요청 시점 DB 스냅샷. 검증: psql 직접 INSERT/DELETE가 파드 재시작 없이
+  다음 API 응답에 즉시 반영/소멸(실측 PASS). 스모크 PASS. 스펙: specs/2026-07-09-db-first-reads-design.md.
+- v49 (2026-07-09, pyservice v4) — **형식 온톨로지 1차**: 관계 domain/range 14종
   (기존 DB 빈 제약 자동 백필) · 서브타입 21종 + 키워드 자동 분류(프로덕션 61/139 부여, Postgres 영속) ·
   스키마 위반 감사 4종(실데이터 rel-domain 8건 검출 — OCCURRED_IN 역방향 등, 관계 삭제 큐레이션) ·
   RDF Turtle 내보내기(`GET /api/ontology/export?format=ttl` → pyservice `/export`, 실측 3,007 트리플) ·
