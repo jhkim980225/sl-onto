@@ -26,6 +26,27 @@ CREATE TABLE IF NOT EXISTS relation_types (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- 서브타입(단층 분류) — 형식 온톨로지 1차. keywords = 자동 분류기 매칭용.
+CREATE TABLE IF NOT EXISTS object_subtypes (
+  type_id     TEXT NOT NULL REFERENCES object_types(type_id),
+  st_id       TEXT NOT NULL,
+  label_ko    TEXT NOT NULL,
+  keywords    TEXT[] NOT NULL DEFAULT '{}',
+  description TEXT,
+  PRIMARY KEY (type_id, st_id)
+);
+
+-- 타입별 표준 속성 정의 — 노드 props 는 자유 배열 유지, 정의된 key 만 검증 대상.
+CREATE TABLE IF NOT EXISTS property_defs (
+  type_id  TEXT NOT NULL REFERENCES object_types(type_id),
+  key      TEXT NOT NULL,
+  label_ko TEXT NOT NULL,
+  datatype TEXT NOT NULL DEFAULT 'text',            -- text | number | enum
+  options  TEXT[] NOT NULL DEFAULT '{}',            -- enum 전용
+  required BOOLEAN NOT NULL DEFAULT false,
+  PRIMARY KEY (type_id, key)
+);
+
 -- ② 인스턴스 — 온톨로지 "데이터"
 CREATE TABLE IF NOT EXISTS nodes (
   id         TEXT PRIMARY KEY,

@@ -9,7 +9,8 @@ import pg from "pg";
 import type { Pool, PoolClient } from "pg";
 import type { Node, Edge } from "./types";
 import type { SourceInfo } from "./ingest/index";
-import { OBJECT_TYPES, RELATION_TYPES } from "./db/seed-metamodel";
+import { OBJECT_TYPES, RELATION_TYPES, OBJECT_SUBTYPES, PROPERTY_DEFS } from "./db/seed-metamodel";
+import type { Metamodel, ObjectTypeSeed, RelationTypeSeed, SubtypeSeed, PropertyDefSeed } from "./db/seed-metamodel";
 
 const { Pool: PgPool } = pg;
 
@@ -42,10 +43,11 @@ async function doReady(): Promise<void> {
   // import.meta.url/new URL 방식은 Next 번들에서 깨진다("path must be string/URL" TypeError).
   const schemaPath = path.join(process.cwd(), "lib", "db", "schema.sql");
   await p.query(fs.readFileSync(schemaPath, "utf8"));
-  const { rows } = await p.query<{ c: number }>("SELECT count(*)::int AS c FROM object_types");
-  if (rows[0].c === 0) await seedMetamodel(p);
+  await seedMetamodel(p);
 }
 
+// 매 부팅 멱등 실행(ON CONFLICT DO NOTHING) — 기존 DB 도 새 시드(서브타입·속성정의)를 얻는다.
+// domain/range 는 기존 행이 빈 배열(구버전 시드)일 때만 UPDATE — 스키마 편집 UI 없으므로 안전.
 async function seedMetamodel(p: Pool): Promise<void> {
   for (const t of OBJECT_TYPES) {
     await p.query(
@@ -60,7 +62,40 @@ async function seedMetamodel(p: Pool): Promise<void> {
        VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (rel_id) DO NOTHING`,
       [r.rel_id, r.label_ko, r.description, r.src_types, r.dst_types, r.directed]
     );
+    if (r.src_types.length || r.dst_types.length) {
+      await p.query(
+        `UPDATE relation_types SET src_types = $2, dst_types = $3
+         WHERE rel_id = $1 AND src_types = '{}' AND dst_types = '{}'`,
+        [r.rel_id, r.src_types, r.dst_types]
+      );
+    }
   }
+  for (const s of OBJECT_SUBTYPES) {
+    await p.query(
+      `INSERT INTO object_subtypes (type_id, st_id, label_ko, keywords, description)
+       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (type_id, st_id) DO NOTHING`,
+      [s.type_id, s.st_id, s.label_ko, s.keywords, s.description ?? null]
+    );
+  }
+  for (const d of PROPERTY_DEFS) {
+    await p.query(
+      `INSERT INTO property_defs (type_id, key, label_ko, datatype, options, required)
+       VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (type_id, key) DO NOTHING`,
+      [d.type_id, d.key, d.label_ko, d.datatype, d.options ?? [], d.required ?? false]
+    );
+  }
+}
+
+/** 메타모델 로드 — store 인메모리 캐시용(자동 등록된 관계 타입 포함). */
+export async function loadMetamodel(): Promise<Metamodel> {
+  const p = getPool();
+  const [ot, rt, st, pd] = await Promise.all([
+    p.query<ObjectTypeSeed>("SELECT type_id, label_ko, color, icon, description FROM object_types"),
+    p.query<RelationTypeSeed>("SELECT rel_id, label_ko, description, src_types, dst_types, directed FROM relation_types"),
+    p.query<SubtypeSeed>("SELECT type_id, st_id, label_ko, keywords, description FROM object_subtypes"),
+    p.query<PropertyDefSeed & { options: string[] }>("SELECT type_id, key, label_ko, datatype, options, required FROM property_defs"),
+  ]);
+  return { objectTypes: ot.rows, relationTypes: rt.rows, subtypes: st.rows, propertyDefs: pd.rows };
 }
 
 export async function nodeCount(): Promise<number> {
@@ -74,6 +109,7 @@ export async function nodeCount(): Promise<number> {
 function nodePropsJson(n: Node): Record<string, unknown> {
   const p: Record<string, unknown> = {};
   if (n.sub !== undefined) p.sub = n.sub;
+  if (n.st !== undefined) p.st = n.st;
   if (n.hero !== undefined) p.hero = n.hero;
   if (n.hidden !== undefined) p.hidden = n.hidden;
   if (n.ax !== undefined) p.ax = n.ax;
@@ -89,6 +125,7 @@ function rowToNode(row: NodeRow): Node {
   const p = row.props ?? {};
   const n: Node = { id: row.id, type: row.type as Node["type"], label: row.label };
   if (p.sub !== undefined) n.sub = p.sub as string;
+  if (p.st !== undefined) n.st = p.st as string;
   if (p.hero !== undefined) n.hero = p.hero as boolean;
   if (p.hidden !== undefined) n.hidden = p.hidden as boolean;
   if (p.ax !== undefined) n.ax = p.ax as number;
@@ -290,6 +327,20 @@ export async function persistMeta(key: string, value: unknown): Promise<void> {
 
 export async function logChange(op: string, payload: unknown): Promise<void> {
   await logChangeOn(getPool(), op, payload);
+}
+
+/** 서브타입 자동 분류 결과 영속 — nodes.props JSONB 의 'st' 필드만 갱신(한 트랜잭션). */
+export async function persistSubtypeAssignments(assigns: { id: string; st: string }[]): Promise<void> {
+  if (assigns.length === 0) return;
+  await tx(async (c) => {
+    for (const a of assigns) {
+      await c.query(
+        `UPDATE nodes SET props = jsonb_set(props, '{st}', to_jsonb($2::text), true), updated_at = now() WHERE id = $1`,
+        [a.id, a.st]
+      );
+    }
+    await logChangeOn(c, "classify.subtype", { ids: assigns.map((a) => a.id), summary: `서브타입 자동 분류 ${assigns.length}건` });
+  });
 }
 
 /* ────────────────────────── 임베딩 (wave-2 백필·검색) ────────────────────────── */

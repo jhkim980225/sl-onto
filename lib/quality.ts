@@ -6,7 +6,10 @@
 import type { Node } from "./types";
 import { allNodes, outEdges, inEdges, evidenceOf } from "./store";
 
-export type QualityKind = "dup-candidate" | "orphan" | "no-evidence";
+export type QualityKind =
+  | "dup-candidate" | "orphan" | "no-evidence"
+  // 스키마 위반(형식 온톨로지 1차, lib/schema/validate.ts)
+  | "rel-domain" | "bad-subtype" | "missing-prop" | "bad-datatype";
 
 export interface QualityIssue {
   kind: QualityKind;
@@ -14,6 +17,7 @@ export interface QualityIssue {
   detail: string;
   nodeId: string;
   mergeInto?: string; // dup-candidate 전용 — 병합 대상(정식 노드) id
+  edge?: { src: string; rel: string; dst: string }; // rel-domain 전용 — "관계 삭제" 큐레이션 대상
   evidence: string[]; // 근거 문서 파일명(없을 수 있음 — no-evidence 규칙은 의도적으로 빔)
   confidence: number; // %
 }

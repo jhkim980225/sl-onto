@@ -11,6 +11,8 @@ export interface Node {
   type: ObjType;
   label: string;
   sub?: string;
+  /** 서브타입 분류(object_subtypes.st_id) — 키워드 분류기가 자동 부여, 미분류면 undefined */
+  st?: string;
   hero?: boolean;
   hidden?: boolean;            // 신규 프로젝트 등 시나리오 전 숨김
   /** 앵커 좌표(데모 레이아웃 유지용, 선택) */

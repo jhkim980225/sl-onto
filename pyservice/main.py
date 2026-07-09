@@ -173,6 +173,154 @@ def reason(req: ReasonRequest) -> ReasonResponse:
 
 
 # ---------------------------------------------------------------------------
+# /export — RDF Turtle export of the ontology (schema + instances). rdflib
+# serializes; ids/keys are percent-quoted into URIs, Korean labels stay as
+# rdfs:label literals (lang=ko). Failures return an empty graph, never 500.
+# ---------------------------------------------------------------------------
+
+from rdflib import Literal  # noqa: E402
+from rdflib.namespace import RDF, RDFS, XSD  # noqa: E402
+
+SLO = Namespace("http://sl-ontoground.local/onto#")
+_NUM = re.compile(r"^-?\d+(\.\d+)?$")  # xsd:decimal lexical space (no exponent)
+
+
+def _slo(v: str) -> URIRef:
+    return SLO[quote(v, safe="")]
+
+
+class ExpObjectType(BaseModel):
+    type_id: str
+    label_ko: str = ""
+    description: str | None = None
+
+
+class ExpRelationType(BaseModel):
+    rel_id: str
+    label_ko: str = ""
+    src_types: list[str] = []
+    dst_types: list[str] = []
+    directed: bool = True
+
+
+class ExpSubtype(BaseModel):
+    type_id: str
+    st_id: str
+    label_ko: str = ""
+
+
+class ExpPropertyDef(BaseModel):
+    type_id: str
+    key: str
+    label_ko: str = ""
+    datatype: str = "text"
+
+
+class ExpNode(BaseModel):
+    id: str
+    type: str = ""
+    st: str | None = None
+    label: str = ""
+    props: list[list[str]] | None = None
+
+
+class ExpEdge(BaseModel):
+    src: str
+    rel: str
+    dst: str
+
+
+class ExportRequest(BaseModel):
+    objectTypes: list[ExpObjectType] = []
+    relationTypes: list[ExpRelationType] = []
+    subtypes: list[ExpSubtype] = []
+    propertyDefs: list[ExpPropertyDef] = []
+    nodes: list[ExpNode] = []
+    edges: list[ExpEdge] = []
+
+
+class ExportResponse(BaseModel):
+    ttl: str
+    triples: int
+
+
+def _label(g: Graph, u: URIRef, text: str) -> None:
+    if text:
+        g.add((u, RDFS.label, Literal(text, lang="ko")))
+
+
+def _build_export(req: ExportRequest) -> Graph:
+    g = Graph()
+    g.bind("slo", SLO)
+
+    # schema: object types
+    for ot in req.objectTypes:
+        u = _slo(ot.type_id)
+        g.add((u, RDF.type, RDFS.Class))
+        _label(g, u, ot.label_ko)
+        if ot.description:
+            g.add((u, RDFS.comment, Literal(ot.description, lang="ko")))
+
+    # schema: subtypes (single-level)
+    subtype_keys = set()
+    for st in req.subtypes:
+        subtype_keys.add((st.type_id, st.st_id))
+        u = _slo(f"{st.type_id}_{st.st_id}")
+        g.add((u, RDF.type, RDFS.Class))
+        g.add((u, RDFS.subClassOf, _slo(st.type_id)))
+        _label(g, u, st.label_ko)
+
+    # schema: relation types
+    # ponytail: multi domain/range → first type only, empty array → omitted
+    # (1차 단순화 per spec; owl:unionOf when Protégé fidelity matters)
+    for rt in req.relationTypes:
+        u = _slo(rt.rel_id)
+        g.add((u, RDF.type, RDF.Property))
+        _label(g, u, rt.label_ko)
+        if rt.src_types:
+            g.add((u, RDFS.domain, _slo(rt.src_types[0])))
+        if rt.dst_types:
+            g.add((u, RDFS.range, _slo(rt.dst_types[0])))
+
+    # schema: property defs
+    for pd in req.propertyDefs:
+        u = _slo(f"prop_{pd.key}")
+        g.add((u, RDF.type, RDF.Property))
+        g.add((u, RDFS.domain, _slo(pd.type_id)))
+        g.add((u, RDFS.range, XSD.decimal if pd.datatype == "number" else XSD.string))
+        _label(g, u, pd.label_ko)
+
+    # instances: nodes
+    for n in req.nodes:
+        u = _slo(f"n_{n.id}")
+        if n.type:
+            cls = f"{n.type}_{n.st}" if n.st and (n.type, n.st) in subtype_keys else n.type
+            g.add((u, RDF.type, _slo(cls)))
+        _label(g, u, n.label)
+        for p in n.props or []:
+            if len(p) < 2:
+                continue  # malformed pair: skip, never 500
+            k, v = str(p[0]), str(p[1])
+            lit = Literal(v, datatype=XSD.decimal) if _NUM.match(v.strip()) else Literal(v)
+            g.add((u, _slo(f"prop_{k}"), lit))
+
+    # instances: edges
+    for e in req.edges:
+        g.add((_slo(f"n_{e.src}"), _slo(e.rel), _slo(f"n_{e.dst}")))
+
+    return g
+
+
+@app.post("/export", response_model=ExportResponse)
+def export(req: ExportRequest) -> ExportResponse:
+    try:
+        g = _build_export(req)
+        return ExportResponse(ttl=g.serialize(format="turtle"), triples=len(g))
+    except Exception:
+        return ExportResponse(ttl="", triples=0)  # never 500 on export input
+
+
+# ---------------------------------------------------------------------------
 # /llm — in-house vLLM gateway (OpenAI-compatible /chat/completions, qwen3).
 # Absorbs the direct call previously in Next lib/nlsearch.ts. Failures are
 # always HTTP 200 {"ok": false, "error": ...} — callers fall back, never 500.

@@ -10,8 +10,22 @@ import { ingestAll } from "./ingest/index";
 import type { SourceInfo } from "./ingest/index";
 import * as db from "./db";
 import { backfillEmbeddings } from "./embed";
+import { OBJECT_TYPES, RELATION_TYPES, OBJECT_SUBTYPES, PROPERTY_DEFS } from "./db/seed-metamodel";
+import type { Metamodel } from "./db/seed-metamodel";
+import { classifyMissing } from "./schema/classify";
 
 const HAS_DB = db.dbEnabled();
+
+// ── 메타모델 캐시 — 기본은 시드, DB 모드는 hydrate 시 DB 값으로 교체(자동 등록 관계 포함). ──
+let METAMODEL: Metamodel = {
+  objectTypes: OBJECT_TYPES,
+  relationTypes: RELATION_TYPES,
+  subtypes: OBJECT_SUBTYPES,
+  propertyDefs: PROPERTY_DEFS,
+};
+export function getMetamodel(): Metamodel {
+  return METAMODEL;
+}
 
 /** 임베딩 백필을 백그라운드로(부팅·병합 비차단, 실패 무해 — backfillEmbeddings 자체가 멱등·no-throw).
  * 동시 실행 1개로 제한 — 실행 중 재요청은 완료 후 1회 재실행(그 사이 추가된 노드 커버). */
@@ -83,13 +97,21 @@ function rebuildIndex(nodes: Node[], edges: Edge[]) {
 
 /** data/sources 인제스천(실패·공백 시 seed 폴백). 모듈로드/최초 DB 적재 공용. */
 function ingestOrSeed(): { nodes: Node[]; edges: Edge[]; sources: SourceInfo[] } {
-  try {
-    const ing = ingestAll();
-    if (ing.nodes.length > 0) return { nodes: ing.nodes, edges: ing.edges, sources: ing.sources };
-  } catch {
-    /* fall through */
+  const got = (() => {
+    try {
+      const ing = ingestAll();
+      if (ing.nodes.length > 0) return { nodes: ing.nodes, edges: ing.edges, sources: ing.sources };
+    } catch {
+      /* fall through */
+    }
+    return { nodes: [...SEED_NODES], edges: [...SEED_EDGES], sources: [] as SourceInfo[] };
+  })();
+  // 서브타입 자동 분류 — 신규 적재분은 DB 삽입 전에 st 를 채워 한 번에 들어간다.
+  for (const a of classifyMissing(got.nodes, METAMODEL.subtypes)) {
+    const n = got.nodes.find((x) => x.id === a.id);
+    if (n) n.st = a.st;
   }
-  return { nodes: [...SEED_NODES], edges: [...SEED_EDGES], sources: [] };
+  return got;
 }
 
 // DATABASE_URL 없으면 지금 즉시 인메모리 구축(기존 동작 — sync 테스트가 ready() 없이 읽는다).
@@ -113,6 +135,7 @@ export function ready(): Promise<void> {
 
 async function hydrate(): Promise<void> {
   await db.ready(); // 스키마 적용 + 메타모델 시드(멱등)
+  METAMODEL = await db.loadMetamodel(); // 자동 등록된 관계 타입 포함 — 검증·내보내기의 기준
   if ((await db.nodeCount()) === 0) {
     // 최초 부팅: 인제스천 결과를 DB 로 승격
     const seed = ingestOrSeed();
@@ -127,6 +150,16 @@ async function hydrate(): Promise<void> {
     RUNTIME_SOURCES.length = 0;
     for (const s of sources) RUNTIME_SOURCES.push(s);
     ACTIVE_DRAWING = activeDrawing;
+    // 구버전 적재분 서브타입 백필 — DB 커밋 성공 후 메모리 반영(write-through 관례)
+    const assigns = classifyMissing(NODES, METAMODEL.subtypes);
+    if (assigns.length > 0) {
+      await db.persistSubtypeAssignments(assigns);
+      for (const a of assigns) {
+        const n = byId.get(a.id);
+        if (n) n.st = a.st;
+      }
+      console.log(`[schema] 서브타입 백필: ${assigns.length}건 분류`);
+    }
   }
   scheduleEmbedBackfill(); // 부팅 후 누락 임베딩 자동 채움(비차단)
 }
@@ -140,6 +173,11 @@ export async function mergeDelta(
   edges: Edge[],
   op: string = "ingest"
 ): Promise<{ addedNodes: Node[]; addedEdges: Edge[]; touched: string[] }> {
+  // 신규 노드 서브타입 분류 — DB 삽입 전에 st 포함(기존 노드는 ON CONFLICT 로 불변)
+  for (const a of classifyMissing(nodes, METAMODEL.subtypes)) {
+    const n = nodes.find((x) => x.id === a.id);
+    if (n) n.st = a.st;
+  }
   if (HAS_DB) await db.persistUpsertGraph(nodes, edges, op); // DB 먼저(정합 실패 시 여기서 throw → 메모리 미변경)
   const addedNodes: Node[] = [];
   const addedIds = new Set<string>();
