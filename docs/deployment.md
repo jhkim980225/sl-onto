@@ -38,7 +38,12 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v54 (2026-07-09, pyservice v7)** — **인제스천 LLM 구조화 옵트인**: `/api/ingest?llm=1` —
+- **현재 배포 = v56 (2026-07-10, pyservice v7)** — **구조 리팩토링 + 성능**: 순삭 ~1,100줄
+  (pyservice 클라이언트·fnv1a·패널 마크업 복붙 통합, Workbench 1,522→1,290, infer 684→542,
+  ingest/index 676→533, 라우트 보일러플레이트 lib 하강) + ready() 재동기화 TTL 2s +
+  /api/ontology 라우트 gzip(201KB→17.3KB 전송, avg 56→26ms; 전 조회 API avg ≤26ms).
+  검증: 테스트 100 pass·빌드·스모크·UI 콘솔 에러 0. 리포트 docs/test-reports/2026-07-10-리팩토링-성능.md.
+- v54 (2026-07-09, pyservice v7) — **인제스천 LLM 구조화 옵트인**: `/api/ingest?llm=1` —
   규칙 파싱 빈약(객체<3) 시 vLLM(task=extract)로 개체·관계 보강(vocab id 재사용·fold 매칭·AUTO 0.60·
   실패 관계 폐기·EVIDENCED_BY 연결). 기본 OFF, 실패 시 조용히 규칙 결과 유지.
 - v53 (2026-07-09, pyservice v6) — **PDF 인제스천**: pyservice `POST /parse`(pypdf, docling lazy 옵트인),
