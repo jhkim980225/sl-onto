@@ -4,6 +4,7 @@
 // 골든 룰: 근거(evidence)·경로(trace, 실존 엣지만)·확신도(confidence) 없는 항목은 만들지 않는다.
 import type { Contradiction, Node } from "./types";
 import { allNodes, getNode, outEdges, inEdges, evidenceOf } from "./store";
+import { severityOf } from "./infer/confidence";
 
 const arrow = "→";
 const hop = (a: string, rel: string, b: string) => `${a}${arrow}${rel}${arrow}${b}`;
@@ -25,18 +26,7 @@ function fogOccurredEdge(projId: string) {
   return outEdges(projId).find((e) => e.rel === "OCCURRED_IN" && isFog(getNode(e.dst)?.label));
 }
 
-/** 심각도 S 파싱 (lib/infer.ts severityOf 와 동일 규칙). 순수 함수 하나 공유하자고 별도 모듈을
- * 만들 정도는 아니라 값 그대로 복제 — infer.ts 와 어긋나면 여기만 고치면 됨. */
-function severityOf(n: Node): number {
-  if (!n.props) return 5;
-  for (const [k, v] of n.props) {
-    if (/심각도|(^|[^A-Za-z])S($|[^A-Za-z])/.test(k) || k.trim() === "S") {
-      const m = /([0-9]+(\.[0-9]+)?)/.exec(v);
-      if (m) return parseFloat(m[1]);
-    }
-  }
-  return 5;
-}
+// 심각도 S 파싱은 lib/infer/confidence.ts 의 severityOf 공유 (infer.ts 와 단일 구현).
 
 /* ───────── (a) 기록 괴리: 커뮤니티 언급(소비자언급.*) 있는데 결로·습기 OCCURRED_IN 이력 없음 ─────────
  * lib/nlsearch.ts answerConsumerCross 의 판정 루프와 동일 — 그 함수가 이 헬퍼를 그대로 호출한다

@@ -7,8 +7,6 @@
 // 주의(멀티 레플리카): 병합은 이 프로세스의 인메모리 store 만 바꾼다. 클러스터 데모는
 // replicas=1 또는 sticky session 으로 운영할 것 (lib/store.ts mergeDelta 주석 참조).
 import { NextResponse } from "next/server";
-import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import * as XLSX from "xlsx";
 import { ingestOne, ingestPdfText } from "@/lib/ingest";
@@ -16,6 +14,7 @@ import { llmExtractToDelta } from "@/lib/ingest/llm-assist";
 import { vocabCatalog } from "@/lib/ingest/normalize";
 import { readDeck } from "@/lib/ingest/pptx";
 import { readDoc } from "@/lib/ingest/docx";
+import { withTempFile } from "@/lib/ingest/tempfile";
 import { llmExtract } from "@/lib/llm";
 import { parseDocument, parseEnabled } from "@/lib/parse";
 import { mergeDelta, registerSource, allNodes, allEdges, ready } from "@/lib/store";
@@ -28,19 +27,9 @@ const ALLOWED_EXT = /\.(xlsx|pptx|docx|dxf|pdf)$/i;
 const bad = (status: number, error: string) => NextResponse.json({ ok: false, error }, { status });
 const totals = () => ({ nodes: allNodes().length, edges: allEdges().length });
 
-/** 버퍼를 임시파일(os.tmpdir)로 내려 ingestOne 을 태운다. 파싱 실패는 throw. */
-function ingestBufferAs(fileName: string, buf: Buffer) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slonto-ingest-"));
-  const tmp = path.join(dir, `upload${path.extname(fileName).toLowerCase()}`);
-  try {
-    fs.writeFileSync(tmp, buf);
-    return ingestOne(tmp, fileName);
-  } finally {
-    try {
-      fs.rmSync(dir, { recursive: true, force: true });
-    } catch {}
-  }
-}
+/** 버퍼를 임시파일로 내려 ingestOne 을 태운다. 파싱 실패는 throw. */
+const ingestBufferAs = (fileName: string, buf: Buffer) =>
+  withTempFile(fileName, buf, (tmp) => ingestOne(tmp, fileName));
 
 export async function POST(req: Request) {
   await ready();
@@ -136,18 +125,11 @@ async function tryLlmAssist(name: string, buf: Buffer, pdfText: string) {
 
 /** pptx/docx 산문 텍스트 추출(파서는 파일 경로를 받으므로 임시파일 경유). */
 function extractProseText(name: string, buf: Buffer): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slonto-llm-"));
-  const tmp = path.join(dir, `upload${path.extname(name).toLowerCase()}`);
-  try {
-    fs.writeFileSync(tmp, buf);
+  return withTempFile(name, buf, (tmp) => {
     if (/\.pptx$/i.test(name)) return readDeck(tmp).slides.flatMap((s) => s.lines).join("\n");
     if (/\.docx$/i.test(name)) return readDoc(tmp).paragraphs.join("\n");
     return "";
-  } finally {
-    try {
-      fs.rmSync(dir, { recursive: true, force: true });
-    } catch {}
-  }
+  });
 }
 
 // 샘플 인제스천 — 매 클릭마다 새 현장 보고(차수 증가)가 결로·습기(FMFOG)에 정확히 3개 노드

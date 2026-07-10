@@ -2,18 +2,12 @@
 // 신규 설계 조건(DesignInput) → 온톨로지 그래프 탐색 → 근거·확신도가 붙은 설계 검토 체크리스트.
 // 하드코딩 금지: 모든 항목은 store 그래프에서 계산되고, trace 는 실제 엣지 경로다.
 // 참조: docs/features/inference.md, docs/data-model.md, FMEA_온톨로지_시연_v2.html
-import type { DesignInput, InferResponse, CheckItem, Node, Edge, MasterAudit } from "./types";
+import type { DesignInput, InferResponse, CheckItem, Node, Edge } from "./types";
 import { getNode, allNodes, outEdges, inEdges, evidenceOf } from "./store";
-import { SYNONYMS } from "./nlsearch";
+import { buildMasterAudit } from "./infer/master-audit";
+import { confidenceOf, severityOf } from "./infer/confidence";
 
-/* ────────────────────────── 확신도 가중치 (튜닝 상수) ────────────────────────── */
-// confidence = clamp( w1*유사도 + w2*근거수정규화 + w3*심각도정규화 + w4*마스터일치 + 조건부스트 ) * 100
-const W1_SIM = 0.4;
-const W2_EVID = 0.15;
-const W3_SEV = 0.3;
-const W4_MASTER = 0.15;
-const EVID_FULL = 10; // 근거 문서 정규화 기준 (이 이상이면 1.0)
-const SEV_FULL = 10; // 심각도 S 정규화 기준
+// 확신도 공식·가중치 상수는 lib/infer/confidence.ts, 마스터 대조는 lib/infer/master-audit.ts 로 분리.
 
 // 조건 부스트 (파이프라인 4단계)
 const BOOST_MARKET = 0.08; // 시장 법규 일치
@@ -103,18 +97,6 @@ function nodeText(n: Node): string {
   let t = `${n.label} ${n.sub ?? ""}`;
   if (n.props) for (const [k, v] of n.props) t += ` ${k} ${v}`;
   return norm(t);
-}
-
-/** 심각도 S 파싱 (props 에서 '심각도 S' 또는 'S' 키). 없으면 기본 5. */
-function severityOf(n: Node | undefined): number {
-  if (!n || !n.props) return 5;
-  for (const [k, v] of n.props) {
-    if (/심각도|(^|[^A-Za-z])S($|[^A-Za-z])/.test(k) || k.trim() === "S") {
-      const m = /([0-9]+(\.[0-9]+)?)/.exec(v);
-      if (m) return parseFloat(m[1]);
-    }
-  }
-  return 5;
 }
 
 /* ────────────────────────── 조건(시장·형상·광원) ────────────────────────── */
@@ -247,88 +229,6 @@ function collectDocs(id: string, tv: Traversal, limit = 3): string[] {
 
 function pushUnique(arr: string[], v: string | undefined | null) {
   if (v && !arr.includes(v)) arr.push(v);
-}
-
-/* ────────────────────────── 마스터 대조(masterAudit) ────────────────────────── */
-// 마스터 노드의 "항목"/"항목N" props 를 필수 항목 문자열로 분해("·"/","로 병기된 값 지원 —
-// 기존 MGAP/MTHERM/MBEAM 은 단일 "항목" 안에 "·"로 여러 항목을 담고, 신규 마스터는 항목1..N 컬럼).
-function requiredItemsOf(m: Node): string[] {
-  const out: string[] = [];
-  if (!m.props) return out;
-  for (const [k, v] of m.props) {
-    if (!/^항목\d*$/.test(k)) continue;
-    for (const part of v.split(/[·,]/).map((s) => s.trim()).filter(Boolean)) {
-      if (!out.includes(part)) out.push(part);
-    }
-  }
-  return out;
-}
-
-const STOP_TOKENS = new Set(["이상", "이하", "이내"].map(norm));
-const isNumericTok = (t: string) => /^[0-9]/.test(t);
-
-// SYNONYMS(lib/nlsearch.ts) 그룹에서 토큰이 속한 동의어 집합(자기 자신 포함)을 반환.
-function synonymGroup(tok: string): string[] {
-  const t = norm(tok);
-  for (const [base, syns] of SYNONYMS) {
-    const all = [base, ...syns].map(norm);
-    if (all.includes(t)) return all;
-  }
-  return [t];
-}
-
-/** 필수 항목이 텍스트 코퍼스에 커버되는 비율: 1=완전 일치(covered), 0<x<1=부분(unknown), 0=전무(missing).
- * 오탐보다 안전 — 애매하면(부분 일치) unknown 으로 두고 covered 를 단정하지 않는다. */
-function coverageRatio(req: string, corpus: string): number {
-  const whole = norm(req).trim();
-  if (!whole) return 0; // 공백 항목은 판정 불가 — missing 처리 (리뷰 지적)
-  const toks = whole.split(/\s+/).filter((t) => t.length >= 2 && !STOP_TOKENS.has(t) && !isNumericTok(t));
-  // 전부 불용어/숫자면 통짜 문자열로 폴백하되, 불용어 단독("이상" 등)이 코퍼스 아무데나
-  // 걸리는 오탐을 막기 위해 3자 미만이면 판정 포기(missing).
-  if (toks.length === 0) {
-    if (whole.length < 3 || STOP_TOKENS.has(whole)) return 0;
-    toks.push(whole);
-  }
-  let hit = 0;
-  for (const t of toks) if (synonymGroup(t).some((s) => corpus.includes(s))) hit++;
-  return hit / toks.length;
-}
-
-function concernCorpus(c: Concern): string {
-  return norm(`${c.title} ${c.desc} ${c.evidence.join(" ")}`);
-}
-
-/** 이번 추론에서 도달한 concern 들을 REF_MASTER 마스터별로 묶어 필수 항목 커버리지를 계산. */
-function buildMasterAudit(items: { c: Concern }[]): MasterAudit[] {
-  const byMaster = new Map<string, { master: Node; corpus: string[]; evidence: string[] }>();
-  for (const { c } of items) {
-    if (!c.masterNode) continue;
-    let g = byMaster.get(c.masterNode.id);
-    if (!g) {
-      g = { master: c.masterNode, corpus: [], evidence: [] };
-      byMaster.set(c.masterNode.id, g);
-    }
-    g.corpus.push(concernCorpus(c));
-    for (const e of c.evidence) pushUnique(g.evidence, e);
-  }
-
-  const audits: MasterAudit[] = [];
-  for (const g of byMaster.values()) {
-    const required = requiredItemsOf(g.master);
-    if (required.length === 0) continue; // 항목 없는 마스터는 대조 대상 아님
-    const corpus = g.corpus.join(" ");
-    const covered: string[] = [];
-    const missing: string[] = [];
-    const unknown: string[] = [];
-    for (const req of required) {
-      const ratio = coverageRatio(req, corpus);
-      if (ratio >= 1) covered.push(req);
-      else if (ratio > 0) unknown.push(req);
-      else missing.push(req);
-    }
-    audits.push({ master: { id: g.master.id, label: g.master.label }, required, covered, missing, unknown, evidence: g.evidence });
-  }
-  return audits;
 }
 
 /* ────────────────────────── 메인 파이프라인 ────────────────────────── */
@@ -639,46 +539,4 @@ function addCauseConcern(
 
 function mostSimilarConcern(concerns: Map<string, Concern>, fmId: string): number {
   return concerns.get(fmId)?.sim ?? 0.5;
-}
-
-/* ────────────────────────── 확신도 공식 ────────────────────────── */
-// confidence 최종 값(반올림된 %)은 기존 산식과 1%p도 다르지 않다 — breakdown 은 이미 계산되던
-// 항을 버리지 않고 그대로 동반 반환할 뿐이다(순수 노출, 로직 변경 없음).
-function confidenceOf(c: Concern): { confidence: number; breakdown: NonNullable<CheckItem["breakdown"]> } {
-  const sim = clamp01(c.sim);
-  const evidenceNorm = clamp01(c.docCount / EVID_FULL);
-  const severityNorm = clamp01(c.severity / SEV_FULL);
-  const masterMatch = c.hasMaster ? 1 : 0;
-
-  let simTerm = W1_SIM * sim;
-  let evidTerm = W2_EVID * evidenceNorm;
-  let sevTerm = W3_SEV * severityNorm;
-  let masterTerm = W4_MASTER * masterMatch;
-  let boostTerm = c.boost;
-
-  const raw = simTerm + evidTerm + sevTerm + masterTerm + boostTerm;
-  const confidence = Math.round(clamp01(raw) * 100);
-
-  // raw > 1 (부스트 누적으로 상한 초과)이면 confidence 는 clamp01 로 1(100%)에 묶인다 —
-  // breakdown 항도 동일 비율로 축소해 합계가 clamp 후 값과 어긋나지 않게 한다.
-  if (raw > 1) {
-    const scale = 1 / raw;
-    simTerm *= scale;
-    evidTerm *= scale;
-    sevTerm *= scale;
-    masterTerm *= scale;
-    boostTerm *= scale;
-  }
-
-  return {
-    confidence,
-    breakdown: {
-      sim: simTerm,
-      evid: evidTerm,
-      sev: sevTerm,
-      master: masterTerm,
-      boost: boostTerm,
-      weights: { sim: W1_SIM, evid: W2_EVID, sev: W3_SEV, master: W4_MASTER },
-    },
-  };
 }
