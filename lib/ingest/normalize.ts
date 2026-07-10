@@ -5,6 +5,7 @@
 //   - 동의어      → 0.82
 //   - 비표준 원본 코드(예: "외관-B" → FMGAP) → 0.72 (2014년 최초 보고 코드)
 import type { ObjType } from "../types";
+import { fnv1a } from "../fold";
 
 interface Entry {
   id: string;
@@ -125,15 +126,7 @@ const AUTO_CONF = 0.66;
 const AUTO_REG = new Map<string, Entry>(); // id → 엔트리(canonical 조회용)
 const AUTO_BY_KEY = new Map<string, string>(); // `${type}|${nfcLabel}` → id
 
-// FNV-1a 32bit — 문자열에 대한 순수·결정론적 해시(플랫폼 무관, 랜덤/시각 미사용).
-function stableHash(s: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(16).padStart(8, "0");
-}
+// FNV-1a 32bit(lib/fold.ts fnv1a) — AUTO_ id 바이트 호환 유지(같은 라벨 = 같은 id).
 
 /** 원문을 표준 id 로 해결하되, 통제 어휘에 없으면 기대 타입으로 신규 엔티티를 생성·등록한다. */
 export function resolveOrCreate(raw: string, type: ObjType): NormResult {
@@ -144,7 +137,7 @@ export function resolveOrCreate(raw: string, type: ObjType): NormResult {
   const key = `${type}|${label}`;
   let id = AUTO_BY_KEY.get(key);
   if (!id) {
-    id = `AUTO_${type}_${stableHash(label)}`;
+    id = `AUTO_${type}_${fnv1a(label)}`;
     AUTO_BY_KEY.set(key, id);
     AUTO_REG.set(id, { id, type, label });
   }

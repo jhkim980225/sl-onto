@@ -13,8 +13,8 @@
 - `lib/store.ts` `mergeDelta(nodes, edges)` — 인메모리 인덱스에 증분 병합. **멱등**(같은 파일 재병합 → 빈 델타).
   기존 노드는 덮어쓰지 않음(원본 보존). `registerSource`/`getRuntimeSources` 로 `/api/sources` 에 런타임 파일 노출.
 - `POST /api/ingest` — multipart `file` 업로드 또는 `{"sample":true}`.
-  샘플은 `lib/ingest/sample.ts` 가 SheetJS 인메모리 생성(안개등램프·리어시그널램프 2종 로테이션, 소진 시 `alreadyIngested`).
-  샘플엔 **신규 엔티티(auto-create 0.66)와 기존 엔티티 해소(아우터 렌즈 0.95)** 가 함께 들어 있어 두 능력을 동시 시연.
+  샘플은 라우트(`handleSample`)가 SheetJS 인메모리 생성 — 매 클릭 차수 증가(`FMEA_현장보고_결로_n차.xlsx`)로 항상 새 델타가 생기고, 응답 `focus:"FMFOG"` 로 결로·습기 노드를 활성화.
+  샘플엔 **신규 엔티티(auto-create 0.66)와 기존 엔티티 해소(결로·습기 FMFOG)** 가 함께 들어 있어 두 능력을 동시 시연.
 - 응답: `{ ok, file, source, delta:{nodes,edges,updated}, totals }`.
 
 ## 프론트

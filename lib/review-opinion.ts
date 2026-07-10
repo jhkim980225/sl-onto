@@ -2,6 +2,7 @@
 // 프레임워크 비의존 — app/api/review-opinion/route.ts 가 이 함수들로 얇게 오케스트레이션한다.
 import type { DesignInput, InferResponse, MasterAudit, Contradiction } from "./types";
 import type { ReviewChecklistItem } from "./llm";
+import { fnv1a } from "./fold";
 
 /** 조건을 고정 키 순서로 정규화한 JSON 문자열 — 캐시 키·해시 입력의 결정성 보장. */
 export function canonicalCondition(input: DesignInput): string {
@@ -15,15 +16,9 @@ export function canonicalCondition(input: DesignInput): string {
   });
 }
 
-/** FNV-1a 32bit 해시(hex) — 결정론적·의존성 없음. 캐시 키 충돌은 이 조건 공간에서 실질적 우려 없음. */
+/** FNV-1a 32bit 해시(hex, lib/fold.ts fnv1a) — 결정론적. 캐시 키 충돌은 이 조건 공간에서 실질적 우려 없음. */
 export function hashKey(input: DesignInput): string {
-  const s = canonicalCondition(input);
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(16).padStart(8, "0");
+  return fnv1a(canonicalCondition(input));
 }
 
 /** 사람이 읽는 조건 요약 — Checklist.tsx 헤더 문구와 동일 톤(부품 앵커 vs 신규 설계 조건). */

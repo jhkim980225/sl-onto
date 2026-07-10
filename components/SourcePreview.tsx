@@ -5,8 +5,8 @@
 // "원문 → 표준코드/라벨 (확신도 NN%)" 형태로 보여준다. 원본은 절대 덮어쓰지 않고 표준 매핑·확신도를
 // 함께 보존한다는 온톨로지의 약속을 실제 API 데이터(/api/sources)로 증명하는 화면.
 import { useEffect, useState } from "react";
-import { TYPES } from "./typeStyles";
 import type { SourceInfo } from "./sourceTypes";
+import DoclingPreviewList from "./DoclingPreviewList";
 
 interface SourcePreviewProps {
   source: SourceInfo;
@@ -75,34 +75,7 @@ export default function SourcePreview({ source, onClose }: SourcePreviewProps) {
         </>
       ) : null}
 
-      <div className="sec-label">Docling 추출 → 정규화 (원문 → 표준코드·라벨)</div>
-      <div className="src-prev-list">
-        {source.preview.map((p, i) => {
-          const tp = TYPES[p.type];
-          const mapped = p.raw !== p.label;
-          const pct = Math.round(p.confidence * 100);
-          return (
-            <div className={"src-prev-row" + (mapped ? " mapped" : "")} key={i}>
-              <div className="src-prev-line">
-                <span className="src-prev-raw">&ldquo;{p.raw}&rdquo;</span>
-                <span className="src-prev-arrow">→</span>
-                <span className="src-prev-glyph" style={{ color: tp.c }}>
-                  {tp.g}
-                </span>
-                <span className="src-prev-obj">{p.label}</span>
-                <span className="src-prev-id">{p.id}</span>
-              </div>
-              <div className="src-prev-conf-row">
-                {mapped && <span className="src-prev-tag">매핑됨</span>}
-                <div className="bar">
-                  <i style={{ width: `${pct}%` }} />
-                </div>
-                <span className="cv">확신도 {pct}%</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <DoclingPreviewList preview={source.preview} />
 
       <div
         style={{

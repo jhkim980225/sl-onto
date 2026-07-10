@@ -2,8 +2,9 @@
 
 // FEDA OntoGround 워크벤치 — FMEA_온톨로지_시연_v2.html 의 오케스트레이션(§5~7, DOM 셸)을 이식.
 // 하드코딩된 CORE/CORE_EDGES/DOC_RULES/CHECKLIST는 전부 제거하고 API(fetch) 응답으로 대체한다.
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Graph, { type FocusInfo, type GraphCounts, type GraphHandle, type ViewInfo } from "./Graph";
+import ChaosOverlay from "./ChaosOverlay";
 import Inspector, { type NavEntry } from "./Inspector";
 import Checklist from "./Checklist";
 import SourcePanel from "./SourcePanel";
@@ -19,14 +20,13 @@ import AskPanel, { type AskEntry } from "./AskPanel";
 import QualityPanel from "./QualityPanel";
 import ReasonPanel from "./ReasonPanel";
 import { buildNodeIndex, type NodeIndex } from "./nodeIndex";
+import { useContradictions } from "./useContradictions";
+import { useQualityScan } from "./useQualityScan";
+import { useReason } from "./useReason";
 import type { SourceInfo, SourcesResponse } from "./sourceTypes";
 import type { IngestResponse } from "./ingestTypes";
 import type { RegionsResponse, RegionSummary } from "./condensationTypes";
-import type { QualityIssue, QualityResponse } from "@/lib/quality";
-import type { DerivedEdge } from "@/lib/reason";
 import type {
-  Contradiction,
-  ContradictionsResponse,
   DesignInput,
   Edge,
   GraphResponse,
@@ -49,53 +49,6 @@ const DEFAULT_CONDITION: DesignInput = {
   shape: ["슬림 하우징", "밀폐형"],
   components: ["아우터 렌즈"],
 };
-
-const CHAOS_SAMPLES: [string, string][] = [
-  ["XLSX", "FMEA_2016_HL03.xlsx"],
-  ["XLSX", "검토시트_수출형.xlsx"],
-  ["PPTX", "재발방지_간극.pptx"],
-  ["PPTX", "대책서_배광이슈.pptx"],
-  ["TIF", "2D스캔_단면_주석.tif"],
-  ["BOM", "BOM_HL07_rev4.xlsx"],
-  ["PTS", "PTS-8812_클레임"],
-  ["PTS", "PTS-9034_외관"],
-  ["SPEC", "HKMC_ES_광학.pdf"],
-  ["XLSX", "시험결과_방열.xlsx"],
-];
-
-interface ChaosChip {
-  key: string;
-  ext: string;
-  fn: string;
-  left: number;
-  top: number;
-  rot: number;
-  fx: number;
-  fy: number;
-  delay: number;
-}
-
-function makeChaosChips(samples: [string, string][] = CHAOS_SAMPLES): ChaosChip[] {
-  const chips: ChaosChip[] = [];
-  const pool = samples.length > 0 ? samples : CHAOS_SAMPLES;
-  for (let i = 0; i < 72; i++) {
-    const [ext, fn] = pool[i % pool.length];
-    const x = 6 + Math.random() * 84;
-    const y = 6 + Math.random() * 78;
-    chips.push({
-      key: `chip${i}`,
-      ext,
-      fn,
-      left: x,
-      top: y,
-      rot: Number((Math.random() * 8 - 4).toFixed(1)),
-      fx: (50 - x) * 6,
-      fy: (46 - y) * 6,
-      delay: Number((Math.random() * 0.4).toFixed(2)),
-    });
-  }
-  return chips;
-}
 
 /** 좌측 탐색기 서브타입 집계 — 타입별 st_id("" = 미분류) → 건수. doc 은 탐색기 대상 아님. */
 function computeStCounts(nodes: Node[]): Record<string, Record<string, number>> {
@@ -134,7 +87,6 @@ export default function Workbench() {
   // 병합 모드 상태를 그래프 클릭 콜백(이른 정의)에서 참조하기 위한 ref
   const mergeSourceRef = useRef<{ id: string; label: string } | null>(null);
   const handleMergeIntoRef = useRef<((id: string) => void) | null>(null);
-  const [chaosChips, setChaosChips] = useState<ChaosChip[]>(() => makeChaosChips());
   const [chaosGone, setChaosGone] = useState(false);
   const [chaosHidden, setChaosHidden] = useState(false);
 
@@ -182,18 +134,6 @@ export default function Workbench() {
   >("inspector");
   // 객체 질문(Q&A) 대화 이력 — 패널이 인스펙터로 전환돼도 유지되도록 Workbench 가 보관.
   const [askHistory, setAskHistory] = useState<AskEntry[]>([]);
-  // 전역 모순 스캔 — 온톨로지 구축 완료 후 상시 조회(질문 없이도 노출).
-  const [contradictions, setContradictions] = useState<Contradiction[]>([]);
-  const [contradictionsLoading, setContradictionsLoading] = useState(false);
-  const [contradictionsError, setContradictionsError] = useState<string | null>(null);
-  // 온톨로지 품질 스캔 — 중복 후보·고립 노드·근거 누락(질문 없이도 배지로 노출, 액션 후 재스캔).
-  const [quality, setQuality] = useState<QualityIssue[]>([]);
-  const [qualityLoading, setQualityLoading] = useState(false);
-  const [qualityError, setQualityError] = useState<string | null>(null);
-  // pyservice /reason 유도 관계 — 온톨로지 구축 완료 후 상시 조회(배지, DB 미반영 조회 전용 오버레이).
-  const [derivedRelations, setDerivedRelations] = useState<DerivedEdge[]>([]);
-  const [reasonLoading, setReasonLoading] = useState(false);
-  const [reasonError, setReasonError] = useState<string | null>(null);
   const [condensationRegions, setCondensationRegions] = useState<RegionSummary[] | null>(null);
   const [condensationLoading, setCondensationLoading] = useState(false);
   const [condensationError, setCondensationError] = useState<string | null>(null);
@@ -241,9 +181,6 @@ export default function Workbench() {
       .then((data) => {
         if (cancelled) return;
         setSources(data.sources);
-        // 혼돈 오버레이 칩도 실제 파일명으로 재시딩(간단히 가능한 범위 내에서 실데이터화).
-        const samples: [string, string][] = data.sources.map((s) => [s.type, s.file]);
-        if (samples.length > 0) setChaosChips(makeChaosChips(samples));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -257,49 +194,22 @@ export default function Workbench() {
     };
   }, []);
 
-  // 온톨로지 구축 완료 후 전역 모순 스캔 — 배지("⚠ 모순 N건"). 큐레이션 후 재스캔에도 재사용.
-  const refreshContradictions = useCallback(() => {
-    setContradictionsLoading(true);
-    return fetch("/api/contradictions")
-      .then((res) => {
-        if (!res.ok) throw new Error(`모순 스캔 실패 (${res.status})`);
-        return res.json() as Promise<ContradictionsResponse>;
-      })
-      .then((data) => {
-        setContradictions(data.items);
-        setContradictionsError(null);
-      })
-      .catch((err) => setContradictionsError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setContradictionsLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!ontologyBuilt) return;
-    void refreshContradictions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ontologyBuilt]);
-
-  // 온톨로지 품질 스캔 — 배지("🧹 정리 N건")로 상시 노출. 큐레이션 액션 후 재스캔에도 재사용.
-  const refreshQuality = useCallback(() => {
-    setQualityLoading(true);
-    return fetch("/api/quality")
-      .then((res) => {
-        if (!res.ok) throw new Error(`품질 스캔 실패 (${res.status})`);
-        return res.json() as Promise<QualityResponse>;
-      })
-      .then((data) => {
-        setQuality(data.items);
-        setQualityError(null);
-      })
-      .catch((err) => setQualityError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setQualityLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!ontologyBuilt) return;
-    void refreshQuality();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ontologyBuilt]);
+  // 전역 모순 스캔 · 품질 스캔 — 온톨로지 구축 완료 후 상시 조회, 큐레이션 액션 후 refresh 재스캔.
+  const {
+    items: contradictions,
+    loading: contradictionsLoading,
+    error: contradictionsError,
+    refresh: refreshContradictions,
+  } = useContradictions(ontologyBuilt);
+  const {
+    items: quality,
+    loading: qualityLoading,
+    error: qualityError,
+    refresh: refreshQuality,
+    setError: setQualityError,
+  } = useQualityScan(ontologyBuilt);
+  // pyservice /reason 유도 관계 — 배지("🔗 유도 관계 N건", DB 미반영 조회 전용 오버레이).
+  const { derivedRelations, loading: reasonLoading, error: reasonError } = useReason(ontologyBuilt);
 
   // 서브타입 라벨 매핑(형식 온톨로지 1차) — 실패해도 탐색기 서브타입 트리만 생략(치명 아님).
   useEffect(() => {
@@ -311,28 +221,6 @@ export default function Workbench() {
       })
       .then((d) => setSubtypeDefs(d.subtypes))
       .catch(() => {});
-  }, [ontologyBuilt]);
-
-  // 유도 관계(pyservice /reason) — 배지("🔗 유도 관계 N")로 상시 노출. pyservice 미가용이면 조용히 빈 배열.
-  const refreshReason = useCallback(() => {
-    setReasonLoading(true);
-    return fetch("/api/reason")
-      .then((res) => {
-        if (!res.ok) throw new Error(`유도 관계 조회 실패 (${res.status})`);
-        return res.json() as Promise<{ items: DerivedEdge[] }>;
-      })
-      .then((data) => {
-        setDerivedRelations(data.items);
-        setReasonError(null);
-      })
-      .catch((err) => setReasonError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setReasonLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!ontologyBuilt) return;
-    void refreshReason();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ontologyBuilt]);
 
   const handleSelectSource = useCallback(
@@ -374,12 +262,6 @@ export default function Workbench() {
 
   // 인스펙터 근거 문서 행의 "미리보기 가능" 판정용 파일명 목록
   const sourceFileNames = useMemo(() => sources.map((s) => s.file), [sources]);
-
-  const sourceTypeCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const s of sources) m.set(s.type, (m.get(s.type) ?? 0) + 1);
-    return m;
-  }, [sources]);
 
   const stageName = useMemo(() => {
     const names = ["흩어진 원천 데이터", ontologyBuilt ? "온톨로지 구축 완료" : "온톨로지 구축 중", "신규 설계 추론"];
@@ -1284,53 +1166,13 @@ export default function Workbench() {
             </button>
           )}
 
-          {!chaosHidden && (
-            <div className="chaos" id="chaos">
-              {chaosChips.map((c) => (
-                <div
-                  key={c.key}
-                  className={"chip" + (chaosGone ? " gone" : "")}
-                  style={
-                    {
-                      left: `${c.left}%`,
-                      top: `${c.top}%`,
-                      transform: `rotate(${c.rot}deg)`,
-                      transitionDelay: `${c.delay}s`,
-                      "--fx": `${c.fx}px`,
-                      "--fy": `${c.fy}px`,
-                    } as CSSProperties
-                  }
-                >
-                  <span className="x">{c.ext}</span>
-                  {c.fn}
-                </div>
-              ))}
-            </div>
-          )}
-          {!chaosHidden && (
-            <div className="chaos-cta" id="chaosCta" style={{ opacity: chaosGone ? 0 : 1, transition: "opacity .5s" }}>
-              <div className="hint">
-                {sourcesLoading ? (
-                  "흩어진 원천 파일을 불러오는 중…"
-                ) : sources.length > 0 ? (
-                  <>
-                    {[...sourceTypeCounts.entries()].map(([type, count], i) => (
-                      <span key={type}>
-                        {i > 0 && " · "}
-                        {type} <b>{count}</b>
-                      </span>
-                    ))}{" "}
-                    — 총 <b>{sources.length}</b>개 파일, 설계자 한 사람이 다 기억할 수 없습니다
-                  </>
-                ) : (
-                  <>
-                    원천 파일 없음{sourcesError ? ` (${sourcesError})` : ""} — 시드 데이터로 동작 중
-                  </>
-                )}
-              </div>
-              {/* 온톨로지 구축 버튼 제거 — 기본 진입이 구축 완료 화면 직행(DB 원본) */}
-            </div>
-          )}
+          <ChaosOverlay
+            hidden={chaosHidden}
+            gone={chaosGone}
+            sources={sources}
+            sourcesLoading={sourcesLoading}
+            sourcesError={sourcesError}
+          />
           {ontologyError && (
             <div
               className="disclaimer"

@@ -6,6 +6,8 @@
 // ContradictionsPanel 과 같은 배지→패널→그래프 포커스 관례를 따른다(구조 복제·간소화).
 import type { QualityIssue } from "@/lib/quality";
 import { labelOf, type NodeIndex } from "./nodeIndex";
+import ConfidenceBar from "./ConfidenceBar";
+import PanelHeader from "./PanelHeader";
 
 interface QualityPanelProps {
   loading: boolean;
@@ -44,14 +46,7 @@ export default function QualityPanel({
 }: QualityPanelProps) {
   return (
     <>
-      <div className="cond-head">
-        <span className="sec-label" style={{ margin: 0 }}>
-          온톨로지 정리
-        </span>
-        <span className="cond-back" onClick={onClose}>
-          ← 인스펙터로
-        </span>
-      </div>
+      <PanelHeader title="온톨로지 정리" onClose={onClose} />
 
       {loading && <div className="insp-empty">온톨로지를 스캔하는 중…</div>}
       {error && (
@@ -78,14 +73,7 @@ export default function QualityPanel({
                 {it.title}
               </h3>
               <p>{it.detail}</p>
-              <div className="cf">
-                <div className="bar">
-                  <i style={{ width: `${it.confidence}%`, background: "linear-gradient(90deg,#e8c33d,#8a6d1f)" }} />
-                </div>
-                <span className="cv" style={{ color: meta.color }}>
-                  {it.confidence}%
-                </span>
-              </div>
+              <ConfidenceBar pct={it.confidence} barBg="linear-gradient(90deg,#e8c33d,#8a6d1f)" color={meta.color} />
 
               {it.evidence.length > 0 && (
                 <>

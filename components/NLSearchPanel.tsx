@@ -6,6 +6,7 @@
 // hit 클릭 시 부모의 handleNodeClick(id)로 그래프 포커스 + 인스펙터 로딩을 수행한다.
 import type { NLSearchResponse } from "@/lib/types";
 import { TYPES, TYPE_NAMES } from "./typeStyles";
+import PanelHeader from "./PanelHeader";
 
 interface NLSearchPanelProps {
   query: string;
@@ -19,14 +20,7 @@ interface NLSearchPanelProps {
 export default function NLSearchPanel({ query, loading, error, result, onSelectHit, onClose }: NLSearchPanelProps) {
   return (
     <>
-      <div className="cond-head">
-        <span className="sec-label" style={{ margin: 0 }}>
-          자연어 검색
-        </span>
-        <span className="cond-back" onClick={onClose}>
-          ← 인스펙터로
-        </span>
-      </div>
+      <PanelHeader title="자연어 검색" onClose={onClose} />
 
       {query && <div className="nls-query">&ldquo;{query}&rdquo;</div>}
 

@@ -9,6 +9,7 @@ import type { ObjectDetail, Rel } from "@/lib/types";
 import type { BomFinding } from "@/lib/bom-consistency";
 import { TYPES, TYPE_NAMES } from "./typeStyles";
 import { groupRelations, relKo } from "./relLabels";
+import ConfidenceBar from "./ConfidenceBar";
 
 /** 탐색 히스토리 한 항목 — via는 "어떻게 이 객체에 도달했는가"(관계명+방향 또는 진입 경로 태그). */
 export interface NavEntry {
@@ -485,12 +486,7 @@ function BomCheckSection({ obj, onGo }: { obj: ObjectDetail; onGo: (id: string, 
           </span>
           <h3>{f.title}</h3>
           <p>{f.detail}</p>
-          <div className="cf">
-            <div className="bar">
-              <i style={{ width: `${f.confidence}%` }} />
-            </div>
-            <span className="cv">{f.confidence}%</span>
-          </div>
+          <ConfidenceBar pct={f.confidence} />
           {f.evidence.length > 0 ? (
             <div className="evs">
               {f.evidence.map((e, j) => (

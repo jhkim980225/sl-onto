@@ -6,6 +6,7 @@
 import { useState } from "react";
 import type { AskRel } from "@/lib/ask";
 import { relKo } from "./relLabels";
+import PanelHeader from "./PanelHeader";
 
 export interface AskEntry {
   objectId: string;
@@ -100,14 +101,7 @@ export default function AskPanel({ objectId, objectLabel, history, onAppend, onF
 
   return (
     <>
-      <div className="cond-head">
-        <span className="sec-label" style={{ margin: 0 }}>
-          🤖 객체 질문
-        </span>
-        <span className="cond-back" onClick={onClose}>
-          ← 인스펙터로
-        </span>
-      </div>
+      <PanelHeader title="🤖 객체 질문" onClose={onClose} />
 
       {objectId ? (
         <div className="ask-target">

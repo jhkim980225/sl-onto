@@ -9,8 +9,9 @@
 // 그래프에서 선택 + 인스펙터로 로드한다(결론 → 근거 객체로 바로 이동하는 provenance 배선).
 import { useEffect, useState } from "react";
 import type { CheckItem, DesignInput, InferResponse } from "@/lib/types";
-import { buildChains, findIdByText, labelOf, parseHop, type NodeIndex } from "./nodeIndex";
-import { relKo } from "./relLabels";
+import { buildChains, findIdByText, parseHop, type NodeIndex } from "./nodeIndex";
+import ConfidenceBar from "./ConfidenceBar";
+import { TraceChain } from "./TraceNode";
 
 interface ChecklistProps {
   loading: boolean;
@@ -320,12 +321,7 @@ function ChecklistRow({ c, index, revealed, expanded, onToggle, nodeIndex, onSel
       <span className="no">CHECK {String(index + 1).padStart(2, "0")}</span>
       <h3>{c.title}</h3>
       {!expanded && <p className="chk-desc-preview">{preview}</p>}
-      <div className="cf">
-        <div className="bar">
-          <i style={{ width: `${c.confidence}%` }} />
-        </div>
-        <span className="cv">{c.confidence}%</span>
-      </div>
+      <ConfidenceBar pct={c.confidence} />
 
       {expanded && (
         <div className="chk-detail" onClick={(ev) => ev.stopPropagation()}>
@@ -353,17 +349,7 @@ function ChecklistRow({ c, index, revealed, expanded, onToggle, nodeIndex, onSel
           {chains.length > 0 && (
             <>
               <div className="sec-label">근거 경로</div>
-              {chains.map((chain, ci) => (
-                <div className="trace-chain" key={ci}>
-                  <TraceNode id={chain[0].a} nodeIndex={nodeIndex} onSelectObject={onSelectObject} />
-                  {chain.map((hop, hi) => (
-                    <span key={hi} style={{ display: "contents" }}>
-                      <span className="trace-rel">—{hop.rel ? relKo(hop.rel) : "→"}→</span>
-                      <TraceNode id={hop.b} nodeIndex={nodeIndex} onSelectObject={onSelectObject} />
-                    </span>
-                  ))}
-                </div>
-              ))}
+              <TraceChain chains={chains} nodeIndex={nodeIndex} onSelectObject={onSelectObject} />
             </>
           )}
         </div>
@@ -409,32 +395,5 @@ function ConfidenceBreakdown({
         {" "}= {confidence}%
       </p>
     </>
-  );
-}
-
-function TraceNode({
-  id,
-  nodeIndex,
-  onSelectObject,
-}: {
-  id: string;
-  nodeIndex: NodeIndex;
-  onSelectObject: (id: string) => void;
-}) {
-  const known = nodeIndex.has(id);
-  return (
-    <span
-      className={"trace-node" + (known ? "" : " self")}
-      onClick={
-        known
-          ? (ev) => {
-              ev.stopPropagation();
-              onSelectObject(id);
-            }
-          : undefined
-      }
-    >
-      {labelOf(nodeIndex, id)}
-    </span>
   );
 }

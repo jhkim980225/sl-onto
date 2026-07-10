@@ -7,6 +7,8 @@
 import { useRef, useState, type DragEvent } from "react";
 import { TYPES, TYPE_NAMES } from "./typeStyles";
 import type { IngestResponse } from "./ingestTypes";
+import DoclingPreviewList from "./DoclingPreviewList";
+import PanelHeader from "./PanelHeader";
 
 const ACCEPT = ".xlsx,.pptx,.docx,.dxf";
 
@@ -55,14 +57,7 @@ export default function IngestPanel({
 
   return (
     <>
-      <div className="cond-head">
-        <span className="sec-label" style={{ margin: 0 }}>
-          문서 인제스천
-        </span>
-        <span className="cond-back" onClick={onClose}>
-          ← 인스펙터로
-        </span>
-      </div>
+      <PanelHeader title="문서 인제스천" onClose={onClose} />
 
       <div className="ing-intro">
         이미 구축된 온톨로지에 새 문서를 증분 반영합니다 — 실제 운영 파이프라인의 축소판.
@@ -155,38 +150,7 @@ export default function IngestPanel({
             </div>
           )}
 
-          {result.source.preview.length > 0 && (
-            <>
-              <div className="sec-label">Docling 추출 → 정규화 (원문 → 표준코드·라벨)</div>
-              <div className="src-prev-list">
-                {result.source.preview.map((p, i) => {
-                  const tp = TYPES[p.type];
-                  const mapped = p.raw !== p.label;
-                  const pct = Math.round(p.confidence * 100);
-                  return (
-                    <div className={"src-prev-row" + (mapped ? " mapped" : "")} key={i}>
-                      <div className="src-prev-line">
-                        <span className="src-prev-raw">&ldquo;{p.raw}&rdquo;</span>
-                        <span className="src-prev-arrow">→</span>
-                        <span className="src-prev-glyph" style={{ color: tp.c }}>
-                          {tp.g}
-                        </span>
-                        <span className="src-prev-obj">{p.label}</span>
-                        <span className="src-prev-id">{p.id}</span>
-                      </div>
-                      <div className="src-prev-conf-row">
-                        {mapped && <span className="src-prev-tag">매핑됨</span>}
-                        <div className="bar">
-                          <i style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="cv">확신도 {pct}%</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
+          {result.source.preview.length > 0 && <DoclingPreviewList preview={result.source.preview} />}
 
           {newNodes.length > 0 && (
             <>

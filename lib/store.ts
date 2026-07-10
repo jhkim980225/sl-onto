@@ -370,17 +370,6 @@ export function neighbors(
   return out;
 }
 
-/** 관계 경로 탐색: relPath를 순서대로 따라간 끝 노드들 */
-export function traverse(startId: string, relPath: string[]): Node[] {
-  let frontier = new Set<string>([startId]);
-  for (const rel of relPath) {
-    const next = new Set<string>();
-    for (const id of frontier) for (const n of neighbors(id, { rel })) next.add(n.id);
-    frontier = next;
-  }
-  return [...frontier].map((id) => byId.get(id)!).filter(Boolean);
-}
-
 /** 근거 문서: id 에서 EVIDENCED_BY 로 연결된 doc 들 */
 export function evidenceOf(id: string): Doc[] {
   return outEdges(id)
@@ -414,6 +403,3 @@ export function getObject(id: string): ObjectDetail | null {
   }
   return { ...n, relations, evidence: evidenceOf(id) };
 }
-
-/** DB 모드에서 임베딩 백필 대상(embedding IS NULL) — admin 백필/부팅이 사용. */
-export function isDbMode(): boolean { return HAS_DB; }

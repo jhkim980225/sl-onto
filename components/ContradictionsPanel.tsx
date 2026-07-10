@@ -4,8 +4,10 @@
 // 판정은 GET /api/contradictions(lib/contradictions.ts)에서 온다 — 이 컴포넌트는 렌더만 한다.
 // trace/근거 렌더는 Checklist.tsx 와 동일한 nodeIndex 헬퍼(buildChains/parseHop/relKo)를 재사용한다.
 import type { Contradiction } from "@/lib/types";
-import { buildChains, findIdByText, labelOf, parseHop, type NodeIndex } from "./nodeIndex";
-import { relKo } from "./relLabels";
+import { buildChains, findIdByText, parseHop, type NodeIndex } from "./nodeIndex";
+import ConfidenceBar from "./ConfidenceBar";
+import PanelHeader from "./PanelHeader";
+import { TraceChain } from "./TraceNode";
 
 interface ContradictionsPanelProps {
   loading: boolean;
@@ -32,14 +34,7 @@ export default function ContradictionsPanel({
 }: ContradictionsPanelProps) {
   return (
     <>
-      <div className="cond-head">
-        <span className="sec-label" style={{ margin: 0 }}>
-          전역 모순 스캔
-        </span>
-        <span className="cond-back" onClick={onClose}>
-          ← 인스펙터로
-        </span>
-      </div>
+      <PanelHeader title="전역 모순 스캔" onClose={onClose} />
 
       {loading && <div className="insp-empty">온톨로지를 스캔하는 중…</div>}
       {error && (
@@ -62,14 +57,7 @@ export default function ContradictionsPanel({
               </span>
               <h3>{it.title}</h3>
               <p>{it.detail}</p>
-              <div className="cf">
-                <div className="bar">
-                  <i style={{ width: `${it.confidence}%`, background: "linear-gradient(90deg,#e8a33d,#b3453c)" }} />
-                </div>
-                <span className="cv" style={{ color: "#b3453c" }}>
-                  {it.confidence}%
-                </span>
-              </div>
+              <ConfidenceBar pct={it.confidence} barBg="linear-gradient(90deg,#e8a33d,#b3453c)" color="#b3453c" />
 
               {it.projects.length > 0 && (
                 <div className="evs">
@@ -107,49 +95,12 @@ export default function ContradictionsPanel({
               {chains.length > 0 && (
                 <>
                   <div className="sec-label">근거 경로</div>
-                  {chains.map((chain, ci) => (
-                    <div className="trace-chain" key={ci}>
-                      <TraceNode id={chain[0].a} nodeIndex={nodeIndex} onSelectObject={onSelectObject} />
-                      {chain.map((hop, hi) => (
-                        <span key={hi} style={{ display: "contents" }}>
-                          <span className="trace-rel">—{hop.rel ? relKo(hop.rel) : "→"}→</span>
-                          <TraceNode id={hop.b} nodeIndex={nodeIndex} onSelectObject={onSelectObject} />
-                        </span>
-                      ))}
-                    </div>
-                  ))}
+                  <TraceChain chains={chains} nodeIndex={nodeIndex} onSelectObject={onSelectObject} />
                 </>
               )}
             </div>
           );
         })}
     </>
-  );
-}
-
-function TraceNode({
-  id,
-  nodeIndex,
-  onSelectObject,
-}: {
-  id: string;
-  nodeIndex: NodeIndex;
-  onSelectObject: (id: string) => void;
-}) {
-  const known = nodeIndex.has(id);
-  return (
-    <span
-      className={"trace-node" + (known ? "" : " self")}
-      onClick={
-        known
-          ? (ev) => {
-              ev.stopPropagation();
-              onSelectObject(id);
-            }
-          : undefined
-      }
-    >
-      {labelOf(nodeIndex, id)}
-    </span>
   );
 }

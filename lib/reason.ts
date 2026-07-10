@@ -1,7 +1,8 @@
-// Python 사이드카(/reason) 클라이언트 — 상태 없음. 온톨로지 전체를 보내 "스스로 유도한 관계"를 받는다.
+// Python 사이드카(/reason) 태스크 래퍼 — 상태 없음. 온톨로지 전체를 보내 "스스로 유도한 관계"를 받는다.
 // 골든 룰: 원본 보존 — 유도 엣지는 store에 병합하지 않고 조회 전용(overlay). pyservice 가 죽어도 조회를 막지 않는다
-// (lib/embed.ts 와 동일 패턴: 어떤 네트워크 오류도 삼켜서 빈 배열, throw 금지).
+// (어떤 네트워크 오류도 삼켜서 빈 배열, throw 금지 — 전송은 lib/pyservice.ts 공용 클라이언트).
 import { allEdges, allNodes } from "./store";
+import { pyEnabled, pyPost } from "./pyservice";
 
 const REASON_TIMEOUT_MS = 10000;
 
@@ -17,38 +18,11 @@ export interface DerivedEdge {
   confidence: number; // 0..1
 }
 
-export function reasonEnabled(): boolean {
-  return !!process.env.PYSERVICE_URL;
-}
-
-function pysvc(): string {
-  return (process.env.PYSERVICE_URL || "").replace(/\/$/, "");
-}
-
 /** 현재 온톨로지 전체를 pyservice 에 보내 유도 관계를 받는다. 비활성·미가용·오류 시 []. */
 export async function deriveRelations(): Promise<DerivedEdge[]> {
-  if (!reasonEnabled()) return [];
+  if (!pyEnabled()) return []; // 비활성 시 페이로드 조립 자체를 생략
   const nodes = allNodes().map((n) => ({ id: n.id, type: n.type, label: n.label }));
   const edges = allEdges().map((e) => ({ src: e.src, rel: e.rel, dst: e.dst, weight: e.weight }));
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), REASON_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${pysvc()}/reason`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nodes, edges }),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) {
-      console.warn(`[reason] pyservice ${res.status} — 유도 관계 없이 진행`);
-      return [];
-    }
-    const data = await res.json();
-    return Array.isArray(data?.derived) ? (data.derived as DerivedEdge[]) : [];
-  } catch (e) {
-    console.warn(`[reason] pyservice unavailable (${(e as Error).message}) — 유도 관계 없이 진행`);
-    return [];
-  } finally {
-    clearTimeout(timer);
-  }
+  const data = await pyPost<{ derived?: DerivedEdge[] }>("/reason", { nodes, edges }, REASON_TIMEOUT_MS, "reason");
+  return Array.isArray(data?.derived) ? data.derived : [];
 }

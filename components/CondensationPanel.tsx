@@ -6,6 +6,7 @@
 // 단면도(CondensationDrawing)를 함께 렌더링한다. 값은 전부 API 응답 — 하드코딩 없음.
 import { useEffect, useState } from "react";
 import CondensationDrawing from "./CondensationDrawing";
+import PanelHeader from "./PanelHeader";
 import { riskColor, type CondensationDetail, type RegionKey, type RegionSummary } from "./condensationTypes";
 
 interface CondensationPanelProps {
@@ -46,14 +47,7 @@ export default function CondensationPanel({ regions, onSelectObject, onOpenEvide
 
   return (
     <>
-      <div className="cond-head">
-        <span className="sec-label" style={{ margin: 0 }}>
-          결로 지역별 분석
-        </span>
-        <span className="cond-back" onClick={onClose}>
-          ← 인스펙터로
-        </span>
-      </div>
+      <PanelHeader title="결로 지역별 분석" onClose={onClose} />
       <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>
         {detail ? detail.anchor.component.label : "아우터 렌즈"} → {detail ? detail.anchor.failure.label : "결로·습기"}
       </h2>
