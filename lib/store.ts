@@ -128,6 +128,10 @@ if (!HAS_DB) {
  * 동시 요청은 진행 중 동기화 프로미스를 공유(중복 SELECT 방지). 실패는 캐시하지 않는다. */
 let readyPromise: Promise<void> | undefined;
 let syncInFlight: Promise<void> | undefined;
+let lastSyncAt = 0;
+// 재동기화 TTL — 이 창 안의 연속 요청은 직전 스냅샷 재사용(요청당 4쿼리+O(V+E) 재인덱스 절감).
+// psql 직접 변경 반영이 최대 2초 지연되지만 브라우저 새로고침 한 번보다 짧다 — DB 직독 체감 불변.
+const SYNC_TTL_MS = 2000;
 
 async function syncFromDb(): Promise<void> {
   const { nodes, edges, sources, activeDrawing } = await db.loadAll();
@@ -135,6 +139,7 @@ async function syncFromDb(): Promise<void> {
   RUNTIME_SOURCES.length = 0;
   for (const s of sources) RUNTIME_SOURCES.push(s);
   ACTIVE_DRAWING = activeDrawing;
+  lastSyncAt = Date.now();
 }
 
 export function ready(): Promise<void> {
@@ -146,7 +151,8 @@ export function ready(): Promise<void> {
     });
     return readyPromise;
   }
-  // 부팅 이후: 요청마다 DB 재동기화(동시 요청은 공유)
+  if (Date.now() - lastSyncAt < SYNC_TTL_MS) return readyPromise; // TTL 내 — 스냅샷 재사용
+  // 부팅 이후: TTL 지난 요청은 DB 재동기화(동시 요청은 공유)
   syncInFlight ??= readyPromise
     .then(() => syncFromDb())
     .finally(() => {
