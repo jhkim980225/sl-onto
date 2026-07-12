@@ -74,7 +74,7 @@ function parseTraceIds(trace: string[], idSet: Set<string>): string[] {
   return [...found];
 }
 
-export default function Workbench() {
+export default function Workbench({ onReset }: { onReset: () => void }) {
   const graphRef = useRef<GraphHandle | null>(null);
   const graphDataRef = useRef<GraphResponse | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -942,9 +942,8 @@ export default function Workbench() {
     [handleNodeClick]
   );
 
-  const handleReset = useCallback(() => {
-    window.location.reload();
-  }, []);
+  // 소프트 리셋 — 부모(WorkbenchLoader)가 key 를 바꿔 리마운트한다(하드 리프레시 없음).
+  const handleReset = onReset;
 
   return (
     <>
