@@ -301,6 +301,22 @@ export function infer(input: DesignInput): InferResponse {
       c.masterNode = master;
     }
 
+    // 부품 앵커 모드: 이 고장모드가 과거 어느 프로젝트에서 발생했는지(proj→OCCURRED_IN→fm)를 근거로 붙인다.
+    // 데이터의 OCCURRED_IN 은 proj→fm 방향이라 fm 기준 in-edge — follow()(out-edge 전용)로는 못 걸어
+    // 여기서 직접 순회한다. 기본(프로젝트 앵커) 경로는 proj 에서 출발하므로 불필요 → item 모드에만 적용.
+    if (originKind === "item") {
+      const occ = inEdges(fm.id).filter((e) => e.rel === "OCCURRED_IN");
+      for (const e of occ.slice(0, 3)) {
+        const proj = getNode(e.src);
+        if (!proj || proj.type !== "proj") continue;
+        tv.edges.add(edgeKey(e));
+        tv.objects.add(proj.id);
+        pushUnique(c.trace, hopStr(e)); // proj→OCCURRED_IN→fm — 발생 프로젝트 경로
+        pushUnique(c.evidence, proj.label); // 발생 프로젝트를 근거 칩으로
+        for (const chip of collectDocs(proj.id, tv, 1)) pushUnique(c.evidence, chip);
+      }
+    }
+
     // 5단계: 근거 부착 (고장모드 문서 + 원인 문서 + 마스터/조치/앵커 라벨)
     const docChips = collectDocs(fm.id, tv, 2);
     for (const chip of docChips) pushUnique(c.evidence, chip);

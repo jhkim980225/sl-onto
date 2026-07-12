@@ -177,6 +177,13 @@ test("anchorItem 지정 시 그 부품의 고장 이력으로 스코프된다 (�
     r.checklist.some((c) => c.trace.some((t) => t.includes("HAS_FAILURE"))),
     "trace 에 부품→HAS_FAILURE 홉이 없음"
   );
+  // 부품 검토도 "과거 어느 프로젝트에서 발생했나"(proj→OCCURRED_IN→fm)를 붙여야 한다.
+  // 데이터의 OCCURRED_IN 은 proj→fm 방향(fm 기준 in-edge)이라, 이 홉이 없으면 부품 검토가
+  // 과거 사례 근거를 통째로 잃는다(회귀 방지 — 실제 발생 이력 있는 고장모드가 최소 1건 존재).
+  assert.ok(
+    r.checklist.some((c) => c.trace.some((t) => /OCCURRED_IN/.test(t))),
+    "부품 앵커 trace 에 proj→OCCURRED_IN→fm 발생 이력 홉이 없음 (과거 사례 근거 유실)"
+  );
 });
 
 test("anchorItem 없으면 유사 프로젝트 기반 유지 (기존 동작 회귀 방지)", () => {
