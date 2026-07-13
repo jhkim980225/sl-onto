@@ -99,6 +99,15 @@ function nodeText(n: Node): string {
   return norm(t);
 }
 
+/** 법규 노드의 시장 매칭 전용 텍스트 — label + 국가/지역/시장 프롭 값만.
+ * 서술형 프롭(예: FMVSS 108 비고 "유럽과 배광 기준 상이")에 타 시장 키워드가 substring 으로 걸려
+ * 유럽 설계에 북미 법규(FMVSS)가 잡히던 오매칭(전문가 검증 버그1) 방지 — 매칭 대상 필드를 좁힌다. */
+function regMarketText(n: Node): string {
+  let t = n.label;
+  if (n.props) for (const [k, v] of n.props) if (/국가|지역|시장|market|region/i.test(k)) t += ` ${v}`;
+  return norm(t);
+}
+
 /* ────────────────────────── 조건(시장·형상·광원) ────────────────────────── */
 function marketKeywords(m: string): string[] {
   const mm = norm(m);
@@ -107,6 +116,8 @@ function marketKeywords(m: string): string[] {
     유럽: ["유럽", "ECE", "R149", "Europe"],
     한국: ["한국", "KMVSS", "Korea"],
     중국: ["중국", "GB", "China"],
+    // 아시아: 데이터에 아시아 전용 법규가 없어 한국(KMVSS)을 대표 시장으로 매핑(SL 본거지). 없으면 부스트 무발생이던 버그3.
+    아시아: ["아시아", "Asia", "한국", "KMVSS", "Korea"],
   };
   for (const k of Object.keys(map)) if (mm.includes(norm(k))) return map[k].map(norm);
   return mm ? [mm] : [];
@@ -339,7 +350,7 @@ export function infer(input: DesignInput): InferResponse {
       (master ? ` 표준 마스터 ${master.label} 필수 참조 — 누락 방지.` : "");
 
     // ── 4단계 부분: 시장 법규 부스트 (북미 → FMVSS 108(RUS) 활성, 유럽 전용 배제) ──
-    const marketReg = regs.map((r) => r.node).find((rn) => textMatchesAny(nodeText(rn), marketKeys));
+    const marketReg = regs.map((r) => r.node).find((rn) => textMatchesAny(regMarketText(rn), marketKeys));
     if (marketReg) {
       const regEdge = findEdge(fm.id, isRel("UNDER_REG"), marketReg.id);
       if (regEdge) pushUnique(c.trace, hopStr(regEdge)); // fm→UNDER_REG→reg
@@ -405,8 +416,9 @@ export function infer(input: DesignInput): InferResponse {
   if (!itemScoped) {
     // 슬림 → 수축 원인(CSHRINK)
     if (slimActive) addCauseConcern(concerns, tv, "수축", "shrink-slim", BOOST_SLIM, "(슬림 형상)");
-    // LED → 방열 인과사슬(CTHERM→FMBEAM)
-    if (ledActive) addCauseConcern(concerns, tv, "방열|발열|열", "led-thermal", BOOST_LED, "(LED 방열)");
+    // LED → 방열 인과사슬(CTHERM→FMBEAM). 정규식에서 단독 "열" 제거 — "씰링 열화"(결로계열)에
+    // 오매칭해 방열 부스트가 엉뚱한 원인에 붙던 버그2 방지. 방열 관련 원인만 구체 매칭.
+    if (ledActive) addCauseConcern(concerns, tv, "방열|발열|과열|열충격|열변형", "led-thermal", BOOST_LED, "(LED 방열)");
     // 밀폐·방수 형상 → 결로·습기 가중 + 벤트·씰링 원인
     if (fogActive) {
       for (const c of concerns.values()) {
