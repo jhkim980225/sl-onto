@@ -143,6 +143,8 @@ export interface GraphHandle {
   setFocusExpand: (on: boolean) => void;
   /** 큐레이션 반영: 노드/특정 엣지를 캔버스에서 제거(서버 삭제·병합 후 호출) */
   removeFromCanvas: (nodeIds: string[], edgeKeys: string[]) => void;
+  /** 결과 프레임(Table/RAW/오버뷰)용 — 현재 뷰에 보이는 노드/엣지 스냅샷(읽기 전용, 렌더 무변경). */
+  getView: () => { nodes: Node[]; edges: Edge[] };
 }
 
 /** 포커스 상태 통지 — 숨긴 이웃 수를 UI 버튼("숨겨진 관계 N개 더 보기")에 표시하기 위함. */
@@ -197,6 +199,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
     addDelta: GraphHandle["addDelta"];
     setFocusExpand: GraphHandle["setFocusExpand"];
     removeFromCanvas: GraphHandle["removeFromCanvas"];
+    getView: GraphHandle["getView"];
   } | null>(null);
 
   useImperativeHandle(
@@ -215,6 +218,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
       addDelta: (...args) => controllerRef.current?.addDelta(...args),
       setFocusExpand: (on: boolean) => controllerRef.current?.setFocusExpand(on),
       removeFromCanvas: (...args) => controllerRef.current?.removeFromCanvas(...args),
+      getView: () => controllerRef.current?.getView() ?? { nodes: [], edges: [] },
     }),
     []
   );
@@ -1524,6 +1528,19 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
       addDelta,
       setFocusExpand,
       removeFromCanvas,
+      // 현재 뷰 스냅샷 — "표시 중 N"(notifyView)과 동일한 가시 판정. GNode→Node 는 렌더 필드 제거.
+      getView: () => {
+        const vis = nodes.filter((n) => n.added && !n.hiddenNow && !n.hidden);
+        const visIds = new Set(vis.map((n) => n.id));
+        const viewNodes: Node[] = vis.map((n) => ({
+          id: n.id, type: n.type, label: n.label, sub: n.sub, st: n.st,
+          ext: n.ext, parent: n.parent, props: n.props,
+        }));
+        const viewEdges: Edge[] = edges
+          .filter((e) => e.added && !e.hiddenNow && visIds.has(e.a) && visIds.has(e.b))
+          .map((e) => ({ src: e.a, rel: e.rel, dst: e.b, weight: e.weight, scen: e.scen }));
+        return { nodes: viewNodes, edges: viewEdges };
+      },
     };
 
     return () => {
