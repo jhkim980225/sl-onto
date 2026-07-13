@@ -10,9 +10,11 @@ export default function DoclingPreviewList({
   highlightIds,
 }: {
   preview: SourcePreviewItem[];
-  /** 이 id 집합에 든 매핑 객체 행을 강조(답변 근거 하이라이트). 없으면 강조 없음. */
+  /** 강조 매칭 토큰(id 또는 라벨). 행의 id·label·raw 중 하나가 들면 강조(답변 근거). 없으면 강조 없음. */
   highlightIds?: Set<string>;
 }) {
+  const isHl = (p: SourcePreviewItem) =>
+    !!highlightIds && (highlightIds.has(p.id) || highlightIds.has(p.label) || highlightIds.has(p.raw));
   return (
     <>
       <div className="sec-label">Docling 추출 → 정규화 (원문 → 표준코드·라벨)</div>
@@ -21,7 +23,7 @@ export default function DoclingPreviewList({
           const tp = TYPES[p.type];
           const mapped = p.raw !== p.label;
           const pct = Math.round(p.confidence * 100);
-          const hl = !!highlightIds?.has(p.id);
+          const hl = isHl(p);
           return (
             <div className={"src-prev-row" + (mapped ? " mapped" : "") + (hl ? " hl" : "")} data-hl={hl ? "1" : undefined} key={i}>
               <div className="src-prev-line">

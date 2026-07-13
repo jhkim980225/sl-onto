@@ -38,12 +38,15 @@ const EXAMPLES = [
   "어떤 조치가 효과적이었나?",
 ];
 
-// 문서에서 강조할 객체 id — 질문 대상 + 답변이 인용한 관계의 상대 객체(고장모드·원인 등).
+// 문서에서 강조할 매칭 토큰 — 질문 대상 + 인용 관계 상대의 id·라벨 둘 다.
+// preview 행은 표준 id 또는 라벨로 매핑돼 있어(문서마다 다름) id만으로는 자주 안 걸린다 → 라벨도 포함.
 // 인용이 없으면 전체 관계 상대까지 폴백(그 문서에서 뭐가 근거인지 최대한 보여준다).
 function docHighlightIds(h: AskEntry): string[] {
-  const cited = h.rels.filter((r) => h.citedRels.includes(r.no)).map((r) => r.otherId);
-  const base = cited.length > 0 ? cited : h.rels.map((r) => r.otherId);
-  return [h.objectId, ...base];
+  const cited = h.rels.filter((r) => h.citedRels.includes(r.no));
+  const base = cited.length > 0 ? cited : h.rels;
+  const tokens = [h.objectId, h.objectLabel];
+  for (const r of base) tokens.push(r.otherId, r.otherLabel);
+  return [...new Set(tokens.filter(Boolean))];
 }
 
 export default function AskPanel({ objectId, objectLabel, history, onAppend, onFocusNode, onOpenDoc, onClose }: AskPanelProps) {

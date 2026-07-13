@@ -20,8 +20,11 @@ export default function SourcePreview({ source, onClose, highlightIds }: SourceP
   const [enlarged, setEnlarged] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // 이 문서에서 강조 대상(답변 근거)이 실제 몇 행인지 — 안내 + 스크롤 판단.
-  const hlCount = highlightIds ? source.preview.filter((p) => highlightIds.has(p.id)).length : 0;
+  // 이 문서에서 강조 대상(답변 근거)이 실제 몇 행인지 — id·label·raw 매칭(DoclingPreviewList와 동일).
+  const hlCount = highlightIds
+    ? source.preview.filter((p) => highlightIds.has(p.id) || highlightIds.has(p.label) || highlightIds.has(p.raw)).length
+    : 0;
+  const wantedHl = !!highlightIds && highlightIds.size > 0;
 
   // 근거 하이라이트가 있으면 첫 강조 행으로 스크롤(문서 열자마자 "여기가 근거" 보이게).
   useEffect(() => {
@@ -88,9 +91,11 @@ export default function SourcePreview({ source, onClose, highlightIds }: SourceP
         </>
       ) : null}
 
-      {hlCount > 0 && (
+      {wantedHl && (
         <div className="src-hl-note">
-          🔎 답변 근거로 인용된 <b>{hlCount}개</b> 항목을 강조했습니다.
+          {hlCount > 0
+            ? <>🔎 답변 근거로 인용된 <b>{hlCount}개</b> 항목을 강조했습니다.</>
+            : <>이 문서에서는 답변 인용 항목이 직접 추출되지 않았습니다 — 다른 근거 문서를 확인하세요.</>}
         </div>
       )}
       <div ref={listRef}>
