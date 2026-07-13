@@ -263,11 +263,18 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
     (file: string, highlightIds?: string[]) => {
       const found = sources.find((s) => s.file === file);
       if (!found) return;
-      setSourceHighlight(new Set(highlightIds ?? []));
+      // 명시 토큰(질문 답변 근거) 없으면, 현재 선택 객체 라벨 + 관계 상대 라벨을 기본 강조로 —
+      // 인스펙터·체크리스트에서 근거 문서를 열어도 그 객체 언급이 원문에서 강조되게.
+      const tokens =
+        highlightIds ??
+        (inspectorObj
+          ? [inspectorObj.label, ...inspectorObj.relations.map((r) => r.otherLabel)].filter(Boolean)
+          : []);
+      setSourceHighlight(new Set(tokens));
       setSelectedSource(found);
       setSourceModalOpen(true);
     },
-    [sources]
+    [sources, inspectorObj]
   );
 
   // 인스펙터 근거 문서 행의 "미리보기 가능" 판정용 파일명 목록
