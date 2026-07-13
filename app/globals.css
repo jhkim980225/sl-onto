@@ -367,7 +367,7 @@ svg#graph.fullview .edge.dim{opacity:.03}
 .ft-block-label{position:sticky;top:-8px;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);background:var(--bg-raise);border-bottom:1px solid var(--line-soft);padding:2px 0 4px;margin-bottom:4px}
 .ft-line{font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--ink-dim);white-space:pre-wrap;word-break:break-word;padding:0 3px;border-radius:3px}
 .ft-line[data-hl="1"]{background:#f2fbff}
-mark.ft-hl{background:#d5f0fb;color:inherit;border-radius:2px;padding:0 1px}
+mark.ft-hl{background:#ffe27a;color:var(--ink);font-weight:700;border-radius:2px;padding:0 2px}
 .ft-map-details{margin-top:10px}
 .ft-map-details>summary{cursor:pointer;font-size:11.5px;color:var(--ink-dim);user-select:none;padding:4px 0}
 .ft-map-details>summary:hover{color:var(--ink)}
@@ -384,8 +384,8 @@ mark.ft-hl{background:#d5f0fb;color:inherit;border-radius:2px;padding:0 1px}
 .vuln-modal-bar .btn-ghost{background:rgba(255,255,255,.95)}
 .drawing-modal-close:hover{border-color:#5EA8FF;color:#0a87c0}
 /* 근거 문서 미리보기 모달 (SourceModal) */
-.sm-overlay{position:fixed;inset:0;z-index:90;background:rgba(16,28,48,.55);display:flex;align-items:center;justify-content:center;padding:24px}
-.sm-card{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 24px 70px rgba(0,33,87,.28);width:100%;max-width:900px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+.sm-overlay{position:fixed;inset:0;z-index:90;background:rgba(16,28,48,.55);display:flex;align-items:center;justify-content:center;padding:14px}
+.sm-card{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 24px 70px rgba(0,33,87,.28);width:100%;max-width:1320px;height:94vh;max-height:94vh;display:flex;flex-direction:column;overflow:hidden}
 .sm-header{position:sticky;top:0;flex:none;display:grid;grid-template-columns:1fr auto;align-items:start;gap:6px 12px;padding:14px 16px;border-bottom:1px solid var(--line);background:#fff}
 .sm-head-main{display:flex;align-items:center;gap:8px;min-width:0}
 .sm-head-main .tp{font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;color:#14243f;flex:none}
@@ -403,7 +403,9 @@ mark.ft-hl{background:#d5f0fb;color:inherit;border-radius:2px;padding:0 1px}
 .sm-table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12px}
 .sm-table th{position:sticky;top:0;background:var(--panel);text-align:left;font-weight:600;color:var(--ink-dim);padding:6px 8px;border:1px solid var(--line);white-space:nowrap;z-index:1}
 .sm-table td{padding:6px 8px;border:1px solid var(--line-soft);color:var(--ink-dim);vertical-align:top}
-.sm-table td.cell-hl{background:#d5f0fb;color:var(--ink)}
+/* 관련 행: 연한 틴트로 스캔 가능하게. 정확 매칭 셀: 노란 하이라이터로 확실히 눈에 띄게. */
+.sm-table tr:has(td.cell-hl){background:#fffbe9}
+.sm-table td.cell-hl{background:#ffe27a;color:var(--ink);font-weight:700;box-shadow:inset 0 0 0 1.5px #eab308}
 /* 도면 분석 · 형상 유사 설계 카드 */
 .sim-card{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:9px;background:#fbfdff}
 .sim-head{display:flex;align-items:center;gap:8px}
