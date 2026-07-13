@@ -10,6 +10,8 @@ import { withTempFile } from "./ingest/tempfile";
 export interface SourceBlock {
   label: string;
   lines: string[];
+  /** xlsx 전용 — 표 렌더용 행×열 셀 그리드(있으면 프론트가 <table>로, 없으면 lines 텍스트로). */
+  rows?: string[][];
 }
 export interface SourceText {
   format: string;
@@ -30,7 +32,7 @@ function capLines(blocks: SourceBlock[]): SourceBlock[] {
       out.push(b);
       budget -= b.lines.length;
     } else {
-      out.push({ label: b.label, lines: b.lines.slice(0, budget) });
+      out.push({ label: b.label, lines: b.lines.slice(0, budget), rows: b.rows?.slice(0, budget) });
       budget = 0;
     }
   }
@@ -44,13 +46,11 @@ export function extractSourceBlocks(fileName: string, buf: Buffer): SourceText {
   const ext = path.extname(fileName).toLowerCase();
   if (ext === ".xlsx") {
     const { sheets } = withTempFile(fileName, buf, (tmp) => readWorkbookGrids(tmp));
-    const blocks = sheets.map((s) => ({
-      label: s.name,
-      // 각 행을 " │ " 로 조인. 전부 빈 셀인 행은 제외.
-      lines: s.grid
-        .filter((row) => row.some((c) => c.trim() !== ""))
-        .map((row) => row.join(" │ ")),
-    }));
+    const blocks = sheets.map((s) => {
+      // 전부 빈 셀인 행 제외. rows = 표 렌더용 그리드, lines = 폴백 텍스트(동일 행).
+      const grid = s.grid.filter((row) => row.some((c) => c.trim() !== ""));
+      return { label: s.name, rows: grid, lines: grid.map((row) => row.join(" │ ")) };
+    });
     return { format: "xlsx", blocks: capLines(blocks) };
   }
   if (ext === ".pptx") {
