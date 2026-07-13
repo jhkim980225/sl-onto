@@ -8,6 +8,7 @@ import ChaosOverlay from "./ChaosOverlay";
 import Inspector, { type NavEntry } from "./Inspector";
 import Checklist from "./Checklist";
 import SourcePanel from "./SourcePanel";
+import LeftRail from "./LeftRail";
 import SourcePreview from "./SourcePreview";
 import Stepper from "./Stepper";
 import SearchResults from "./SearchResults";
@@ -108,6 +109,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
   // PHASE 1: 전체 온톨로지 규모(뷰와 무관) + 현재 표시 중인 노드 수/뷰 모드.
   const [fullTotals, setFullTotals] = useState<{ nodes: number; edges: number } | null>(null);
   // 객체 타입 탐색기 — 그래프를 특정 타입으로 파고들기(null=기본 앵커 뷰)
+  const [leftPanel, setLeftPanel] = useState<string | null>(null); // 좌측 드로어 활성 아이콘(null=접힘)
   const [activeType, setActiveType] = useState<ObjType | null>(null);
   // 서브타입 탐색기(형식 온톨로지 1차) — activeType 아래 st_id 필터("__none"=미분류, null=타입 전체)
   const [activeSt, setActiveSt] = useState<string | null>(null);
@@ -1104,24 +1106,26 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
         </button>
       </header>
 
-      <div className="main">
-        <SourcePanel
-          counts={graphCounts}
-          activeType={activeType}
-          onSelectType={(t) => {
-            setActiveType(t);
-            setActiveSt(null);
-            graphRef.current?.filterByType(t);
-          }}
-          subtypeDefs={subtypeDefs}
-          stCounts={stCounts}
-          activeSubtype={activeSt}
-          onSelectSubtype={(t, st) => {
-            setActiveType(t);
-            setActiveSt(st);
-            graphRef.current?.filterByType(st ? `${t}:${st}` : t);
-          }}
-        />
+      <div className={"main" + (leftPanel ? " left-open" : "")}>
+        <LeftRail active={leftPanel} onSelect={setLeftPanel}>
+          <SourcePanel
+            counts={graphCounts}
+            activeType={activeType}
+            onSelectType={(t) => {
+              setActiveType(t);
+              setActiveSt(null);
+              graphRef.current?.filterByType(t);
+            }}
+            subtypeDefs={subtypeDefs}
+            stCounts={stCounts}
+            activeSubtype={activeSt}
+            onSelectSubtype={(t, st) => {
+              setActiveType(t);
+              setActiveSt(st);
+              graphRef.current?.filterByType(st ? `${t}:${st}` : t);
+            }}
+          />
+        </LeftRail>
 
         <section className="canvas-wrap" id="cw">
           <div className="stagechip" id="stageChip">
