@@ -104,6 +104,16 @@ export async function nodeCount(): Promise<number> {
   return rows[0].c;
 }
 
+/** 업로드 원본 바이트 조회 — content NULL/행 없음이면 null (베이스라인은 디스크에서 읽음). */
+export async function getSourceContent(file: string): Promise<Buffer | null> {
+  if (!dbEnabled()) return null; // DB 모드 아니면 업로드 원본 없음(인메모리 폴백)
+  const { rows } = await getPool().query<{ content: Buffer | null }>(
+    "SELECT content FROM sources WHERE file = $1",
+    [file]
+  );
+  return rows[0]?.content ?? null;
+}
+
 /* ────────────────────────── Row ↔ 도메인 어댑터 (무손실 라운드트립) ────────────────────────── */
 
 // Node 의 컬럼 외 필드는 전부 nodes.props JSONB 로 담는다(sub/hero/hidden/ax/ay/parent/ext/props).
