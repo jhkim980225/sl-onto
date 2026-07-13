@@ -1,10 +1,11 @@
 "use client";
 
-// 결과 프레임 뷰 전환 — 캔버스 좌상단 [Graph | Table | RAW] 세그먼트.
-export type ViewMode = "graph" | "table" | "raw";
+// 결과 프레임 뷰 전환 — 캔버스 좌상단 [Graph | 계층 | Table | RAW] 세그먼트.
+export type ViewMode = "graph" | "hierarchy" | "table" | "raw";
 
 const MODES: { id: ViewMode; label: string }[] = [
   { id: "graph", label: "Graph" },
+  { id: "hierarchy", label: "계층" },
   { id: "table", label: "Table" },
   { id: "raw", label: "RAW" },
 ];

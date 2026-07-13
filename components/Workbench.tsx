@@ -22,6 +22,7 @@ import ReasonPanel from "./ReasonPanel";
 import ViewToggle, { type ViewMode } from "./ViewToggle";
 import TableView from "./TableView";
 import RawView from "./RawView";
+import HierarchyView from "./HierarchyView";
 import OverviewPanel from "./OverviewPanel";
 import type { View } from "@/lib/view-table";
 import { buildNodeIndex, type NodeIndex } from "./nodeIndex";
@@ -1204,6 +1205,20 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
               }}
             />
           </div>
+          {ontologyBuilt && (
+            // 계층 뷰는 전체 온톨로지(현재 뷰 아님) 기준 — display 토글로 마운트 유지(접힘 상태 보존).
+            <div className="hv-layer" style={{ display: viewMode === "hierarchy" ? undefined : "none" }}>
+              <HierarchyView
+                active={viewMode === "hierarchy"}
+                nodes={graphDataRef.current?.nodes ?? []}
+                subtypeDefs={subtypeDefs}
+                onSelectNode={(id) => {
+                  setViewMode("graph");
+                  handleGraphNodeClick(id);
+                }}
+              />
+            </div>
+          )}
           {viewMode === "table" && <TableView view={view} onSelect={handleGraphNodeClick} />}
           {viewMode === "raw" && <RawView view={view} />}
           {ontologyBuilt && <OverviewPanel view={view} />}

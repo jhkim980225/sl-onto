@@ -252,6 +252,25 @@ svg#graph.fullview .edge.dim{opacity:.03}
 .rf-copy:hover{color:var(--amber);border-color:#cdd8e6}
 .rf-raw-pre{flex:1;overflow:auto;margin:0;padding:14px 16px;font-family:var(--mono);font-size:11.5px;line-height:1.6;color:var(--ink-dim);white-space:pre}
 
+/* ── 계층(택소노미) 뷰 — 독립 SVG 탑다운 노드-링크 ── */
+.hv-layer{position:absolute;inset:0;z-index:6}
+.hv-root{position:absolute;inset:0;background:var(--bg-raise);overflow:hidden}
+.hv-svg{width:100%;height:100%;display:block;cursor:grab}
+.hv-svg.grabbing{cursor:grabbing}
+.hv-link{fill:none;stroke:var(--line);stroke-width:1.4}
+.hv-box{cursor:pointer}
+.hv-box>rect:first-of-type{transition:filter .12s}
+.hv-box:hover>rect:first-of-type{filter:brightness(.96)}
+.hv-instance:hover>rect:first-of-type{stroke:var(--amber)}
+.hv-box text{font-family:var(--sans);font-size:12px;fill:var(--ink);text-anchor:middle;dominant-baseline:middle;pointer-events:none;user-select:none}
+.hv-box text.hv-rootlbl{fill:#fff;font-weight:600}
+.hv-type text{font-weight:600}
+.hv-box .hv-caret{font-family:var(--mono);font-size:11px;fill:var(--ink-dim);text-anchor:start}
+.hv-zoombar{position:absolute;right:16px;bottom:40px;z-index:7;display:flex;flex-direction:column;gap:6px}
+.hv-zoombar button{width:34px;height:34px;border:1px solid var(--line);background:rgba(255,255,255,.92);border-radius:8px;color:var(--ink-dim);font-size:15px}
+.hv-zoombar button:hover{color:var(--amber);border-color:#cdd8e6}
+.hv-hint{position:absolute;left:16px;bottom:14px;z-index:7;font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);pointer-events:none}
+
 .rf-overview{position:absolute;right:62px;bottom:12px;z-index:8;width:230px;background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,33,87,.10);backdrop-filter:blur(5px);overflow:hidden}
 .rf-ov-head{width:100%;display:flex;align-items:center;gap:8px;appearance:none;background:transparent;border:none;padding:9px 12px;cursor:pointer;text-align:left}
 .rf-ov-title{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
