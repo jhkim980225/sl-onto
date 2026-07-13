@@ -9,7 +9,7 @@ import Inspector, { type NavEntry } from "./Inspector";
 import Checklist from "./Checklist";
 import SourcePanel from "./SourcePanel";
 import LeftRail from "./LeftRail";
-import SourcePreview from "./SourcePreview";
+import SourceModal from "./SourceModal";
 import Stepper from "./Stepper";
 import SearchResults from "./SearchResults";
 import CondensationPanel from "./CondensationPanel";
@@ -258,13 +258,14 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
   // 근거 문서 칩 클릭 → 원천 파일 정형화 미리보기(SourcePreview)로 이동.
   // highlightIds: 답변이 인용한 객체 id들 — 그 문서에서 해당 추출 행을 강조(질문 답변 근거 확인).
   const [sourceHighlight, setSourceHighlight] = useState<Set<string>>(new Set());
+  const [sourceModalOpen, setSourceModalOpen] = useState(false);
   const handleOpenEvidenceFile = useCallback(
     (file: string, highlightIds?: string[]) => {
       const found = sources.find((s) => s.file === file);
       if (!found) return;
       setSourceHighlight(new Set(highlightIds ?? []));
       setSelectedSource(found);
-      setRightPanelMode("source");
+      setSourceModalOpen(true);
     },
     [sources]
   );
@@ -1346,8 +1347,6 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
               onSelectObject={handleReasonSelect}
               onClose={() => setRightPanelMode("inspector")}
             />
-          ) : rightPanelMode === "source" && selectedSource ? (
-            <SourcePreview source={selectedSource} highlightIds={sourceHighlight} onClose={() => setRightPanelMode("inspector")} />
           ) : rightPanelMode === "condensation" ? (
             condensationRegions ? (
               <CondensationPanel
@@ -1393,6 +1392,14 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
           )}
         </aside>
       </div>
+
+      {sourceModalOpen && selectedSource && (
+        <SourceModal
+          source={selectedSource}
+          highlightIds={sourceHighlight}
+          onClose={() => setSourceModalOpen(false)}
+        />
+      )}
 
       <Stepper
         stage={stage}
