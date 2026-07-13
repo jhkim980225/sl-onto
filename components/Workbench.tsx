@@ -236,16 +236,6 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
       .catch(() => {});
   }, [ontologyBuilt]);
 
-  const handleSelectSource = useCallback(
-    (file: string) => {
-      const found = sources.find((s) => s.file === file);
-      if (!found) return;
-      setSelectedSource(found);
-      setRightPanelMode("source");
-    },
-    [sources]
-  );
-
   // ── 결로 지역별 분석 시나리오 진입 (Inspector에서 아우터 렌즈/결로·습기 선택 시) ──
   const handleOpenCondensation = useCallback(() => {
     setRightPanelMode("condensation");
@@ -1116,10 +1106,6 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
       <div className="main">
         <SourcePanel
           counts={graphCounts}
-          sources={sources}
-          sourcesLoading={sourcesLoading}
-          sourcesError={sourcesError}
-          onSelectSource={handleSelectSource}
           activeType={activeType}
           onSelectType={(t) => {
             setActiveType(t);
