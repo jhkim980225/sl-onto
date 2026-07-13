@@ -255,11 +255,14 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
       .finally(() => setCondensationLoading(false));
   }, [condensationRegions, condensationLoading]);
 
-  // 결로 분석 패널의 근거 문서 칩 클릭 → 원천 파일 정형화 미리보기(SourcePreview)로 이동.
+  // 근거 문서 칩 클릭 → 원천 파일 정형화 미리보기(SourcePreview)로 이동.
+  // highlightIds: 답변이 인용한 객체 id들 — 그 문서에서 해당 추출 행을 강조(질문 답변 근거 확인).
+  const [sourceHighlight, setSourceHighlight] = useState<Set<string>>(new Set());
   const handleOpenEvidenceFile = useCallback(
-    (file: string) => {
+    (file: string, highlightIds?: string[]) => {
       const found = sources.find((s) => s.file === file);
       if (!found) return;
+      setSourceHighlight(new Set(highlightIds ?? []));
       setSelectedSource(found);
       setRightPanelMode("source");
     },
@@ -1331,6 +1334,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
               history={askHistory}
               onAppend={(entry) => setAskHistory((prev) => [...prev, entry])}
               onFocusNode={handleAskFocus}
+              onOpenDoc={handleOpenEvidenceFile}
               onClose={() => setRightPanelMode("inspector")}
             />
           ) : rightPanelMode === "reason" ? (
@@ -1343,7 +1347,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
               onClose={() => setRightPanelMode("inspector")}
             />
           ) : rightPanelMode === "source" && selectedSource ? (
-            <SourcePreview source={selectedSource} onClose={() => setRightPanelMode("inspector")} />
+            <SourcePreview source={selectedSource} highlightIds={sourceHighlight} onClose={() => setRightPanelMode("inspector")} />
           ) : rightPanelMode === "condensation" ? (
             condensationRegions ? (
               <CondensationPanel

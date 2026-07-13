@@ -5,7 +5,14 @@
 import { TYPES } from "./typeStyles";
 import type { SourcePreviewItem } from "./sourceTypes";
 
-export default function DoclingPreviewList({ preview }: { preview: SourcePreviewItem[] }) {
+export default function DoclingPreviewList({
+  preview,
+  highlightIds,
+}: {
+  preview: SourcePreviewItem[];
+  /** 이 id 집합에 든 매핑 객체 행을 강조(답변 근거 하이라이트). 없으면 강조 없음. */
+  highlightIds?: Set<string>;
+}) {
   return (
     <>
       <div className="sec-label">Docling 추출 → 정규화 (원문 → 표준코드·라벨)</div>
@@ -14,8 +21,9 @@ export default function DoclingPreviewList({ preview }: { preview: SourcePreview
           const tp = TYPES[p.type];
           const mapped = p.raw !== p.label;
           const pct = Math.round(p.confidence * 100);
+          const hl = !!highlightIds?.has(p.id);
           return (
-            <div className={"src-prev-row" + (mapped ? " mapped" : "")} key={i}>
+            <div className={"src-prev-row" + (mapped ? " mapped" : "") + (hl ? " hl" : "")} data-hl={hl ? "1" : undefined} key={i}>
               <div className="src-prev-line">
                 <span className="src-prev-raw">&ldquo;{p.raw}&rdquo;</span>
                 <span className="src-prev-arrow">→</span>

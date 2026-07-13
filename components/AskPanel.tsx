@@ -27,6 +27,8 @@ interface AskPanelProps {
   onAppend: (entry: AskEntry) => void;
   /** 그래프 포커스만(패널 전환 없음) — 근거 관계 칩/[R n] 클릭용 */
   onFocusNode: (id: string) => void;
+  /** 근거 문서 칩 클릭 → 정형화 미리보기 열고 인용 객체(highlightIds) 행 강조. */
+  onOpenDoc: (file: string, highlightIds: string[]) => void;
   onClose: () => void;
 }
 
@@ -36,7 +38,15 @@ const EXAMPLES = [
   "어떤 조치가 효과적이었나?",
 ];
 
-export default function AskPanel({ objectId, objectLabel, history, onAppend, onFocusNode, onClose }: AskPanelProps) {
+// 문서에서 강조할 객체 id — 질문 대상 + 답변이 인용한 관계의 상대 객체(고장모드·원인 등).
+// 인용이 없으면 전체 관계 상대까지 폴백(그 문서에서 뭐가 근거인지 최대한 보여준다).
+function docHighlightIds(h: AskEntry): string[] {
+  const cited = h.rels.filter((r) => h.citedRels.includes(r.no)).map((r) => r.otherId);
+  const base = cited.length > 0 ? cited : h.rels.map((r) => r.otherId);
+  return [h.objectId, ...base];
+}
+
+export default function AskPanel({ objectId, objectLabel, history, onAppend, onFocusNode, onOpenDoc, onClose }: AskPanelProps) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -208,12 +218,18 @@ export default function AskPanel({ objectId, objectLabel, history, onAppend, onF
             )}
             {h.docs.length > 0 && (
               <>
-                <div className="sec-label">근거 문서</div>
+                <div className="sec-label">근거 문서 <span className="ask-doc-hint">(클릭 → 미리보기·근거 강조)</span></div>
                 <div className="ask-relchips">
                   {h.docs.map((d) => (
-                    <span key={d} className="cond-evd-chip" style={{ cursor: "default" }}>
+                    <button
+                      key={d}
+                      type="button"
+                      className="cond-evd-chip ask-doc-chip"
+                      title={`${d} 정형화 미리보기 — 이 답변이 인용한 항목 강조`}
+                      onClick={() => onOpenDoc(d, docHighlightIds(h))}
+                    >
                       {d}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </>
