@@ -108,21 +108,33 @@ export default function AskPanel({ objectId, objectLabel, history, onAppend, onF
           질문 대상: <b>{objectLabel ?? objectId}</b>
         </div>
       ) : (
-        <div className="insp-empty">그래프에서 객체를 선택하세요 — 선택 객체의 관계·근거를 바탕으로 답합니다.</div>
+        <div className="insp-empty">
+          <b>먼저 그래프에서 객체를 선택하세요.</b>
+          <br />
+          선택한 객체의 관계·근거를 바탕으로 사내 LLM이 답합니다. 객체를 고르면 질문 입력이 열립니다.
+        </div>
       )}
 
+      {/* 객체 미선택 시 입력·예시·전송 전부 비활성 — "질문은 썼는데 전송이 안 눌린다" 혼동 방지. */}
       <div className="ask-examples">
         {EXAMPLES.map((ex) => (
-          <button key={ex} type="button" className="ask-example" onClick={() => setQuestion(ex)}>
+          <button
+            key={ex}
+            type="button"
+            className="ask-example"
+            disabled={!objectId}
+            onClick={() => setQuestion(ex)}
+          >
             {ex}
           </button>
         ))}
       </div>
       <textarea
         className="ask-input"
-        placeholder="선택 객체에 대해 질문하세요 (2~500자)"
+        placeholder={objectId ? "선택 객체에 대해 질문하세요 (2~500자)" : "객체를 선택하면 질문할 수 있습니다"}
         maxLength={500}
         value={question}
+        disabled={!objectId}
         onChange={(e) => setQuestion(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
@@ -131,7 +143,12 @@ export default function AskPanel({ objectId, objectLabel, history, onAppend, onF
           }
         }}
       />
-      <button className="ask-send" disabled={!canSend} onClick={() => void send()}>
+      <button
+        className="ask-send"
+        disabled={!canSend}
+        title={!objectId ? "먼저 객체를 선택하세요" : question.trim().length < 2 ? "질문을 입력하세요" : undefined}
+        onClick={() => void send()}
+      >
         {loading ? "답변 생성 중…" : "질문 전송"}
       </button>
 

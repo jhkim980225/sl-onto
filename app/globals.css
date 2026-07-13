@@ -553,7 +553,9 @@ svg#graph.fullview .edge.dim{opacity:.03}
 .ask-target b{color:var(--ink)}
 .ask-examples{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
 .ask-example{font-size:11px;color:var(--ink-dim);background:#eef2f8;border:1px solid var(--line);border-radius:12px;padding:4px 9px;text-align:left}
-.ask-example:hover{color:var(--amber);border-color:#b3e2f2;background:#eaf6fc}
+.ask-example:hover:not(:disabled){color:var(--amber);border-color:#b3e2f2;background:#eaf6fc}
+.ask-example:disabled{opacity:.45;cursor:default}
+.ask-input:disabled{background:#f5f7fa;color:var(--ink-faint);cursor:default}
 .ask-input{width:100%;min-height:56px;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--sans);font-size:12.5px;line-height:1.55;color:var(--ink);background:#fff}
 .ask-input::placeholder{color:var(--ink-faint)}
 .ask-input:focus{outline:none;border-color:var(--amber)}
