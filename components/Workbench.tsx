@@ -19,6 +19,11 @@ import ContradictionsPanel from "./ContradictionsPanel";
 import AskPanel, { type AskEntry } from "./AskPanel";
 import QualityPanel from "./QualityPanel";
 import ReasonPanel from "./ReasonPanel";
+import ViewToggle, { type ViewMode } from "./ViewToggle";
+import TableView from "./TableView";
+import RawView from "./RawView";
+import OverviewPanel from "./OverviewPanel";
+import type { View } from "@/lib/view-table";
 import { buildNodeIndex, type NodeIndex } from "./nodeIndex";
 import { useContradictions } from "./useContradictions";
 import { useQualityScan } from "./useQualityScan";
@@ -110,6 +115,14 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
   const [subtypeDefs, setSubtypeDefs] = useState<{ type_id: string; st_id: string; label_ko: string }[]>([]);
   const [viewInfo, setViewInfo] = useState<ViewInfo | null>(null);
   const [focusInfo, setFocusInfo] = useState<FocusInfo | null>(null);
+  // 결과 프레임 — Graph/Table/RAW 토글 + 현재 뷰 스냅샷(Table/RAW/오버뷰 공용).
+  const [viewMode, setViewMode] = useState<ViewMode>("graph");
+  const [view, setView] = useState<View>({ nodes: [], edges: [] });
+  // Graph 읽기전용 게터로 현재 가시 노드/엣지 스냅샷을 당겨온다(토글·포커스/뷰 변화 시).
+  const refreshView = useCallback(() => {
+    const v = graphRef.current?.getView();
+    if (v) setView(v);
+  }, []);
   const [ingestVisible, setIngestVisible] = useState(false);
   const [ingestLines, setIngestLines] = useState<string[]>([]);
   const [ingestPct, setIngestPct] = useState(0);
@@ -1181,12 +1194,33 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
             </div>
           )}
 
-          <Graph
-            ref={graphRef}
-            onNodeClick={handleGraphNodeClick}
-            onViewChange={setViewInfo}
-            onFocusChange={setFocusInfo}
-          />
+          {ontologyBuilt && (
+            <ViewToggle
+              mode={viewMode}
+              onChange={(m) => {
+                setViewMode(m);
+                refreshView();
+              }}
+            />
+          )}
+
+          <div className="rf-graph-layer" style={{ display: viewMode === "graph" ? undefined : "none" }}>
+            <Graph
+              ref={graphRef}
+              onNodeClick={handleGraphNodeClick}
+              onViewChange={(v) => {
+                setViewInfo(v);
+                refreshView();
+              }}
+              onFocusChange={(f) => {
+                setFocusInfo(f);
+                refreshView();
+              }}
+            />
+          </div>
+          {viewMode === "table" && <TableView view={view} onSelect={handleGraphNodeClick} />}
+          {viewMode === "raw" && <RawView view={view} />}
+          {ontologyBuilt && <OverviewPanel view={view} />}
 
           <div className={"ingest" + (ingestVisible ? " show" : "")} id="ingest">
             <div className="ih">
