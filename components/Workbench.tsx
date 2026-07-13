@@ -7,6 +7,7 @@ import Graph, { type FocusInfo, type GraphCounts, type GraphHandle, type ViewInf
 import ChaosOverlay from "./ChaosOverlay";
 import Inspector, { type NavEntry } from "./Inspector";
 import Checklist from "./Checklist";
+import DesignConditionForm from "./DesignConditionForm";
 import SourcePanel from "./SourcePanel";
 import LeftRail from "./LeftRail";
 import SourceModal from "./SourceModal";
@@ -1109,7 +1110,10 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
               ? `선택 부품 '${inspectorObj.label}' 기준으로 검토 체크리스트 생성`
               : "기본 설계 조건으로 검토 체크리스트 생성 (부품 노드를 선택하면 그 부품 기준)"
           }
-          onClick={handleRunScenario}
+          onClick={() => {
+            setRightPanelMode("checklist");
+            handleRunScenario();
+          }}
         >
           {inspectorObj?.type === "item"
             ? `▶ '${inspectorObj.label.length > 10 ? inspectorObj.label.slice(0, 10) + "…" : inspectorObj.label}' 설계 검토`
@@ -1271,15 +1275,24 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
 
         <aside className="side right" id="insp">
           {rightPanelMode === "checklist" ? (
-            <Checklist
-              loading={inferLoading}
-              error={inferError}
-              result={inferResult}
-              condition={lastInferInput ?? condition}
-              revealedCount={revealedChecklistCount}
-              nodeIndex={nodeIndex}
-              onSelectObject={handleChecklistSelect}
-            />
+            <>
+              <DesignConditionForm
+                condition={condition}
+                onChange={setCondition}
+                anchorLabel={inspectorObj?.type === "item" ? inspectorObj.label : null}
+                onRun={handleRunScenario}
+                running={inferLoading}
+              />
+              <Checklist
+                loading={inferLoading}
+                error={inferError}
+                result={inferResult}
+                condition={lastInferInput ?? condition}
+                revealedCount={revealedChecklistCount}
+                nodeIndex={nodeIndex}
+                onSelectObject={handleChecklistSelect}
+              />
+            </>
           ) : rightPanelMode === "nlsearch" ? (
             <NLSearchPanel
               query={nlQuery}
@@ -1408,12 +1421,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
         />
       )}
 
-      <Stepper
-        stage={stage}
-        condition={condition}
-        onChangeCondition={setCondition}
-        editable={stage >= 2 && !scenarioTriggered}
-      />
+      <Stepper stage={stage} />
     </>
   );
 }
