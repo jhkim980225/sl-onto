@@ -358,10 +358,14 @@ export function infer(input: DesignInput): InferResponse {
       for (const chip of collectDocs(marketReg.id, tv, 1)) pushUnique(c.evidence, chip);
       c.category = "regulatory";
       c.boost += BOOST_MARKET;
-      c.title = `${safe.market} ${fm.label} 법규 적합성 — ${marketReg.label}`;
-      c.desc =
-        `${safe.market}향 조건 자동 감지 → ${marketReg.label} 적용. ` +
-        `타 시장(유럽 ECE 등)과 배광 기준 상이 — 시뮬레이션 조건 분리 필수. 심각도 S=${c.severity}.`;
+      // 제목·설명 relabel 은 신규 설계 조건(프로젝트 앵커) 흐름에서만. 부품 앵커 모드는 "선택 부품 …"
+      // 프레이밍을 유지(법규 근거는 trace·evidence 로만 붙임) — 부품 중심 스코프 일관.
+      if (originKind !== "item") {
+        c.title = `${safe.market} ${fm.label} 법규 적합성 — ${marketReg.label}`;
+        c.desc =
+          `${safe.market}향 조건 자동 감지 → ${marketReg.label} 적용. ` +
+          `타 시장(유럽 ECE 등)과 배광 기준 상이 — 시뮬레이션 조건 분리 필수. 심각도 S=${c.severity}.`;
+      }
     }
 
     // 형상 키워드 관련성 부스트 (예: 분리형 DRL → 휘도)
