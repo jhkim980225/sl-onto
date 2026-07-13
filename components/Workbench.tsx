@@ -1107,13 +1107,10 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
           disabled={!ontologyBuilt}
           title={
             inspectorObj?.type === "item"
-              ? `선택 부품 '${inspectorObj.label}' 기준으로 검토 체크리스트 생성`
-              : "기본 설계 조건으로 검토 체크리스트 생성 (부품 노드를 선택하면 그 부품 기준)"
+              ? `선택 부품 '${inspectorObj.label}' 설계 조건 패널 열기 (조건 확인 후 '추론 실행')`
+              : "설계 조건 패널 열기 (조건 선택 후 '추론 실행')"
           }
-          onClick={() => {
-            setRightPanelMode("checklist");
-            handleRunScenario();
-          }}
+          onClick={() => setRightPanelMode("checklist")}
         >
           {inspectorObj?.type === "item"
             ? `▶ '${inspectorObj.label.length > 10 ? inspectorObj.label.slice(0, 10) + "…" : inspectorObj.label}' 설계 검토`
@@ -1292,6 +1289,9 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
                 nodeIndex={nodeIndex}
                 onSelectObject={handleChecklistSelect}
               />
+              {!inferResult && !inferLoading && !inferError && (
+                <div className="insp-empty">조건을 선택하고 <b>▶ 추론 실행</b>을 누르면 검토 체크리스트가 생성됩니다.</div>
+              )}
             </>
           ) : rightPanelMode === "nlsearch" ? (
             <NLSearchPanel
