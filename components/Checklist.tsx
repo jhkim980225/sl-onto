@@ -165,7 +165,7 @@ export default function Checklist({
       <button className="opinion-btn" onClick={fetchOpinion} disabled={opinionLoading} title="현재 체크리스트를 사내 LLM이 종합해 소견을 생성합니다">
         {opinionLoading ? "AI 소견 생성 중… (사내 LLM, 최대 1~2분)" : "🤖 AI 종합 소견"}
       </button>
-      {opinionError && <div className="opinion-card opinion-error">사내 LLM 미가용</div>}
+      {opinionError && <div className="opinion-card opinion-error">사내 LLM 응답 지연·혼잡 — 잠시 후 다시 시도하세요</div>}
       {opinion && (
         <div className="opinion-card">
           <div className="sec-label">AI 종합 소견</div>

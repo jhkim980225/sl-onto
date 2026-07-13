@@ -57,7 +57,7 @@ export default function AskPanel({ objectId, objectLabel, history, onAppend, onF
       const data = await res.json().catch(() => null);
       if (!res.ok || !data) {
         throw new Error(
-          res.status === 503 ? "사내 LLM 미가용 — 잠시 후 다시 시도하세요" : data?.error ?? `질문 실패 (${res.status})`
+          res.status === 503 ? "사내 LLM 응답이 지연되고 있습니다(공용 서버 혼잡) — 잠시 후 다시 시도하세요" : data?.error ?? `질문 실패 (${res.status})`
         );
       }
       onAppend({

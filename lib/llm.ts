@@ -4,8 +4,10 @@
 import { pyEnabled, pyPost } from "./pyservice";
 
 const NL_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS || 60000);
-// 소견 생성은 체크리스트 전체를 컨텍스트로 넣어 60~90초 걸릴 수 있다 — 넉넉히.
-const REVIEW_TIMEOUT_MS = 120000;
+// 소견·Q&A·추출 생성은 컨텍스트가 커 60~90초 걸릴 수 있다.
+// pyservice 하드 상한(LLM_TOTAL_TIMEOUT_S=120초)보다 크게 잡아, 느릴 때 앱이 먼저 끊지 않고
+// pyservice 의 정상 결과(ok:true/false)가 항상 이기게 한다 — "미가용" 오탐 방지.
+const REVIEW_TIMEOUT_MS = 130000;
 
 export function llmEnabled(): boolean {
   return pyEnabled();

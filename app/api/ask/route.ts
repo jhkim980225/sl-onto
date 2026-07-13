@@ -50,7 +50,7 @@ export async function POST(req: Request) {
 
   const t0 = Date.now();
   const llm = await llmAsk(question, ctx.contextText);
-  if (!llm) return NextResponse.json({ error: "LLM 미가용" }, { status: 503 });
+  if (!llm) return NextResponse.json({ error: "사내 LLM 응답 지연·혼잡" }, { status: 503 });
 
   if (dbEnabled()) {
     await saveAiOpinion(key, { objectId, question }, llm.answer, llm.citedRels);

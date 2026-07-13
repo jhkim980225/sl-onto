@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     contradictions: ctx.contradictions,
   });
   if (!llm) {
-    return NextResponse.json({ error: "LLM 미가용" }, { status: 503 });
+    return NextResponse.json({ error: "사내 LLM 응답 지연·혼잡" }, { status: 503 });
   }
 
   const generatedAt = new Date().toISOString();
