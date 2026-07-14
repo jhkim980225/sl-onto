@@ -54,7 +54,7 @@ type Stage = 1 | 2 | 3;
 const DEFAULT_CONDITION: DesignInput = {
   market: "아시아",
   lightSource: "LED",
-  shape: ["슬림 하우징", "밀폐형"],
+  shape: ["슬림", "밀폐형"], // 데이터 형상 옵션(GET /api/design-options)과 일치 — 칩 중복 방지
   components: ["아우터 렌즈"],
 };
 

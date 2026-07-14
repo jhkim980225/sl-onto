@@ -1,7 +1,8 @@
 "use client";
 
 // 우측 패널 상단 · 신규 설계 추론 조건 입력 + 실행 (입력→실행→결과 한 컬럼).
-// 조건은 기존 온톨로지가 인식하는 값에서 선택 — 시장·광원 드롭다운, 형상 토글 칩(복수).
+// 조건 옵션은 실제 프로젝트 데이터에서 자동 생성(GET /api/design-options) — 시장·광원 드롭다운, 형상 토글 칩.
+import { useEffect, useState } from "react";
 import type { DesignInput } from "@/lib/types";
 
 interface DesignConditionFormProps {
@@ -12,10 +13,18 @@ interface DesignConditionFormProps {
   running: boolean;
 }
 
-// 추론이 실제로 인식·부스트하는 값들(시장→법규, 광원→방열, 형상→수축·결로·휘도).
-const MARKETS = ["북미", "유럽", "아시아", "중국", "한국"];
-const LIGHT_SOURCES = ["LED", "LED 분리형", "할로겐", "레이저"];
-const SHAPES = ["슬림 하우징", "밀폐형", "분리형 DRL", "개방형", "곡면 렌즈", "일체형"];
+interface Options {
+  markets: string[];
+  lightSources: string[];
+  shapes: string[];
+}
+
+// fetch 실패·빈 응답 시 폴백(추론이 인식하는 최소 값).
+const FALLBACK: Options = {
+  markets: ["북미", "유럽", "아시아", "중국", "한국"],
+  lightSources: ["LED", "할로겐"],
+  shapes: ["슬림", "밀폐형", "곡면", "개방형"],
+};
 
 export default function DesignConditionForm({
   condition,
@@ -24,10 +33,36 @@ export default function DesignConditionForm({
   onRun,
   running,
 }: DesignConditionFormProps) {
+  const [opts, setOpts] = useState<Options>(FALLBACK);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/design-options")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: Options | null) => {
+        if (cancelled || !d) return;
+        // 비어있는 축은 폴백 유지.
+        setOpts({
+          markets: d.markets?.length ? d.markets : FALLBACK.markets,
+          lightSources: d.lightSources?.length ? d.lightSources : FALLBACK.lightSources,
+          shapes: d.shapes?.length ? d.shapes : FALLBACK.shapes,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const toggleShape = (s: string) => {
     const has = condition.shape.includes(s);
     onChange({ ...condition, shape: has ? condition.shape.filter((x) => x !== s) : [...condition.shape, s] });
   };
+
+  // 현재 선택값이 옵션에 없으면(과거 조건 등) 그 값도 노출.
+  const withCurrent = (list: string[], cur: string) =>
+    cur && !list.includes(cur) ? [cur, ...list] : list;
+  // 형상 칩 = 데이터 옵션 ∪ 현재 선택된 값(옵션 밖이어도 표시).
+  const shapeChips = [...new Set([...opts.shapes, ...condition.shape])];
 
   return (
     <div className="dc-form">
@@ -40,11 +75,7 @@ export default function DesignConditionForm({
       <label className="dc-field">
         <span>시장</span>
         <select value={condition.market} onChange={(e) => onChange({ ...condition, market: e.target.value })} aria-label="시장">
-          {/* 현재 값이 목록에 없으면(과거 조건 등) 그 값도 옵션으로 노출 */}
-          {!MARKETS.includes(condition.market) && condition.market ? (
-            <option value={condition.market}>{condition.market}</option>
-          ) : null}
-          {MARKETS.map((m) => (
+          {withCurrent(opts.markets, condition.market).map((m) => (
             <option key={m} value={m}>{m}</option>
           ))}
         </select>
@@ -52,10 +83,7 @@ export default function DesignConditionForm({
       <label className="dc-field">
         <span>광원</span>
         <select value={condition.lightSource} onChange={(e) => onChange({ ...condition, lightSource: e.target.value })} aria-label="광원">
-          {!LIGHT_SOURCES.includes(condition.lightSource) && condition.lightSource ? (
-            <option value={condition.lightSource}>{condition.lightSource}</option>
-          ) : null}
-          {LIGHT_SOURCES.map((l) => (
+          {withCurrent(opts.lightSources, condition.lightSource).map((l) => (
             <option key={l} value={l}>{l}</option>
           ))}
         </select>
@@ -63,7 +91,7 @@ export default function DesignConditionForm({
       <div className="dc-field dc-field-shape">
         <span>형상</span>
         <div className="dc-chips">
-          {SHAPES.map((s) => (
+          {shapeChips.map((s) => (
             <button
               key={s}
               type="button"
