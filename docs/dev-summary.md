@@ -1,23 +1,31 @@
 # dev-summary.md — 개발 완료 내역 정리
 
-> 작성일: 2026-07-06. 상세는 각 링크 문서 참조. 남은 항목은 [§8](#8-남은-항목) 참조.
+> 작성일: 2026-07-06 · 갱신: 2026-07-20. 상세는 각 링크 문서 참조. 남은 항목은 [§8](#8-남은-항목) 참조.
 
 ## 1. 한 줄 요약
 
 흩어진 FMEA 문서(xlsx/pptx/docx)를 **온톨로지로 적재**하고, 신규 설계 조건을 입력하면 그래프 탐색으로
 **근거·확신도가 붙은 설계 검토 체크리스트 + FMEA 초안(xlsx)** 을 생성하는 워크벤치.
-**MVP 완료 기준 15개 전부 충족, FEDA K8s 배포 v6 운영 중** (`http://192.168.0.100:30494/`).
+**MVP 완료 기준 15개 전부 충족, FEDA K8s 배포 v56 운영 중** (`http://192.168.0.100:30494/`).
 
 ## 2. 배포 버전 히스토리
 
+전체 목록은 [deployment.md](deployment.md). 주요 분기점만:
+
 | 버전 | 내용 |
 |---|---|
-| v1 | 최초 배포 (3단계 워크벤치 + API) |
-| v2 | 자연어 검색 · 그래프 인터랙션 · 라이트 SL 브랜드 테마 · 견고 파싱 |
-| v3 | FMEA 초안 다운로드 (xlsx) |
-| v4 | 백본 우선 초기화면 · 전체 보기 토글 · 라벨 LOD |
-| v5 | 인스펙터 뒤로가기 · 이동 경로 |
-| **v6 (현재)** | **증분 인제스천 탭** (replicas 2→1 전환: 인메모리 병합 일관성) |
+| v1~v6 | 3단계 워크벤치 + API · 자연어 검색 · FMEA xlsx · 증분 인제스천(replicas 2→1) |
+| ~v45 | **Postgres + pgvector 영속화** (DB=원본, 인메모리=읽기 캐시) |
+| v49 | **형식 온톨로지 1차** — 스키마 검증 · 서브타입 61/139 · Turtle 3,007 트리플 |
+| v50 | DB 직독 (요청별 Postgres 재동기화 — psql 변경 즉시 반영) |
+| v51 | **선택 객체 LLM Q&A (RAG)** — `/api/ask` |
+| v52 | R1 3종 — 하이브리드 검색 · 중복해소 강화 · 분류 87% |
+| v53 | **PDF 인제스천** — pyservice `/parse` (pypdf, docling 옵트인) |
+| v54 | **인제스천 LLM 구조화 옵트인** — `/api/ingest?llm=1` |
+| **v56 (현재 배포)** | **구조 리팩토링 2웨이브(-1,100줄) + 성능**(라우트 gzip · 재동기화 TTL 2s) |
+
+**미배포 로컬 커밋(7/13~7/14)**: 결과 프레임(Graph/Table/RAW) · 계층 택소노미 뷰 · 좌측 아이콘 레일 ·
+근거 문서 원문 모달+언급 강조 · 추론 정확도 3건 수정(전문가 검증) · 설계 조건 자동 드롭다운.
 
 ## 3. 구현된 기능
 
@@ -65,23 +73,37 @@
 - 백본 우선 초기화면 + 전체 보기 토글 + 라벨 LOD, 인스펙터 히스토리(뒤로가기).
 - 라이트 SL 브랜드 테마(흰 배경 · 네이비 텍스트 · 시안 `#00a2e5`), `prefers-reduced-motion` 존중.
 
-## 4. API (7 + 2)
+## 4. API (23 라우트)
 
 | 엔드포인트 | 역할 |
 |---|---|
-| `GET /api/ontology` | 전체 노드·엣지 |
+| `GET /api/ontology` · `/ontology/export` | 전체 노드·엣지 · Turtle 내보내기 |
 | `GET /api/object/[id]` | 객체 속성·관계·근거 |
-| `GET /api/search?q=` | 키워드 검색 |
+| `GET /api/search?q=` | 키워드 + 임베딩 하이브리드 검색 |
 | `POST /api/nlsearch` | 자연어 검색 |
 | `POST /api/infer` | 설계 조건 → 체크리스트 |
-| `GET /api/sources` | 원천 파일 목록·추출 미리보기 |
+| `GET /api/sources` · `/source-text?file=` | 원천 파일 목록 · **원문 전체 블록**(모달 뷰용) |
 | `GET /api/condensation` | 결로 지역 목록/상세 |
-| `POST /api/fmea-draft` | DFMEA xlsx 다운로드 (v3) |
-| `POST /api/ingest` | 증분 인제스천 — multipart/샘플 (v6) |
+| `POST /api/fmea-draft` | DFMEA xlsx 다운로드 |
+| `POST /api/ingest` | 증분 인제스천 — multipart/샘플 (`?llm=1` LLM 보강 옵트인) |
+| `POST /api/ask` | **선택 객체 Q&A (RAG)** — 관계·근거 컨텍스트 → `[R n]` 인용 답변, 캐시 |
+| `POST /api/review-opinion` | **LLM 검토 소견** — 추론·모순 컨텍스트 기반 |
+| `GET /api/reason` | 기존 엣지로 유도한 관계(검토용, DB 미반영) |
+| `GET /api/contradictions` · `/quality` · `/bom-check?item=` | 전역 모순 스캔 · 품질 지표 · BOM 정합성 |
+| `POST /api/drawing-input` · `GET /api/drawing-svg?file=` | **DXF 도면 입력**(형상 유사 탐색·취약점 검사) · SVG 미리보기 |
+| `GET /api/design-options` | 설계 조건 드롭다운(실제 proj 데이터에서 distinct) |
+| `GET /api/schema` | 메타모델 스냅샷(객체타입·관계타입·서브타입) |
+| `POST /api/curate` | 큐레이션 — 노드/관계 삭제, 병합(원본 보존) |
+| `POST /api/admin/embed-backfill` | 임베딩 백필 재트리거 |
 
 ## 5. 품질
 
-- **테스트: 24개 전부 통과** (`node --test`, 2026-07-06 확인) — infer 7 · ingest 7 · robust 파싱 6 · search 4.
+- **테스트: 117개 (110 pass · 7 skip · 0 fail)** — 2026-07-20 확인.
+  실행: `node --test --experimental-strip-types "lib/**/*.test.ts"`.
+- RAG 검증 리포트 4건: [객체질문 RAG](test-reports/2026-07-09-객체질문-RAG.md) ·
+  [기존문서 4/4 PASS](test-reports/2026-07-10-RAG-기존문서.md) ·
+  [신규문서 전 구간 PASS](test-reports/2026-07-10-RAG-신규문서.md) ·
+  [리팩토링·성능](test-reports/2026-07-10-리팩토링-성능.md).
 - 에이전트 전수 코드 리뷰 완료([review-notes.md](review-notes.md)): HIGH 1건 포함 4건 수정,
   LOW 1건 보류(타이머 cleanup), 골든 룰 준수 확인.
 - `next build` standalone 검증(data/sources 트레이싱 + API 동작 확인).
@@ -103,8 +125,15 @@
 
 ## 8. 남은 항목
 
+- **배포 격차**: 7/13~7/14 로컬 커밋(UI 대개편 + 추론 정확도 수정)이 v56 이후 미배포. 다음 v번호는
+  마스터 `docker images` + `kubectl get rs` 로 확인.
+- **`npm test` 스크립트 파일 미지정**: `node --test --experimental-strip-types` 만 있어 0 tests 로 통과함.
+  글롭(`"lib/**/*.test.ts"`) 붙여야 실제 117개가 돈다.
 - **보류 1건 (LOW)**: `Graph.tsx`/`Workbench.tsx` 언마운트 시 setTimeout 미정리 ([review-notes.md](review-notes.md) #4).
-- **문서 최신화**: `CLAUDE.md`·`requirements.md`의 "배포 v2" 표기 → 실제 v6, "npm test 36 pass" → 현재 24.
-- **확장 백로그** (의도적 범위 밖, 이음새 확보됨): Postgres 영속화(`lib/store.ts` 교체 — 증분 업로드 영속 + 멀티 레플리카),
-  임베딩 검색(`search()` 내부), LLM 자연어(env 주입만) · LLM RAG 추론, Docling 사이드카(스캔 PDF·중첩표),
-  FMEA 초안 서식/DOCX, 실 도면(CAD/PDF) 뷰어, 외부 데이터 연계, 로그인·편집, HPA.
+- **확장 백로그** (의도적 범위 밖, 이음새 확보됨): 이미지 OCR / 스캔 PDF·표 사진(Docling 사이드카 —
+  `/parse` 에 lazy 옵트인만 배선), 래스터 도면 VLM 이해, 검색·추론 랭킹의 R→G 전환(현재 RAG 는 `/api/ask`
+  `/api/review-opinion` 한정), FMEA 초안 서식/DOCX, 외부 데이터 연계(논문·특허), 로그인·편집, HPA.
+
+### 이미 해소된 항목 (2026-07-06 시점 백로그 → 완료)
+Postgres 영속화 ✅(v45) · 임베딩 검색 ✅(v52 하이브리드) · LLM 자연어/RAG ✅(v51 `/api/ask`) ·
+PDF 인제스천 ✅(v53) · LLM 인제스천 보강 ✅(v54) · 형식 온톨로지·Turtle ✅(v49) · DXF 도면 입력 ✅.
