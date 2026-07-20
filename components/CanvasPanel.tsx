@@ -5,16 +5,11 @@
 // 캔버스 관리 API 는 ?canvas= 를 받지 않으므로 apiFetch 가 아니라 생 fetch 를 쓴다.
 import { useCallback, useEffect, useState } from "react";
 import type { CanvasSummary } from "@/lib/canvases"; // 타입만 — 번들에 lib/canvases 런타임이 들어가지 않는다
+import { reasonOf } from "./apiError";
 
 interface Props {
   current: string;
   onSwitch: (id: string) => void;
-}
-
-/** 실패 응답에서 사용자에게 보여줄 한국어 사유를 꺼낸다(409 의 error 가 그대로 노출된다). */
-async function reasonOf(r: Response, fallback: string): Promise<string> {
-  const body = await r.json().catch(() => null);
-  return (body as { error?: string } | null)?.error ?? fallback;
 }
 
 export default function CanvasPanel({ current, onSwitch }: Props) {

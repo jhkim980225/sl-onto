@@ -21,11 +21,14 @@ const HAS_DB = db.dbEnabled();
  * 동시 실행 1개로 제한 — 실행 중 재요청은 완료 후 1회 재실행(그 사이 추가된 노드 커버).
  * canvasId 를 받아 withCanvas 로 다시 깐다 — 백그라운드 태스크는 요청 ALS 컨텍스트 밖에서 돈다. */
 let backfillRunning = false;
-let backfillAgain = false;
+// 대기 중인 캔버스 id 집합. 불린 하나였을 때는 "누가 대기 중인지"를 잃어서, A 백필이 도는 중
+// B 가 요청하면 재실행이 A 로 걸리고 B 의 노드가 영원히 embedding IS NULL 로 남았다
+// (시맨틱 검색·중복 감사에서 조용히 누락).
+const backfillPending = new Set<string>();
 function scheduleEmbedBackfill(canvasId: string) {
   if (!HAS_DB) return;
   if (backfillRunning) {
-    backfillAgain = true;
+    backfillPending.add(canvasId);
     return;
   }
   backfillRunning = true;
@@ -36,9 +39,10 @@ function scheduleEmbedBackfill(canvasId: string) {
     .catch(() => {})
     .finally(() => {
       backfillRunning = false;
-      if (backfillAgain) {
-        backfillAgain = false;
-        scheduleEmbedBackfill(canvasId);
+      const next = backfillPending.values().next();
+      if (!next.done) {
+        backfillPending.delete(next.value);
+        scheduleEmbedBackfill(next.value);
       }
     });
 }

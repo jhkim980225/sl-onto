@@ -5,8 +5,8 @@
 import { NextResponse } from "next/server";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getSourceContent } from "@/lib/db";
 import { extractSourceBlocks } from "@/lib/source-text";
+import { canvasSourceBytes } from "@/lib/source-bytes";
 import { parseDocument, parseEnabled } from "@/lib/parse";
 import { ready } from "@/lib/store";
 import { withCanvasRoute } from "@/lib/canvas-route";
@@ -24,11 +24,10 @@ export async function GET(req: Request) {
       if (!raw) return bad(400, "file 파라미터가 필요합니다");
       const file = path.basename(raw).normalize("NFC"); // 경로 탈출 방지 — data/sources 밖 접근 금지
 
-      // 바이트 확보: 디스크(베이스라인) 우선, 없으면 DB 업로드 원본.
-      const diskPath = path.join(process.cwd(), "data", "sources", file);
-      let buf: Buffer | null = fs.existsSync(diskPath) ? fs.readFileSync(diskPath) : null;
-      if (!buf) buf = await getSourceContent(file);
-      if (!buf) return bad(404, "파일을 찾을 수 없습니다");
+      // 바이트 확보 — 이 캔버스에 등록된 문서만. 디스크를 먼저 읽으면 타 캔버스의
+      // 베이스라인 문서가 그대로 열린다(격리 위반). lib/source-bytes.ts 주석 참조.
+      const buf = await canvasSourceBytes(file);
+      if (!buf) return bad(404, "이 캔버스에 없는 문서입니다");
 
       const ext = path.extname(file).toLowerCase();
 

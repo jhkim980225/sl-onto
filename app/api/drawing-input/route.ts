@@ -8,7 +8,7 @@ import { analyzeDrawing } from "@/lib/drawing-input";
 import { ingestOne } from "@/lib/ingest";
 import { parseDxfEntities, parseDrawing } from "@/lib/ingest/dxf";
 import { withTempFile } from "@/lib/ingest/tempfile";
-import { mergeDelta, registerSource, allNodes, allEdges, setActiveDrawing, ready } from "@/lib/store";
+import { allEdges, allNodes, getMetamodel, getRuntimeSources, mergeDelta, ready, registerSource, setActiveDrawing } from "@/lib/store";
 import { assessDrawing } from "@/lib/drawing-risk";
 import { withCanvasRoute } from "@/lib/canvas-route";
 
@@ -43,7 +43,22 @@ export async function POST(req: Request) {
       const drawing = parseDrawing(parseDxfEntities(buf.toString("utf8")));
 
       // 1) 온톨로지 합류 (기존 인제스천 파이프라인 재사용 — 멱등)
-      const result = withTempFile(name, buf, (tmp) => ingestOne(tmp, name));
+      // /api/ingest 와 동일한 두 가드. 없으면 (a) 빈 스키마 캔버스에서 nodes.type FK 위반 raw 500,
+  // (b) 같은 이름 재업로드 시 sources 행만 교체되고 옛 노드가 남아 근거가 어긋난다.
+  if (getMetamodel().objectTypes.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "이 캔버스에는 객체타입이 없습니다. ◈ 스키마에서 먼저 정의하세요", needsSchema: true },
+      { status: 409 }
+    );
+  }
+  if (getRuntimeSources().some((s) => s.file === name)) {
+    return NextResponse.json(
+      { ok: false, error: `"${name}" 도면이 이미 있습니다. 내용을 바꾸려면 📄 문서에서 ⟳ 교체를 쓰세요.`, duplicate: true },
+      { status: 409 }
+    );
+  }
+
+  const result = withTempFile(name, buf, (tmp) => ingestOne(tmp, name));
       const delta = await mergeDelta(result.nodes, result.edges, "drawing.add");
       await registerSource(result.source, buf);
 

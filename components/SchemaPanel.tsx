@@ -5,6 +5,7 @@
 // 삭제 실패(409)는 서버가 준 한국어 사유를 그대로 노출한다("이 타입의 노드가 12개 남아 있어…").
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { reasonOf } from "./apiError";
 
 interface ObjectType {
   type_id: string;
@@ -18,13 +19,12 @@ interface RelationType {
   dst_types: string[];
 }
 
-/** 실패 응답에서 사용자에게 보여줄 한국어 사유를 꺼낸다. */
-async function reasonOf(r: Response, fallback: string): Promise<string> {
-  const body = await r.json().catch(() => null);
-  return (body as { error?: string } | null)?.error ?? fallback;
+interface SchemaPanelProps {
+  /** 스키마가 바뀌면(타입 추가·삭제) 부모가 capabilities 를 다시 조회하게 한다. */
+  onChanged?: () => void;
 }
 
-export default function SchemaPanel() {
+export default function SchemaPanel({ onChanged }: SchemaPanelProps) {
   const [types, setTypes] = useState<ObjectType[]>([]);
   const [rels, setRels] = useState<RelationType[]>([]);
   const [tId, setTId] = useState("");
@@ -57,6 +57,7 @@ export default function SchemaPanel() {
     setTId("");
     setTLabel("");
     await load();
+    onChanged?.(); // 객체타입이 바뀌면 기능 가용성(capabilities)도 바뀐다
   }
 
   async function delType(id: string) {
@@ -67,6 +68,7 @@ export default function SchemaPanel() {
       return;
     }
     await load();
+    onChanged?.();
   }
 
   async function addRel() {

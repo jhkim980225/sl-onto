@@ -60,3 +60,13 @@ test("dropCanvasCache 후 그 캔버스는 비어 있다", async () => {
   store.dropCanvasCache("cv-i");
   assert.equal(withCanvas("cv-i", () => store.getNode("T")), undefined);
 });
+
+test("임베딩 백필 대기열이 캔버스 id 를 잃지 않는다", async () => {
+  // 불린 플래그였을 때는 A 실행 중 B 요청이 들어오면 재실행이 A 로 걸려
+  // B 가 영원히 임베딩 없이 남았다. Set 으로 바뀐 뒤의 회귀 방어.
+  const src = await import("node:fs").then((fs) => fs.readFileSync("lib/store.ts", "utf8"));
+  assert.ok(src.includes("backfillPending"), "대기 캔버스를 Set 으로 보존해야 한다");
+  assert.ok(!src.includes("backfillAgain"), "불린 플래그가 남아 있으면 안 된다");
+  assert.match(src, /backfillPending\.add\(canvasId\)/, "대기 시 요청한 캔버스 id 를 넣어야 한다");
+  assert.match(src, /scheduleEmbedBackfill\(next\.value\)/, "재실행은 대기 중이던 캔버스로 걸어야 한다");
+});

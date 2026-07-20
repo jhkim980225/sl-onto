@@ -104,9 +104,11 @@ export default function DesignConditionForm({
           ))}
         </div>
       </div>
-      <button className="btn btn-primary dc-run" onClick={onRun} disabled={running}>
+      {/* 형상 0개는 서버가 400 으로 거절한다 — 버튼을 막고 이유를 먼저 알린다. */}
+      <button className="btn btn-primary dc-run" onClick={onRun} disabled={running || condition.shape.length === 0}>
         {running ? "추론 중…" : "▶ 추론 실행"}
       </button>
+      {condition.shape.length === 0 && <div className="dc-hint">형상을 하나 이상 선택하세요.</div>}
     </div>
   );
 }

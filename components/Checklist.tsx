@@ -13,6 +13,10 @@ import { buildChains, findIdByText, parseHop, type NodeIndex } from "./nodeIndex
 import ConfidenceBar from "./ConfidenceBar";
 import { TraceChain } from "./TraceNode";
 import { apiFetch } from "@/lib/api-client";
+import { reasonOf } from "./apiError";
+
+// 서버가 사유를 주지 않을 때(네트워크 끊김·타임아웃)만 쓰는 폴백.
+const LLM_BUSY = "사내 LLM 응답 지연·혼잡 — 잠시 후 다시 시도하세요";
 
 interface ChecklistProps {
   loading: boolean;
@@ -35,6 +39,7 @@ export default function Checklist({
 }: ChecklistProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [dl, setDl] = useState(false);
+  const [dlError, setDlError] = useState<string | null>(null);
   // FMEA 초안 다운로드 클릭 → 취약점 분석 리포트(이미지) 모달을 먼저 보여주고,
   // 모달 안의 다운로드 버튼이 실제 xlsx 다운로드를 수행한다.
   const [vulnOpen, setVulnOpen] = useState(false);
@@ -50,27 +55,28 @@ export default function Checklist({
   // AI 종합 소견(RAG) — /api/review-opinion. 새 추론 결과가 나오면(체크리스트가 바뀌면) 초기화.
   const [opinion, setOpinion] = useState<{ opinion: string; citedChecks: number[]; cached: boolean; generatedAt: string } | null>(null);
   const [opinionLoading, setOpinionLoading] = useState(false);
-  const [opinionError, setOpinionError] = useState(false);
+  // 서버가 준 사유를 그대로 담는다 — 모든 실패를 "LLM 혼잡"으로 뭉뚱그리지 않는다.
+  const [opinionError, setOpinionError] = useState<string | null>(null);
   useEffect(() => {
     setOpinion(null);
-    setOpinionError(false);
+    setOpinionError(null);
   }, [result]);
 
   async function fetchOpinion() {
     if (opinionLoading) return;
     setOpinionLoading(true);
-    setOpinionError(false);
+    setOpinionError(null);
     try {
       const res = await apiFetch("/api/review-opinion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(condition),
       });
+      if (!res.ok) throw new Error(await reasonOf(res, LLM_BUSY));
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "생성 실패");
       setOpinion({ opinion: data.opinion, citedChecks: data.citedChecks ?? [], cached: !!data.cached, generatedAt: data.generatedAt });
-    } catch {
-      setOpinionError(true);
+    } catch (e) {
+      setOpinionError(e instanceof Error ? e.message : LLM_BUSY);
     } finally {
       setOpinionLoading(false);
     }
@@ -99,13 +105,15 @@ export default function Checklist({
   async function downloadFmea() {
     if (dl) return;
     setDl(true);
+    setDlError(null);
     try {
       const res = await apiFetch("/api/fmea-draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(condition),
       });
-      if (!res.ok) throw new Error("생성 실패");
+      // 409(capability 없음)·400 등 — 서버가 준 사유를 사용자에게 그대로 보여준다.
+      if (!res.ok) throw new Error(await reasonOf(res, `생성 실패 (${res.status})`));
       const blob = await res.blob();
       const cd = res.headers.get("Content-Disposition") || "";
       const m = cd.match(/filename\*=UTF-8''([^;]+)/);
@@ -118,8 +126,9 @@ export default function Checklist({
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch {
-      /* 조용히 무시 — 버튼 상태만 복구 */
+    } catch (e) {
+      setDlError(e instanceof Error ? e.message : String(e));
+      setVulnOpen(false); // 모달을 닫아 뒤의 에러 배너가 보이게 한다
     } finally {
       setDl(false);
     }
@@ -166,7 +175,8 @@ export default function Checklist({
       <button className="opinion-btn" onClick={fetchOpinion} disabled={opinionLoading} title="현재 체크리스트를 사내 LLM이 종합해 소견을 생성합니다">
         {opinionLoading ? "AI 소견 생성 중… (사내 LLM, 최대 1~2분)" : "🤖 AI 종합 소견"}
       </button>
-      {opinionError && <div className="opinion-card opinion-error">사내 LLM 응답 지연·혼잡 — 잠시 후 다시 시도하세요</div>}
+      {dlError && <div className="opinion-card opinion-error">FMEA 초안 생성 실패 — {dlError}</div>}
+      {opinionError && <div className="opinion-card opinion-error">{opinionError}</div>}
       {opinion && (
         <div className="opinion-card">
           <div className="sec-label">AI 종합 소견</div>

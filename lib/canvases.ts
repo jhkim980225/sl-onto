@@ -102,10 +102,22 @@ export async function restoreCanvas(id: string): Promise<void> {
   invalidateCanvasList();
 }
 
-/** 영구 삭제 — 노드·엣지·문서·스키마가 CASCADE 로 사라진다. 되돌릴 수 없다. */
-export async function purgeCanvas(id: string): Promise<void> {
+/** 영구 삭제 — 노드·엣지·문서·스키마·change_log 가 CASCADE 로 사라진다. 되돌릴 수 없다.
+ * 반드시 휴지통(소프트 삭제)을 거친 캔버스만 지운다. 앱에 인증이 없어서, 가드가 없으면
+ * `curl -X DELETE '.../api/canvases/default?purge=1'` 한 줄로 운영 온톨로지 전체가 날아간다
+ * (브라우저 이름 확인 프롬프트는 UI 밖에서 무력하다). */
+export async function purgeCanvas(id: string): Promise<{ ok: true } | { ok: false; reason: string }> {
   requireDb();
+  const active = await db.canvasRows(false);
+  if (active.some((c) => c.id === id)) {
+    return { ok: false, reason: "활성 캔버스는 영구 삭제할 수 없습니다 — 먼저 휴지통으로 옮기세요" };
+  }
+  const trashed = await db.canvasRows(true);
+  if (!trashed.some((c) => c.id === id)) {
+    return { ok: false, reason: "휴지통에 없는 캔버스입니다" };
+  }
   await db.purgeCanvas(id);
   invalidateCanvasList();
   dropCanvasCache(id);
+  return { ok: true };
 }

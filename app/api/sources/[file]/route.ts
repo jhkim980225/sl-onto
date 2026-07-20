@@ -58,6 +58,16 @@ export async function PUT(req: Request, { params }: { params: Promise<{ file: st
       return bad(400, "지원 형식은 .xlsx / .pptx / .docx / .dxf / .pdf 입니다");
     if (f.size === 0) return bad(400, "빈 파일입니다");
     if (f.size > MAX_BYTES) return bad(400, "파일이 10MB 를 초과합니다");
+
+    // 교체 대상(URL)과 업로드 파일 이름이 같아야 한다. 다르면 A 를 지우고 B 를 덮어써
+    // A 가 통째로 사라진다(실측: 노드 29 → 17). UI 는 "A 교체" 라고 표시하므로 사용자는 모른다.
+    // 다른 이름으로 바꾸려면 삭제 후 등록이 맞다 — 그쪽이 의도가 명시적이다.
+    if (name !== file.normalize("NFC")) {
+      return bad(
+        400,
+        `교체 파일 이름이 다릅니다 — "${file}" 자리에 "${name}" 을 올릴 수 없습니다. 이름이 같은 파일로 교체하거나, 삭제 후 새로 등록하세요.`
+      );
+    }
     const buf = Buffer.from(await f.arrayBuffer());
 
     // ── 1) 파싱 먼저. 여기서 실패하면 원본 문서는 그대로 남는다(설계 §3 원자성).

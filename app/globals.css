@@ -519,6 +519,7 @@ mark.ft-hl{background:#ffe27a;color:var(--ink);font-weight:700;border-radius:2px
 .dc-chip:hover{border-color:#b3e2f2}
 .dc-chip.on{background:var(--amber);color:#fff;border-color:var(--amber);font-weight:600}
 .dc-run{width:100%;justify-content:center;margin-top:10px}
+.dc-hint{margin-top:6px;font-size:11px;color:var(--ink-faint);text-align:center}
 
 /* ── 결로 지역 분석 시나리오 ── */
 .cond-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;padding:10px 12px;border-radius:8px;background:#eef4fc;border:1px solid #bcd6f4;color:#2f6fb5;font-size:12.5px;font-weight:500;transition:border-color .15s,background .15s}

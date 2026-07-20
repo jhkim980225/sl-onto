@@ -12,6 +12,7 @@ import SourcePanel from "./SourcePanel";
 import LeftRail from "./LeftRail";
 import CanvasPanel from "./CanvasPanel";
 import SchemaPanel from "./SchemaPanel";
+import { reasonOf } from "./apiError";
 import DocumentPanel from "./DocumentPanel";
 import SourceModal from "./SourceModal";
 import Stepper from "./Stepper";
@@ -245,7 +246,8 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
   // 서브타입 라벨 매핑(형식 온톨로지 1차) + 기능 가용성 — 같은 /api/schema 한 번으로 둘 다 받는다.
   // 실패해도 탐색기 서브타입 트리·조건부 버튼만 생략(치명 아님).
   // ontologyBuilt 를 기다리지 않는다 — 라우트가 ready() 를 보장하고, 빈 캔버스에서도 캡이 필요하다.
-  useEffect(() => {
+  // 마운트 1회로는 부족하다 — ◈ 스키마에서 타입을 정의하면 새로고침 없이 버튼이 나타나야 한다.
+  const refreshCaps = useCallback(() => {
     apiFetch("/api/schema")
       .then((res) => {
         if (!res.ok) throw new Error(`스키마 조회 실패 (${res.status})`);
@@ -260,6 +262,9 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
       })
       .catch(() => {});
   }, []);
+  useEffect(() => {
+    refreshCaps();
+  }, [refreshCaps]);
 
   // ── 결로 지역별 분석 시나리오 진입 (Inspector에서 아우터 렌즈/결로·습기 선택 시) ──
   const handleOpenCondensation = useCallback(() => {
@@ -511,8 +516,8 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(inferInput),
     })
-      .then((res) => {
-        if (!res.ok) throw new Error(`추론 API 실패 (${res.status})`);
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await reasonOf(res, `추론 API 실패 (${res.status})`));
         return res.json() as Promise<InferResponse>;
       })
       .then((data) => {
@@ -606,8 +611,8 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
       })
-        .then((res) => {
-          if (!res.ok) throw new Error(`추론 API 실패 (${res.status})`);
+        .then(async (res) => {
+          if (!res.ok) throw new Error(await reasonOf(res, `추론 API 실패 (${res.status})`));
           return res.json() as Promise<InferResponse>;
         })
         .then((data) => {
@@ -766,8 +771,8 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
       })
-        .then((res) => {
-          if (!res.ok) throw new Error(`추론 API 실패 (${res.status})`);
+        .then(async (res) => {
+          if (!res.ok) throw new Error(await reasonOf(res, `추론 API 실패 (${res.status})`));
           return res.json() as Promise<InferResponse>;
         })
         .then((data) => {
@@ -930,9 +935,10 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
           if (selectedNodeRef.current && gone.has(selectedNodeRef.current.id)) selectedNodeRef.current = null;
         }
         refreshSources();
+        refreshCaps();
       })
       .catch((err) => setOntologyError(err instanceof Error ? err.message : String(err)));
-  }, [refreshSources]);
+  }, [refreshSources, refreshCaps]);
 
   // POST /api/ingest 공통 경로 — FormData(파일 업로드) 또는 JSON 문자열({sample:true}).
   const runIngest = useCallback(
@@ -994,8 +1000,9 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
   const handleIngestFile = useCallback(
     (file: File) => {
       if (ingestLoading) return;
-      if (!/\.(xlsx|pptx|docx)$/i.test(file.name)) {
-        setIngestError("지원하지 않는 형식입니다 — .xlsx / .pptx / .docx 파일만 업로드할 수 있습니다.");
+      // dxf 는 인제스천이 아니라 📐 도면 분석(/api/drawing-input) 전용이라 여기서 제외한다.
+      if (!/\.(xlsx|pptx|docx|pdf)$/i.test(file.name)) {
+        setIngestError("지원하지 않는 형식입니다 — .xlsx / .pptx / .docx / .pdf 파일만 업로드할 수 있습니다.");
         setIngestResult(null);
         return;
       }
@@ -1208,7 +1215,7 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
                 }}
               />
             ),
-            schema: <SchemaPanel />,
+            schema: <SchemaPanel onChanged={refreshCaps} />,
           }}
         />
 

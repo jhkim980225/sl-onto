@@ -36,7 +36,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     await dbReady();
     const { id } = await params;
     if (new URL(req.url).searchParams.get("purge") === "1") {
-      await purgeCanvas(id); // 되돌릴 수 없음
+      const p = await purgeCanvas(id); // 되돌릴 수 없음 — 휴지통을 거친 캔버스만 허용
+      if (!p.ok) return NextResponse.json({ error: p.reason }, { status: 409 });
       return NextResponse.json({ ok: true });
     }
     const r = await deleteCanvas(id);

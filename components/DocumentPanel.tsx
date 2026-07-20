@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import type { SourceInfo, SourcesResponse } from "./sourceTypes";
+import { reasonOf } from "./apiError";
 
 interface Props {
   /** 삭제·교체 성공 후 그래프·카운터를 다시 불러오게 하는 부모 콜백 */
@@ -22,15 +23,6 @@ interface MutateResult {
   removed?: Removed;
   added?: { nodes: number; edges: number };
   keptEdges?: number;
-}
-
-/** 실패 응답에서 사용자에게 보여줄 한국어 사유를 꺼낸다(JSON 이 아니어도 깨지지 않는다). */
-async function reasonOf(r: Response, fallback: string): Promise<string> {
-  const body = await r.json().catch(() => null);
-  const b = body as { error?: string; needsSchema?: boolean } | null;
-  // 409 needsSchema = 빈 스키마 캔버스 — 무엇을 먼저 해야 하는지로 바꿔 안내한다.
-  if (b?.needsSchema) return "◈ 스키마에서 객체타입을 먼저 정의하세요.";
-  return b?.error ?? fallback;
 }
 
 /** 남은 관계 안내 — 0건이면 문장을 붙이지 않는다. */
@@ -150,7 +142,7 @@ export default function DocumentPanel({ onChanged }: Props) {
       <input
         ref={fileRef}
         type="file"
-        accept=".xlsx,.pptx,.docx"
+        accept=".xlsx,.pptx,.docx,.dxf,.pdf"
         style={{ display: "none" }}
         onChange={(e) => {
           const f = e.target.files?.[0];

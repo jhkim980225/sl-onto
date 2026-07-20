@@ -1,7 +1,7 @@
 "use client";
 
 // 우측 패널 · 문서 인제스천(증분 반영) — 이미 구축된 온톨로지에 새 문서를 더한다.
-// 파일 업로드(.xlsx/.pptx/.docx) 또는 샘플 문서로 POST /api/ingest 를 호출하고,
+// 파일 업로드(.xlsx/.pptx/.docx/.pdf) 또는 샘플 문서로 POST /api/ingest 를 호출하고,
 // 결과(새 객체/관계 통계 + 원문→표준 매핑 미리보기 + 새 노드 목록)를 보여준다.
 // 새 노드 클릭 시 부모의 handleNodeClick funnel(via "인제스천")로 그래프 선택/포커스.
 import { useRef, useState, type DragEvent } from "react";
@@ -10,7 +10,8 @@ import type { IngestResponse } from "./ingestTypes";
 import DoclingPreviewList from "./DoclingPreviewList";
 import PanelHeader from "./PanelHeader";
 
-const ACCEPT = ".xlsx,.pptx,.docx,.dxf";
+// 서버(/api/ingest ALLOWED_EXT)와 일치. dxf 는 인제스천이 아니라 📐 도면 분석 전용이라 제외.
+const ACCEPT = ".xlsx,.pptx,.docx,.pdf";
 
 interface IngestPanelProps {
   loading: boolean;
@@ -86,7 +87,7 @@ export default function IngestPanel({
           📄
         </span>
         <span>파일을 끌어다 놓거나 클릭해 선택</span>
-        <span className="fmt">.xlsx · .pptx · .docx — 최대 10MB</span>
+        <span className="fmt">.xlsx · .pptx · .docx · .pdf — 최대 10MB</span>
         <input
           ref={fileInputRef}
           type="file"
