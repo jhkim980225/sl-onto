@@ -18,7 +18,7 @@ Next.js(App Router, TS) · Route Handlers API · **Postgres 영속 온톨로지*
 pgvector 384-dim + Python 임베딩 사이드카 pyservice) · 규칙기반 그래프 추론 ·
 자연어 검색(규칙기반 + 임베딩 후보확장, LLM 옵트인) · 인제스천(xlsx/pptx/docx/dxf) ·
 **라이트 SL 브랜드 테마**(흰 배경·네이비 텍스트·시안 액센트 `#00a2e5`).
-- **배포됨(v76, 2026-07-20):** FEDA K8s ns `sl-ontoground`, NodePort **30494** → `http://192.168.0.100:30494/` (상세 `docs/deployment.md`).
+- **배포됨(v79):** FEDA K8s ns `sl-ontoground`, NodePort **30494** → `http://192.168.0.100:30494/` (상세 `docs/deployment.md`).
   다음 버전 번호는 마스터의 `docker images` + `kubectl get rs`로 확인(로컬 스크립트 파일명 믿지 말 것).
 
 ## 레포 구조
@@ -81,6 +81,6 @@ FMEA 타입이 없는 캔버스에서는 추론·초안·모순·BOM 이 409(`li
 | `docs/architecture.md` | 시스템 구조·데이터흐름·API·배포 |
 | `docs/data-model.md` | 온톨로지 스키마·저장 schema·JSON 형태 |
 | `docs/design.md` | UI 디자인 시스템(라이트 SL 브랜드 · 그래프 존/방사형 레이아웃) |
-| `docs/deployment.md` | Docker standalone → FEDA K8s 배포(v76 · 레지스트리 :5000 · NodePort 30494) |
+| `docs/deployment.md` | Docker standalone → FEDA K8s 배포(v79 · 레지스트리 :5000 · NodePort 30494) |
 | `docs/skills.md` | 빌드용 스킬 |
 | `docs/features/*` | 기능별 상세(인제스천·저장소·검색·nlsearch·추론·graph-interaction·결로시나리오·UI) |

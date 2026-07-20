@@ -80,7 +80,7 @@ docs/
 
 | 위치 | 현재 | 실제 |
 |---|---|---|
-| `architecture.md:112` | 배포 v2 | v76 (마스터의 `docker images` + `kubectl get rs` 로 확인) |
+| `architecture.md:112` | 배포 v2 | **v79** (2026-07-21 사용자 확인). v76 은 001-canvas 마이그레이션이 나간 시점이라 이력 서술은 유지 |
 | `requirements.md:39,57,75` | v7 | 〃 |
 | `CLAUDE.md:84` | v8 | 〃 (21줄은 v76 — 자기모순) |
 | `requirements.md:43` | "신경망 임베딩·벡터DB 미채택" | pgvector 384dim + e5 사이드카 채택 |

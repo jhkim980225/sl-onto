@@ -36,7 +36,7 @@ SL 자동차 램프 FMEA는 필수 업무지만 과거 자료가 비정형(PPT·
 - 기존 SVG 데모 UI를 API에 연결(3단계 유지) + 그래프 인터랙션(포커스·타입 존·방사형)
 - 검색: 키워드 + 그래프 스코어링 · **자연어 규칙기반 검색**
 - 결로·습기 지역별 시연 시나리오(지역 상세 + 설계도 SVG)
-- 라이트 SL 브랜드 테마 · Docker 단일 이미지로 **FEDA K8s 배포 완료(v76)**
+- 라이트 SL 브랜드 테마 · Docker 단일 이미지로 **FEDA K8s 배포 완료(v79)**
 
 ### ❌ 구현 안 함 (YAGNI/확장기)
 - Docling(스캔/이미지 PDF·표 사진·복잡 중첩표), 도면/이미지 이해(VLM), 멀티모달 임베딩
@@ -54,7 +54,7 @@ SL 자동차 램프 FMEA는 필수 업무지만 과거 자료가 비정형(PPT·
 | 리스크·영향 분석 + 맞춤 FMEA 초안 | 체크리스트(근거+확신도) | FMEA 문서 생성 |
 | 도면/이미지 이해 | **결로 지역별 설계도 SVG**(온톨로지 링크된 단면도) | 실 CAD/PDF 도면 뷰어·VLM |
 | 외부 데이터 연계 | ❌ | 논문·특허·소비자 |
-| 회사 클라우드 배포 | **완료 — FEDA K8s v76 (NodePort 30494)** | HPA·SSO |
+| 회사 클라우드 배포 | **완료 — FEDA K8s v79 (NodePort 30494)** | HPA·SSO |
 
 ## 6. 완료 기준 (Definition of Done)
 - [x] STAGE 2에서 온톨로지가 저장소에서 로드되어 렌더 (인제스천 결과 ≈170 노드/2156 엣지, seed 폴백 시 ≈275)
@@ -72,4 +72,4 @@ SL 자동차 램프 FMEA는 필수 업무지만 과거 자료가 비정형(PPT·
 - [x] STAGE 1 원천 패널이 **실제 파일** 목록 + 클릭 시 정형화 미리보기(원문→표준 매핑·확신도) 표시
 - [x] `next build` standalone 이미지 검증 — data/sources 트레이싱 + 7 API 동작 확인
 - [x] Dockerfile + [deployment.md](deployment.md) 준비 완료
-- [x] **회사 클라우드 배포 완료** — FEDA K8s ns `sl-ontoground`, v76, NodePort 30494 → `http://192.168.0.100:30494/`
+- [x] **회사 클라우드 배포 완료** — FEDA K8s ns `sl-ontoground`, v79, NodePort 30494 → `http://192.168.0.100:30494/`
