@@ -47,8 +47,24 @@ export async function listCanvases(includeDeleted = false): Promise<CanvasSummar
   return (await db.canvasRows(includeDeleted)).map(toSummary);
 }
 
+/** 캔버스 쓰기는 Postgres 가 있어야 성립한다. 인메모리 모드에서 그냥 두면 getPool() 이
+ * connectionString: undefined 로 Pool 을 만들어 localhost 연결에 매달렸다가 500 으로 끝난다 —
+ * 사용자는 원인을 알 수 없다. 도메인 계층에서 한 번 막아 모든 호출자를 커버한다.
+ * 라우트는 이 오류를 503 으로 변환한다(클라이언트가 요청을 고쳐서 해결할 수 없는 서버 상태). */
+export class CanvasWriteUnavailable extends Error {
+  constructor() {
+    super("DB 모드에서만 캔버스를 만들거나 수정할 수 있습니다");
+    this.name = "CanvasWriteUnavailable";
+  }
+}
+
+function requireDb(): void {
+  if (!db.dbEnabled()) throw new CanvasWriteUnavailable();
+}
+
 /** 새 캔버스 생성 — 빈 스키마. 메타모델을 시드하지 않는다(설계 §3.4). */
 export async function createCanvas(name: string, description: string | null): Promise<CanvasSummary> {
+  requireDb();
   const base = slugify(name);
   const taken = new Set((await db.canvasRows(false)).concat(await db.canvasRows(true)).map((c) => c.id));
   let id = base;
@@ -59,12 +75,14 @@ export async function createCanvas(name: string, description: string | null): Pr
 }
 
 export async function renameCanvas(id: string, name: string, description: string | null): Promise<void> {
+  requireDb();
   await db.updateCanvas(id, name.trim(), description);
   invalidateCanvasList();
 }
 
 /** 소프트 삭제(휴지통). 마지막 활성 캔버스는 지울 수 없다 — 앱이 빈 상태가 되면 복구 경로가 없다. */
 export async function deleteCanvas(id: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  requireDb();
   const active = await db.canvasRows(false);
   if (active.length <= 1) return { ok: false, reason: "마지막 캔버스는 삭제할 수 없습니다" };
   if (!active.some((c) => c.id === id)) return { ok: false, reason: "존재하지 않는 캔버스입니다" };
@@ -75,12 +93,14 @@ export async function deleteCanvas(id: string): Promise<{ ok: true } | { ok: fal
 }
 
 export async function restoreCanvas(id: string): Promise<void> {
+  requireDb();
   await db.restoreCanvas(id);
   invalidateCanvasList();
 }
 
 /** 영구 삭제 — 노드·엣지·문서·스키마가 CASCADE 로 사라진다. 되돌릴 수 없다. */
 export async function purgeCanvas(id: string): Promise<void> {
+  requireDb();
   await db.purgeCanvas(id);
   invalidateCanvasList();
   dropCanvasCache(id);

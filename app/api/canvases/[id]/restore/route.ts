@@ -3,12 +3,15 @@
 import { NextResponse } from "next/server";
 import * as db from "@/lib/db";
 import { restoreCanvas } from "@/lib/canvases";
+import { canvasWrite } from "@/lib/canvas-write";
 
 export const runtime = "nodejs";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (db.dbEnabled()) await db.ready();
-  const { id } = await params;
-  await restoreCanvas(id);
-  return NextResponse.json({ ok: true });
+  return canvasWrite(async () => {
+    if (db.dbEnabled()) await db.ready();
+    const { id } = await params;
+    await restoreCanvas(id);
+    return NextResponse.json({ ok: true });
+  });
 }

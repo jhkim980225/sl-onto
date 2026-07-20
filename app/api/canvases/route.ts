@@ -6,6 +6,7 @@ import { z } from "zod";
 import * as db from "@/lib/db";
 import { listCanvases, createCanvas } from "@/lib/canvases";
 import { parseJsonBody } from "@/lib/schemas";
+import { canvasWrite } from "@/lib/canvas-write";
 
 export const runtime = "nodejs";
 
@@ -25,10 +26,12 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  await dbReady();
-  const parsed = await parseJsonBody(req, CreateSchema);
-  if (!parsed.ok) return parsed.response;
+  return canvasWrite(async () => {
+    await dbReady();
+    const parsed = await parseJsonBody(req, CreateSchema);
+    if (!parsed.ok) return parsed.response;
 
-  const canvas = await createCanvas(parsed.data.name, parsed.data.description ?? null);
-  return NextResponse.json({ canvas }, { status: 201 });
+    const canvas = await createCanvas(parsed.data.name, parsed.data.description ?? null);
+    return NextResponse.json({ canvas }, { status: 201 });
+  });
 }
