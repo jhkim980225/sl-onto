@@ -105,7 +105,7 @@ Route Handler
 | `/api/canvases/[id]` | PATCH/DELETE | `?purge=1` | 이름·설명 변경 / 소프트 삭제(마지막이면 409) · 영구 삭제 |
 | `/api/canvases/[id]/restore` | POST | — | 휴지통에서 복구 |
 | `/api/ontology/export` | GET | `?format=ttl` | RDF Turtle 내보내기(pyservice `/export`, 미설정 시 503) |
-| `/api/ask` | POST | `{id, question}` | `{answer, rels[], docs[]}` — 선택 객체 RAG 질의응답 |
+| `/api/ask` | POST | `{objectId, question}` | `{answer, rels[], docs[]}` — 선택 객체 RAG 질의응답 |
 | `/api/reason` | GET | — | 사이드카 유도 관계 overlay(조회 전용, store 미병합) |
 | `/api/source-text` | GET | `?file=` | 원본 문서 텍스트 |
 | `/api/quality` | GET | — | 품질 스캔(중복·고립·근거없음 + 형식 온톨로지 위반) |
