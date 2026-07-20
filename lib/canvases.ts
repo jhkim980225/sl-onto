@@ -30,6 +30,10 @@ export function invalidateCanvasList(): void {
 export async function canvasExists(id: string): Promise<boolean> {
   // 인메모리 모드(테스트·로컬)에는 canvases 테이블이 없다 — 기본 캔버스만 존재하는 것으로 본다.
   if (!db.dbEnabled()) return id === DEFAULT_CANVAS;
+  // withCanvasRoute 가 핸들러(=store.ready())보다 먼저 이걸 부른다. 부팅 첫 요청이 데이터
+  // 라우트면 canvases 테이블이 아직 없으므로 여기서 스키마·마이그레이션을 먼저 보장한다.
+  // db.ready() 는 멱등이고 모듈 레벨 Promise 가드가 있어 반복 호출 비용이 없다.
+  await db.ready();
   if (!existsCache) existsCache = new Set((await db.canvasRows(false)).map((c) => c.id));
   return existsCache.has(id);
 }
