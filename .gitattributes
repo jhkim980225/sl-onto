@@ -1,0 +1,13 @@
+# 바이너리 — CRLF 변환·diff 금지.
+# 특히 .pdf: scripts/gen-cosmetics.ts 가 만드는 PDF 는 무압축 ASCII 라 git 이
+# 텍스트로 오인한다. 줄바꿈이 바뀌면 xref 바이트 오프셋이 어긋나 파일이 깨진다.
+*.pdf   binary
+*.xlsx  binary
+*.pptx  binary
+*.docx  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gz    binary
+*.zip   binary
+*.dxf   text eol=lf
