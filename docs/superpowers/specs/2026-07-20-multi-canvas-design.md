@@ -312,9 +312,40 @@ Route Handler
 | 마이그레이션 실패 | 단일 트랜잭션 abort. 부팅 실패로 표면화(조용한 성공 금지) |
 | 마지막 캔버스 삭제 | 409 + UI 버튼 비활성 |
 | 캔버스 이름 중복 | 허용(id 는 별도 slug) |
-| 빈 스키마에서 인제스천 | 200 + `warning: "정의된 객체타입이 없어 적재된 항목이 없습니다"`. 실패 아님 |
+| 빈 스키마에서 인제스천 | **선제 차단** — `409` + `"이 캔버스에는 객체타입이 없습니다. ◈ 스키마에서 먼저 정의하세요"`. 아래 참조 |
 | 요구 타입 없는 기능 호출 | 409 + 사유. UI 는 애초에 버튼을 감춤 |
 | ALS 컨텍스트 밖 store 호출 | 개발 모드 `console.warn` + 스택. 프로덕션은 기본 캔버스 |
+
+### 빈 스키마 인제스천 — DB 제약이 강제한다 (구현 중 발견)
+
+원본 스키마에 이미 다음 FK 가 있었다(설계 시 누락했던 사실):
+
+```sql
+nodes.type TEXT NOT NULL REFERENCES object_types(type_id)
+edges.rel  TEXT NOT NULL REFERENCES relation_types(rel_id)
+```
+
+캔버스 스코핑 후 이것은 `(canvas_id, type) → object_types(canvas_id, type_id)` 가 된다.
+따라서 **객체타입이 하나도 없는 캔버스에는 노드를 물리적으로 넣을 수 없다** — 넣으려 하면
+FK 위반으로 트랜잭션이 실패한다. "경고와 함께 200" 은 불가능하다.
+
+이것은 오히려 설계 의도와 맞다("스키마를 먼저 정의해야 문서가 들어간다"). 다만 사용자에게
+FK 위반 500 을 보여줄 수는 없으므로 **인제스천 라우트가 선제 차단**한다:
+
+```ts
+// app/api/ingest/route.ts — 파싱·머지 이전에
+if (getMetamodel().objectTypes.length === 0) {
+  return NextResponse.json(
+    { error: "이 캔버스에는 객체타입이 없습니다. ◈ 스키마에서 먼저 정의하세요", needsSchema: true },
+    { status: 409 }
+  );
+}
+```
+
+UI(`IngestPanel`)는 `needsSchema` 를 받으면 스키마 드로어로 안내한다.
+
+**관계타입은 다르다** — `ensureRelTypes()`(`lib/db.ts`)가 미등록 관계를 자동 등록하므로
+인제스천이 막히지 않는다. 객체타입만 사람이 먼저 정의해야 한다.
 
 ## 9. 테스트
 
