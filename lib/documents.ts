@@ -2,7 +2,7 @@
 //
 // 엣지에는 출처가 없다(Edge 에 doc 필드 없음). 따라서 "이 문서가 만든 엣지"를 특정할 수 없고,
 // 대신 근거 우선(골든 룰 1)을 그대로 적용한다: 이 문서가 유일한 근거인 객체만 지운다.
-import { getNode, inEdges, evidenceOf, removeNode, removeSource, allEdges } from "./store";
+import { getNode, inEdges, evidenceOf, removeNode, removeSource } from "./store";
 
 export interface DeleteResult {
   removed: { doc: number; nodes: number; edges: number };

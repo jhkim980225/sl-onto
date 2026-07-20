@@ -1,7 +1,7 @@
 // lib/infer.ts — 추론 엔진 (핵심).
 // 신규 설계 조건(DesignInput) → 온톨로지 그래프 탐색 → 근거·확신도가 붙은 설계 검토 체크리스트.
 // 하드코딩 금지: 모든 항목은 store 그래프에서 계산되고, trace 는 실제 엣지 경로다.
-// 참조: docs/features/inference.md, docs/data-model.md, FMEA_온톨로지_시연_v2.html
+// 참조: docs/features/그래프-추론.md, docs/data-model.md, FMEA_온톨로지_시연_v2.html
 import type { DesignInput, InferResponse, CheckItem, Node, Edge } from "./types";
 import { getNode, allNodes, outEdges, inEdges, evidenceOf } from "./store";
 import { buildMasterAudit } from "./infer/master-audit";

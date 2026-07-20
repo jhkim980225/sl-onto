@@ -1,6 +1,6 @@
 // FMEA 초안 생성 — 신규 설계 조건 + 온톨로지 탐색으로 DFMEA 워크시트(xlsx)를 채운다.
 // 산출물: 부품/기능·잠재적 고장모드·영향·S·원인·O·설계관리·D·RPN·우선순위·권고조치·근거.
-// docs/features/fmea-draft.md
+// docs/features/FMEA-초안생성.md
 import * as XLSX from "xlsx";
 import type { DesignInput, Node } from "./types";
 import { getNode, allNodes, neighbors, evidenceOf } from "./store";

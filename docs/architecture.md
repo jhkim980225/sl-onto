@@ -105,7 +105,7 @@ Route Handler
 
 ## 4.2 그래프 인터랙션 레이어 (`components/Graph.tsx`)
 포스 시뮬 위에: (1) 클릭 포커스/디밍(비이웃 dim), (2) 대분류 타입 존(centroid gravity + `.zone-label`),
-(3) 관련도 방사형 배치(티어별 링 190/320/450). → [features/graph-interaction.md](features/graph-interaction.md).
+(3) 관련도 방사형 배치(티어별 링 190/320/450). → [features/그래프-인터랙션.md](features/그래프-인터랙션.md).
 
 ## 5. 배포
 - `output: 'standalone'` + Docker 단일 이미지. `$PORT` 대응. 무상태(기동 시 인제스천 재구축).

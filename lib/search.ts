@@ -1,5 +1,5 @@
 // feature: search — 키워드 필드 매칭 + 1-hop 그래프 확장 + 랭킹.
-// 프레임워크 무관(lib). 결정적. docs/features/search.md
+// 프레임워크 무관(lib). 결정적. docs/features/키워드-검색.md
 // 확장 이음새: 키워드→임베딩 교체 시 이 함수 내부만 바꾸고 시그니처·계약 유지.
 import type { Node, SearchHit, SearchResponse } from "./types";
 import { allNodes, evidenceOf, neighbors, deg, getNode } from "./store";

@@ -1,4 +1,4 @@
-# feature: bom-consistency — BOM 정합성 검증
+# feature: BOM 정합성 검증
 
 ## 책임
 부품의 BOM 구성(`CONSISTS_OF`)과 재질 속성을 온톨로지와 **교차 검증**해, 행 단위로는 정상인
@@ -21,7 +21,7 @@ checkBom(itemId: string): BomFinding[]
 구성 없는 부품은 빈 배열(오탐 없음).
 
 ## 데이터 흐름
-BOM xlsx (`BOM_*.xlsx`, `ingestXlsxBom` — [ingestion.md](ingestion.md)) → `CONSISTS_OF` + 재질/수량 props
+BOM xlsx (`BOM_*.xlsx`, `ingestXlsxBom` — [인제스천.md](인제스천.md)) → `CONSISTS_OF` + 재질/수량 props
 → `checkBom` → `GET /api/bom-check?item=<id>` → Inspector item 카드 "BOM 정합성" 섹션
 (기존 체크리스트 CSS 재사용, trace 칩 클릭 → 그래프 포커스).
 

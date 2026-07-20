@@ -1,6 +1,6 @@
 // 결로·습기 지역별 시연 시나리오 (아우터렌즈 → FMFOG).
 // 온톨로지 백본(ILENS·IHSG·FMFOG·CVENT·AVENT·규제 노드)에 "지역 축"과 "설계도 주석"을 얹는다.
-// docs/features/condensation-scenario.md
+// docs/features/결로-시나리오.md
 import { getObject, getNode, evidenceOf } from "@/lib/store";
 
 export type RegionKey = "asia" | "europe" | "na" | "china";

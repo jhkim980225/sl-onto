@@ -1,5 +1,5 @@
 // 온톨로지 저장소. 읽기 = 인메모리 인덱스(캐시), 원본 = Postgres(DATABASE_URL 있을 때).
-// write-through: 쓰기는 DB 커밋 성공 후에만 메모리 반영(캐시/DB 정합). docs/features/ontology-store.md
+// write-through: 쓰기는 DB 커밋 성공 후에만 메모리 반영(캐시/DB 정합). docs/features/온톨로지-저장소.md
 //
 // 모드:
 //   - DATABASE_URL 없음: 기존 인메모리 전용(모듈 로드 시 ingest→인덱스 구축). 테스트·로컬 개발 무변경.

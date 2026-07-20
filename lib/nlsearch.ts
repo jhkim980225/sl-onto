@@ -1,6 +1,6 @@
 // 자연어 검색 — 좁은 온톨로지에 대한 엔티티 링크 + 의도 파악 + 그래프 확장(규칙기반, 빠름·정확).
 // 질의에 언급된 개념(부품·고장·원인·지역·유형)을 실제 엔티티로 연결하고 관계로 확장한다.
-// 사내 LLM(qwen3)은 서버가 느려(수십 초) 기본 비활성. NL_USE_LLM=1 이면 LLM 우선(폴백=규칙기반). docs/features/nlsearch.md
+// 사내 LLM(qwen3)은 서버가 느려(수십 초) 기본 비활성. NL_USE_LLM=1 이면 LLM 우선(폴백=규칙기반). docs/features/자연어-검색.md
 import type { NLSearchResponse, SearchHit, ObjType, Node } from "./types";
 import { allNodes, getNode, neighbors, deg, outEdges, evidenceOf, getActiveDrawing } from "./store";
 import { featuresFromProps, hasFeatures, rankSimilarByShape } from "./shape-sim";

@@ -1,4 +1,4 @@
-# feature: fmea-draft — FMEA 초안 문서 생성
+# feature: FMEA 초안 문서 생성
 
 신규 설계 조건 + 온톨로지 탐색으로 **채워진 DFMEA 워크시트(xlsx)** 를 생성·다운로드한다.
 과제 요구 "설계 조건별 **맞춤형 FMEA 초안 생성**"에 대응하는 실제 업무 산출물.
@@ -19,7 +19,7 @@
 - **정제(중요)**: FMEA 초안은 **큐레이션 백본(비-AUTO)만** 사용 — auto-create 벌크 엔티티는 조합 링크 노이즈가 있어 제외.
   fm-원인 중복 제거 · 원인 3/행·조치 3/행·총 40행 상한. → 사리에 맞는 ~13행 초안.
 - **마스터 대조 요약**: 워크시트 하단에 `infer(input).masterAudit` 커버/누락/미확인 행
-  (설계표준 필수 항목 커버리지 — [inference.md](inference.md) 참조).
+  (설계표준 필수 항목 커버리지 — [그래프-추론.md](그래프-추론.md) 참조).
 
 ## API
 - `POST /api/fmea-draft` (body: `DesignInput`) → `application/vnd...spreadsheetml.sheet` 첨부 다운로드

@@ -32,7 +32,7 @@
 
 ## 3. 구현된 기능
 
-### 3.1 인제스천 — 비정형 문서 → 온톨로지 ([features/ingestion.md](features/ingestion.md))
+### 3.1 인제스천 — 비정형 문서 → 온톨로지 ([features/인제스천.md](features/인제스천.md))
 - 실제 원천 파일 **약 34개**(xlsx FMEA 시트 · pptx 재발방지/8D · docx 품질리포트 · xlsx 참조 마스터)를
   기동 시 파싱해 온톨로지 구축: **≈170 노드 / 2,156 엣지** (실패 시 seed 폴백 ≈275 노드).
 - 정규화 + 확신도 티어(정확 id 1.00 / 라벨 0.95 / 동의어 0.82 / 비표준 0.72), 원본값 보존(골든 룰).
@@ -40,37 +40,37 @@
 - **견고 파싱**: 병합헤더·세로 병합·동의어 컬럼·산문형 실무 문서 대응 —
   real-samples 측정 **BEFORE 0객체/0관계 → AFTER 42객체/36관계**.
 
-### 3.2 온톨로지 저장소 ([features/ontology-store.md](features/ontology-store.md))
+### 3.2 온톨로지 저장소 ([features/온톨로지-저장소.md](features/온톨로지-저장소.md))
 - Postgres 원본 + 인메모리 읽기 캐시(`lib/store.ts`, write-through), 객체 9종 · 관계 12종 ·
   속성/근거/확신도 모델. 캐시는 **캔버스별** `Map<canvasId, CanvasCache>`([§3.9](#39-다중-캔버스--문서-crud-2026-07-20-v76-배포됨)).
 - 빈 DB 부팅 시에만 `data/sources` 인제스천으로 `default` 캔버스를 구축. `DATABASE_URL` 없으면 인메모리 폴백.
 
-### 3.3 검색 — 키워드 + 자연어 ([features/search.md](features/search.md) · [features/nlsearch.md](features/nlsearch.md))
+### 3.3 검색 — 키워드 + 자연어 ([features/키워드-검색.md](features/키워드-검색.md) · [features/자연어-검색.md](features/자연어-검색.md))
 - 키워드 검색: 라벨/동의어 매칭 + 그래프 스코어링, 입력 중 드롭다운.
 - **자연어 검색**(Enter): 규칙기반 파이프라인(<1s, 한국어) — 지역→법규 매핑 · 유형 의도 · 도메인 동의어 ·
   엔티티 링크 · 1-hop 그래프 확장 · 지역 필터 · 랭킹 + 해석/답변 템플릿.
 - LLM 경로는 옵트인(`NL_USE_LLM=1`, 사내 vLLM, 실패 시 규칙 폴백) — 서버 지연(~60s)으로 기본 OFF.
 
-### 3.4 그래프 추론 → 체크리스트 ([features/inference.md](features/inference.md))
+### 3.4 그래프 추론 → 체크리스트 ([features/그래프-추론.md](features/그래프-추론.md))
 - `POST /api/infer`: 신규 설계 조건 → 그래프 탐색 → **계산된** 체크리스트 상위 8
   (제목 · 인과 설명 · 근거칩 · 확신도% · 실존 엣지 trace).
 - 조건 반응: 북미→FMVSS 108 승격, 슬림→수축 항목 부스트 등.
 
-### 3.5 FMEA 초안 생성 ([features/fmea-draft.md](features/fmea-draft.md))
+### 3.5 FMEA 초안 생성 ([features/FMEA-초안생성.md](features/FMEA-초안생성.md))
 - `POST /api/fmea-draft` → **채워진 DFMEA 워크시트(xlsx) 다운로드** (13컬럼: S·O·D·RPN·우선순위·권고조치·근거).
 - RPN = S×O×D, 조건 부스트(슬림→수축 O+1 등), 큐레이션 백본만 사용(AUTO 노이즈 제외) → ~13행 초안.
 
-### 3.6 증분 인제스천 ([features/incremental-ingest.md](features/incremental-ingest.md))
+### 3.6 증분 인제스천 ([features/증분-인제스천.md](features/증분-인제스천.md))
 - "📥 문서 인제스천" 탭: 파일 드롭(≤10MB) 또는 샘플 시연 → **델타만 파싱·병합**, 그래프 실시간 스폰.
 - `mergeDelta` 멱등(재병합 → 빈 델타), 기존 노드 미덮어쓰기(원본 보존), 원천 목록 런타임 갱신.
 - 검증(2026-07-05): 새 객체 8·관계 9·기존 연결 3, 카운터 170→179.
 
-### 3.7 결로·습기 지역별 시나리오 ([features/condensation-scenario.md](features/condensation-scenario.md))
+### 3.7 결로·습기 지역별 시나리오 ([features/결로-시나리오.md](features/결로-시나리오.md))
 - 아우터 렌즈(ILENS)×결로(FMFOG) 축으로 지역(아시아·유럽·북미·중국) 탭 →
   기후·위험도·규제·시험·대책 상세 + **헤드램프 단면 설계도 SVG**(지역별 주석 토글).
 - 앵커 전부 실제 온톨로지 노드, 근거는 실파일 `EVIDENCED_BY`.
 
-### 3.8 워크벤치 UI · 그래프 인터랙션 ([features/workbench-ui.md](features/workbench-ui.md) · [features/graph-interaction.md](features/graph-interaction.md))
+### 3.8 워크벤치 UI · 그래프 인터랙션 ([features/워크벤치-UI.md](features/워크벤치-UI.md) · [features/그래프-인터랙션.md](features/그래프-인터랙션.md))
 - 3단계 흐름(흩어진 원천 → 온톨로지 구축 → 신규 설계 추론), 데모 SVG 포스 그래프 이식 + API 배선
   (하드코딩 데이터 0 — 골든 룰).
 - 인터랙션: 클릭 포커스/디밍(sticky) · 대분류 타입 존 8개 · **방사형 관련도 링**(핵심 190/주변 320/근거 450).

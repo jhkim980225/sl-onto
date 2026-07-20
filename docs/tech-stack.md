@@ -33,13 +33,13 @@
   - ollama `nomic-embed-text` 임베딩: 한국어 개념을 **변별 못함**(유사도 붕괴).
   - 규칙기반: **<1s**, 한국어 정확, 결정론적. 좁고 통제된 온톨로지에선 링크가 임베딩보다 정확.
 - **결과:** 규칙기반이 기본. **LLM 경로는 코드에 있으나 OFF**(`NL_USE_LLM=1` 로 옵트인, 실패 시 규칙기반 폴백).
-  env: `LLM_BASE_URL`·`LLM_MODEL`·`LLM_TIMEOUT_MS`. 서버가 빨라지면 켠다. → [features/nlsearch.md](features/nlsearch.md).
+  env: `LLM_BASE_URL`·`LLM_MODEL`·`LLM_TIMEOUT_MS`. 서버가 빨라지면 켠다. → [features/자연어-검색.md](features/자연어-검색.md).
 
 ### ADR-6. 인제스천 = 실제 파일 파싱 + 견고 휴리스틱 (Docling 은 확장)
 - **결정:** SheetJS/jszip 로 실제 xlsx/pptx/docx 를 파싱. 통제 어휘 매핑 + **미지 엔티티 auto-create**(id `AUTO_*`, conf 0.66) +
   실무 문서용 **견고 파싱**(헤더 자동탐지·컬럼 동의어·병합셀 채움·자유텍스트 링크).
 - **왜:** "시드 대체"를 넘어 실제 비정형에서 추출하는 것을 보였다. real-samples BEFORE 0/0 → AFTER 42객체/36관계.
-- **한계:** 스캔/이미지 PDF·표 사진·복잡 중첩표는 여전히 **Docling(Python 사이드카)** 필요. → [features/ingestion.md](features/ingestion.md).
+- **한계:** 스캔/이미지 PDF·표 사진·복잡 중첩표는 여전히 **Docling(Python 사이드카)** 필요. → [features/인제스천.md](features/인제스천.md).
 
 ## 2. 스택 표
 

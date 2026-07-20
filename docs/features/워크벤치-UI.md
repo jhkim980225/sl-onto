@@ -1,4 +1,4 @@
-# feature: workbench-ui — 워크벤치 UI
+# feature: 워크벤치 UI
 
 ## 책임
 데모의 3단계 워크벤치를 API 구동으로 재현. 시각 스펙은 [../design.md](../design.md).

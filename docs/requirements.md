@@ -25,8 +25,8 @@ SL 자동차 램프 FMEA는 필수 업무지만 과거 자료가 비정형(PPT·
 
 ## 3. 데모가 확정한 것 (요약)
 - 온톨로지 객체 9종 · 관계 12종 · 속성/근거/확신도 모델 → [data-model.md](data-model.md)
-- 3단계 흐름(흩어진 원천 → 온톨로지 구축 → 신규 설계 추론) → [features/workbench-ui.md](features/workbench-ui.md)
-- 산출물: 설계 검토 체크리스트(제목·인과설명·근거칩·확신도%) → [features/inference.md](features/inference.md)
+- 3단계 흐름(흩어진 원천 → 온톨로지 구축 → 신규 설계 추론) → [features/워크벤치-UI.md](features/워크벤치-UI.md)
+- 산출물: 설계 검토 체크리스트(제목·인과설명·근거칩·확신도%) → [features/그래프-추론.md](features/그래프-추론.md)
 
 ## 4. MVP 범위
 ### ✅ 구현
@@ -60,14 +60,14 @@ SL 자동차 램프 FMEA는 필수 업무지만 과거 자료가 비정형(PPT·
 - [x] STAGE 2에서 온톨로지가 저장소에서 로드되어 렌더 (인제스천 결과 ≈170 노드/2156 엣지, seed 폴백 시 ≈275)
 - [x] 노드 클릭 시 `/api/object`로 실제 속성·관계·근거 표시 (인스펙터 검증)
 - [x] STAGE 3에서 조건 입력 → `/api/infer`가 **계산된** 체크리스트 반환(하드코딩 아님, 상위 8 캡·`total`)
-- [x] 온톨로지가 **실제 원천 파일**(xlsx/pptx/docx 약 34개)에서 인제스천되어 구축(≈170 노드/2156 엣지) ([features/ingestion.md](features/ingestion.md))
+- [x] 온톨로지가 **실제 원천 파일**(xlsx/pptx/docx 약 34개)에서 인제스천되어 구축(≈170 노드/2156 엣지) ([features/인제스천.md](features/인제스천.md))
 - [x] 통제 어휘에 없는 값도 **auto-create**로 편입(id `AUTO_*`, 확신도 0.66)
 - [x] **견고 파싱**: 지저분한 실무 문서(병합헤더·동의어 컬럼·산문) 처리 — real-samples BEFORE 0/0 → AFTER 42객체/36관계
 - [x] 체크리스트 항목 클릭 → 상세(근거 경로·근거칩·확신도) + 근거 클릭 시 그래프 선택
 - [x] 검색 → 드롭다운 결과 클릭 → 노드 포커스 + 인스펙터
-- [x] **자연어 검색**(Enter) → `/api/nlsearch` 규칙기반 해석·관련 객체·이웃 ([features/nlsearch.md](features/nlsearch.md))
-- [x] **결로 지역별 시나리오**: 지역 탭 + 상세 + 설계도 SVG ([features/condensation-scenario.md](features/condensation-scenario.md))
-- [x] **그래프 인터랙션**: 클릭 포커스/디밍·타입 존·방사형 레이아웃 ([features/graph-interaction.md](features/graph-interaction.md))
+- [x] **자연어 검색**(Enter) → `/api/nlsearch` 규칙기반 해석·관련 객체·이웃 ([features/자연어-검색.md](features/자연어-검색.md))
+- [x] **결로 지역별 시나리오**: 지역 탭 + 상세 + 설계도 SVG ([features/결로-시나리오.md](features/결로-시나리오.md))
+- [x] **그래프 인터랙션**: 클릭 포커스/디밍·타입 존·방사형 레이아웃 ([features/그래프-인터랙션.md](features/그래프-인터랙션.md))
 - [x] 전체 테스트 green (`npm test` 26 pass)
 - [x] STAGE 1 원천 패널이 **실제 파일** 목록 + 클릭 시 정형화 미리보기(원문→표준 매핑·확신도) 표시
 - [x] `next build` standalone 이미지 검증 — data/sources 트레이싱 + 7 API 동작 확인

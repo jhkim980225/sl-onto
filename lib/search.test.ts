@@ -1,5 +1,5 @@
 // lib/search.test.ts — Node 내장 테스트 러너 (`node --test --experimental-strip-types`).
-// docs/features/search.md 테스트 케이스 검증.
+// docs/features/키워드-검색.md 테스트 케이스 검증.
 //
 // 참고: 이 프로젝트의 lib/*.ts 는 Next.js 관례상 확장자 없는 상대 import 를 쓰는데
 // (`import ... from "./store"`), Node 의 --experimental-strip-types 런타임은 ESM 규칙상
