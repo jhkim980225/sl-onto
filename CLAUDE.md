@@ -75,12 +75,12 @@ FMEA 타입이 없는 캔버스에서는 추론·초안·모순·BOM 이 409(`li
 | 문서 | 내용 |
 |---|---|
 | `docs/requirements.md` | 배경·요구사항·MVP 범위·추적표·완료기준 |
-| `docs/과제요구-구현현황.md` | 과제 원문 요구 항목별 됨/부분/안 됨 구분(발표·보고용) |
+| `docs/legacy/과제요구-구현현황.md` | (레거시) FMEA 과제 원문 요구 항목별 됨/부분/안 됨 — 1차 MVP 기록 |
 | `docs/시연-시나리오.md` | 검색(대화) 시연 대본 — 질문·실제 답변·모순 서사·근거 증명 동선 |
 | `docs/tech-stack.md` | 스택 결정기록·버전·대안 |
 | `docs/architecture.md` | 시스템 구조·데이터흐름·API·배포 |
 | `docs/data-model.md` | 온톨로지 스키마·저장 schema·JSON 형태 |
 | `docs/design.md` | UI 디자인 시스템(라이트 SL 브랜드 · 그래프 존/방사형 레이아웃) |
-| `docs/deployment.md` | Docker standalone → FEDA K8s 배포(v8 · 레지스트리 :5000 · NodePort 30494) |
+| `docs/deployment.md` | Docker standalone → FEDA K8s 배포(v76 · 레지스트리 :5000 · NodePort 30494) |
 | `docs/skills.md` | 빌드용 스킬 |
 | `docs/features/*` | 기능별 상세(인제스천·저장소·검색·nlsearch·추론·graph-interaction·결로시나리오·UI) |

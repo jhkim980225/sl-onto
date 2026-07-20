@@ -109,7 +109,7 @@ Route Handler
 
 ## 5. 배포
 - `output: 'standalone'` + Docker 단일 이미지. `$PORT` 대응. 무상태(기동 시 인제스천 재구축).
-- **배포됨(v2):** FEDA K8s, ns `sl-ontoground`, 레지스트리 `192.168.0.100:5000`, NodePort 30494. → [deployment.md](deployment.md).
+- **배포됨(v76, 2026-07-20):** FEDA K8s, ns `sl-ontoground`, 레지스트리 `192.168.0.100:5000`, NodePort 30494. → [deployment.md](deployment.md).
 
 ## 6. 확장 이음새 (seam)
 | 지금 | 교체 대상 | 바뀌는 파일 |
