@@ -11,11 +11,11 @@ FMEA 지식 온톨로지 워크벤치. 원천: `../정리할거.txt`(SL 과제 �
 6. [features/](features/) — **기능별 상세**
    - [인제스천.md](features/인제스천.md) — 비정형 파일 → 정형화 → 온톨로지
    - [증분-인제스천.md](features/증분-인제스천.md) — 증분 인제스천 시연(업로드→델타 합류) (auto-create·견고 파싱)
-   - [결로-시나리오.md](features/결로-시나리오.md) — 결로·습기 지역별 시연 + 설계도
+   - [결로-시나리오.md](features/legacy-fmea/결로-시나리오.md) — 결로·습기 지역별 시연 + 설계도
    - [온톨로지-저장소.md](features/온톨로지-저장소.md) — 저장소
    - [키워드-검색.md](features/키워드-검색.md) — 키워드 검색
    - [자연어-검색.md](features/자연어-검색.md) — 자연어 검색(규칙기반 · LLM 옵트인)
-   - [그래프-추론.md](features/그래프-추론.md) — 추론 엔진(상위 8 캡)
+   - [그래프-추론.md](features/legacy-fmea/그래프-추론.md) — 추론 엔진(상위 8 캡)
    - [그래프-인터랙션.md](features/그래프-인터랙션.md) — 그래프 포커스·타입 존·방사형 레이아웃
    - [워크벤치-UI.md](features/워크벤치-UI.md) — 워크벤치 UI
 7. [deployment.md](deployment.md) — Docker standalone → 회사 클라우드 배포
