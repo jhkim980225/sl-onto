@@ -13,6 +13,7 @@ interface RailIcon {
 
 const ICONS: RailIcon[] = [
   { id: "canvases", glyph: "▤", label: "캔버스", ready: true },
+  { id: "documents", glyph: "📄", label: "문서", ready: true },
   { id: "types", glyph: "▣", label: "객체 타입", ready: true },
   { id: "schema", glyph: "◈", label: "스키마", ready: true },
   { id: "history", glyph: "🕐", label: "히스토리", ready: false },

@@ -307,6 +307,15 @@ export async function registerSource(s: SourceInfo, content?: Buffer): Promise<v
   else c.sources.push(s);
 }
 
+/** 원천 등록 해제 — DB 행(+원본 바이트) 삭제 후 캐시 목록에서 제거(write-through).
+ * 캐시 목록에서 빼야 /api/sources 가 삭제를 반영한다. */
+export async function removeSource(file: string): Promise<void> {
+  if (HAS_DB) await db.deleteSource(file);
+  const c = cache();
+  const i = c.sources.findIndex((x) => x.file === file);
+  if (i >= 0) c.sources.splice(i, 1);
+}
+
 /** 런타임 등록 출처 목록(복사본). */
 export function getRuntimeSources(): SourceInfo[] {
   return [...cache().sources];

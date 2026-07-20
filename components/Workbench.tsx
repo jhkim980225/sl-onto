@@ -12,6 +12,7 @@ import SourcePanel from "./SourcePanel";
 import LeftRail from "./LeftRail";
 import CanvasPanel from "./CanvasPanel";
 import SchemaPanel from "./SchemaPanel";
+import DocumentPanel from "./DocumentPanel";
 import SourceModal from "./SourceModal";
 import Stepper from "./Stepper";
 import SearchResults from "./SearchResults";
@@ -892,6 +893,47 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
       });
   }, []);
 
+  // ── 문서 삭제·교체(좌측 📄 문서 드로어) 후 그래프 재동기화 ──
+  // buildOntology 는 append 라 재호출하면 중복 마운트된다. 대신 /api/ontology 를 다시 받아
+  // 사라진 노드는 removeFromCanvas, 새로 생긴 노드/엣지는 addDelta — 큐레이션·인제스천이 쓰는 경로 그대로.
+  const handleDocumentsChanged = useCallback(() => {
+    apiFetch("/api/ontology")
+      .then((res) => {
+        if (!res.ok) throw new Error(`온톨로지 조회 실패 (${res.status})`);
+        return res.json() as Promise<GraphResponse>;
+      })
+      .then((data) => {
+        const prev = graphDataRef.current;
+        const nextIds = new Set(data.nodes.map((n) => n.id));
+        const prevIds = new Set(prev?.nodes.map((n) => n.id) ?? []);
+        const goneIds = (prev?.nodes ?? []).filter((n) => !nextIds.has(n.id)).map((n) => n.id);
+        const newNodes = data.nodes.filter((n) => !prevIds.has(n.id));
+        const key = (e: Edge) => `${e.src}|${e.rel}|${e.dst}`;
+        const prevEdges = new Set((prev?.edges ?? []).map(key));
+        const newEdges = data.edges.filter((e) => !prevEdges.has(key(e)));
+
+        if (goneIds.length) graphRef.current?.removeFromCanvas(goneIds, []);
+        if (newNodes.length || newEdges.length) graphRef.current?.addDelta(newNodes, newEdges);
+
+        graphDataRef.current = data;
+        setFullTotals({ nodes: data.nodes.length, edges: data.edges.length });
+        setStCounts(computeStCounts(data.nodes));
+        const idx = buildNodeIndex(data.nodes);
+        nodeIndexRef.current = idx;
+        setNodeIndex(idx);
+
+        if (goneIds.length) {
+          // 사라진 객체를 보고 있었다면 인스펙터·히스토리·앵커 참조를 걷어낸다.
+          const gone = new Set(goneIds);
+          setNavHistory((h) => h.filter((e) => !gone.has(e.id)));
+          setInspectorObj((o) => (o && gone.has(o.id) ? null : o));
+          if (selectedNodeRef.current && gone.has(selectedNodeRef.current.id)) selectedNodeRef.current = null;
+        }
+        refreshSources();
+      })
+      .catch((err) => setOntologyError(err instanceof Error ? err.message : String(err)));
+  }, [refreshSources]);
+
   // POST /api/ingest 공통 경로 — FormData(파일 업로드) 또는 JSON 문자열({sample:true}).
   const runIngest = useCallback(
     (body: FormData | string) => {
@@ -1146,6 +1188,7 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
           onSelect={setLeftPanel}
           panels={{
             canvases: <CanvasPanel current={canvas} onSwitch={onSwitchCanvas} />,
+            documents: <DocumentPanel onChanged={handleDocumentsChanged} />,
             types: (
               <SourcePanel
                 counts={graphCounts}

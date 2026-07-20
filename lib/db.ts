@@ -368,6 +368,15 @@ export async function persistSource(s: SourceInfo, content?: Buffer): Promise<vo
   await upsertSourceOn(getPool(), s, content);
 }
 
+/** 원천 파일 1건 삭제 — sources 행 + 보관 중인 원본 바이트(content). */
+export async function deleteSource(file: string): Promise<void> {
+  const cv = currentCanvas();
+  await tx(async (c) => {
+    await c.query("DELETE FROM sources WHERE canvas_id = $1 AND file = $2", [cv, file]);
+    await logChangeOn(c, "document.delete", { ids: [`doc:${file}`], summary: `문서 삭제 ${file}` }, cv);
+  });
+}
+
 export async function persistMeta(key: string, value: unknown): Promise<void> {
   await getPool().query(
     `INSERT INTO meta (canvas_id, key, value) VALUES ($1, $2, $3::jsonb)
