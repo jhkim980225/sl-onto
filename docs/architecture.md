@@ -114,7 +114,7 @@ Route Handler
 | `/api/admin/embed-backfill` | POST | — | `{embedded, skipped}` — 임베딩 백필 재트리거 |
 | `/api/fmea-draft` | POST | 설계 조건 | DFMEA xlsx — **레거시** |
 | `/api/contradictions` | GET | — | 모순 스캔 — **레거시** |
-| `/api/bom-check` | POST | — | BOM 정합 — **레거시** |
+| `/api/bom-check` | GET | `?item=` | BOM 정합 — **레거시** |
 | `/api/drawing-input` · `/api/drawing-svg` | POST/GET | 도면 | 2D 설계도 — **레거시** |
 | `/api/design-options` | GET | — | 설계 조건 드롭다운 — **레거시** |
 | `/api/review-opinion` | POST | 추론 결과 | AI 종합 소견 — **레거시** |
