@@ -124,6 +124,31 @@ docker run -p 8000:8000 sl-ontoground
   ```
   (LLM 자연어 검색을 켜려면 Deployment 에 `NL_USE_LLM=1` + `LLM_BASE_URL`/`LLM_MODEL` env 주입 — 기본 OFF.)
 
+## ⚠ 001-canvas 마이그레이션 (다중 캔버스 — 다음 배포 시 1회)
+
+다중 캔버스 도입으로 `nodes`/`edges`/`sources`/메타모델 4종/`meta`/`change_log`/`ai_opinions` 가
+전부 `canvas_id` 를 갖는 **복합 PK** 로 승격된다. **v76(2026-07-20)에 배포 완료** — 운영 DB 에서
+운영 DB 에 처음 적용된다.
+
+- **적용 시점**: 자동. `lib/db.ts doReady()` 가 `nodes` 는 있는데 `canvases` 가 없으면
+  `lib/db/migrations/001-canvas.sql` 을 **부팅 후 첫 요청에서 1회** 실행한다.
+- **단일 트랜잭션**. 실패하면 통째로 abort — 부분 적용 상태는 남지 않고 부팅 실패로 표면화된다.
+- **단방향이다. 되돌리기 스크립트가 없다.** 회수 경로는 백업뿐 —
+  **배포 전 운영 DB 백업 필수**(`pg_dump`).
+- **성공 확인**: 파드 로그에 다음 한 줄이 뜬다.
+  ```
+  [db] 001-canvas 마이그레이션 적용 — 기존 데이터를 'default' 캔버스로 귀속
+  ```
+  이후 `SELECT * FROM canvases;` 에 `default`(램프) 1행, 기존 179 노드 / 2,198 엣지 / 40 문서가
+  전부 `canvas_id='default'` 로 귀속됐는지 확인한다.
+- **멱등**: `canvases` 가 이미 있으면 건너뛴다(재기동 안전).
+- **제약 이름 가정**: SQL 이 Postgres 기본 명명(`nodes_pkey`·`edges_src_fkey` …)을 전제로
+  `DROP CONSTRAINT` 한다. `IF EXISTS` 를 일부러 쓰지 않아 이름이 다르면 조용히 넘어가지 않고 실패한다.
+  적용 전 `\d nodes` 로 실제 이름을 확인할 것.
+- 신규(빈) DB 는 마이그레이션 없이 `default` 캔버스 생성 + FMEA 메타모델 시드 + `ingestAll()` 로 부팅한다.
+
+설계: [superpowers/specs/2026-07-20-multi-canvas-design.md](superpowers/specs/2026-07-20-multi-canvas-design.md) §3.
+
 ## 상태 구성 (Postgres 전환 완료)
 - 앱 Deployment 에 `DATABASE_URL`(클러스터 내 Postgres) 주입 — DB=원본, 인메모리=읽기 캐시.
 - `PYSERVICE_URL=http://pyservice.sl-ontoground:8000` — 임베딩 사이드카(`k8s/pyservice.yaml`,

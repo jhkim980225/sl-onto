@@ -21,8 +21,9 @@
 └───────────────┬─────────────────────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────────────────────┐
-│  저장소  인메모리(store)  ← 기동 시 ingestAll() 로 구축    │
-│  nodes · edges · evidence  (실패/공백 시 seed 폴백)       │
+│  저장소  Postgres(원본) + 인메모리 읽기 캐시(store)        │
+│  캔버스별 캐시 Map<canvasId, CanvasCache> · §2.1          │
+│  nodes · edges · evidence  (DB 없으면 인메모리 폴백)      │
 └─────────────────────────────────────────────────────────┘
 ```
 확장 시 `ingest/`←Docling(Python), `search.ts`/`nlsearch.ts`←임베딩·LLM, `infer.ts`←LLM RAG 를 HTTP로 갈아끼운다.
@@ -34,6 +35,37 @@
 | Route Handlers | 요청 검증(zod)·lib 호출·JSON 응답 | 무거운 로직 직접 구현 금지 |
 | `lib/` | 저장소 접근·검색·자연어검색·추론·인제스천·시나리오(순수 로직) | Next 전역/요청 객체 의존 금지 |
 | 저장소 | 객체·관계·근거(인메모리) | 비즈니스 규칙 금지 |
+
+## 2.1 요청 경로 — 캔버스 스코핑
+
+온톨로지는 **캔버스(도메인별 격리 워크스페이스)** 단위다. 모든 데이터 요청은 어떤 캔버스를 보는지
+명시해야 한다.
+
+```
+클라이언트  selectedCanvas (localStorage)
+   └─ lib/api-client.ts  apiFetch() 가 모든 fetch 에 ?canvas=<id> 부착
+        ▼
+Route Handler
+   └─ withCanvasRoute(req, handler)      ← lib/canvas-route.ts · 데이터 라우트 26개 공통 래퍼
+        ├─ ?canvas 누락 → 400 (기본 캔버스 폴백 금지 — 다른 부서 데이터 오출력 방지)
+        ├─ 없는/삭제된 캔버스 → 404      (canvasExists: 인메모리 Set 캐시, CRUD 시 무효화)
+        └─ withCanvas(id, handler)       ← lib/canvas-context.ts · AsyncLocalStorage
+             ▼
+           lib/store.ts   CACHES: Map<canvasId, CanvasCache> — cache() 가 currentCanvas() 로 조회
+             ▼             (공개 시그니처 불변 → 호출부 276곳 무변경)
+           lib/db.ts      모든 쿼리에 canvas_id 조건
+```
+
+`/api/canvases*` 3개는 캔버스 **자체**를 다루므로 래퍼를 쓰지 않는다.
+
+**기능 가용성**(`lib/capabilities.ts`)은 설정값이 아니라 **스키마에서 유도한 파생값**이다.
+`fm`·`cause`·`item` 같은 요구 객체타입이 없는 캔버스에서는 `/api/infer` `/fmea-draft`
+`/contradictions` `/bom-check` 가 **409 + 사유**를 돌려주고, `GET /api/schema` 가 실어 보내는
+`capabilities` 로 UI 가 애초에 버튼을 감춘다. `condensation` 은 노드 id 하드코딩(`ILENS`·`FMFOG`)
+때문에 `default` 캔버스 전용이다.
+
+> 설계: [superpowers/specs/2026-07-20-multi-canvas-design.md](superpowers/specs/2026-07-20-multi-canvas-design.md) ·
+> [superpowers/specs/2026-07-20-canvas-document-crud-design.md](superpowers/specs/2026-07-20-canvas-document-crud-design.md)
 
 ## 3. 데이터 흐름 (3단계)
 1. **STAGE 1 — 흩어진 원천:** 정적 카오스 연출(원천 카운트). API 불필요.
@@ -53,6 +85,15 @@
 | `/api/infer` | POST | `{market,lightSource,shape,components[]}` | `{checklist[], total?, traversed{objects,edges,docs}}` |
 | `/api/sources` | GET | — | `SourceInfo[]`(파일별 추출 요약·미리보기) |
 | `/api/condensation` | GET | `?region?` | 지역 목록 또는 `CondensationDetail`(앵커·지역상세·규제·근거·설계도 스펙) |
+| `/api/sources/[file]` | DELETE | path 파일명 | `{ok, removed{doc,nodes,edges}, keptEdges}` — 문서 삭제 |
+| `/api/sources/[file]` | PUT | multipart `file` | `{ok, replaced, removed, added}` — 교체(파싱 성공 후에만 삭제) |
+| `/api/schema` | GET | — | 메타모델 + `capabilities`(스키마 유도) |
+| `/api/schema/object-types` | POST/PATCH/DELETE | 타입 정의 | 캔버스 메타모델 편집(사용 중 타입 삭제는 409) |
+| `/api/schema/relation-types` | POST/PATCH/DELETE | 관계 정의 | 〃 |
+| `/api/canvases` | GET/POST | `?trash=1` / `{name,description?}` | 캔버스 목록(노드·문서 수) / 생성(빈 스키마) |
+| `/api/canvases/[id]` | PATCH/DELETE | `?purge=1` | 이름·설명 변경 / 소프트 삭제(마지막이면 409) · 영구 삭제 |
+| `/api/canvases/[id]/restore` | POST | — | 휴지통에서 복구 |
+> `/api/canvases*` 를 제외한 모든 라우트는 `?canvas=<id>` 필수(§2.1).
 > JSON 상세 형태는 [data-model.md](data-model.md). 알고리즘은 [features/](features/).
 
 ## 4.1 인제스천 라우팅 (`lib/ingest/index.ts`)

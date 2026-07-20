@@ -43,7 +43,53 @@
   ```
 - **근거:** 모든 객체는 `EVIDENCED_BY`로 `doc`에 연결(provenance).
 
-## 4. 저장 스키마 (SQLite)
+## 3.1 캔버스 — 격리 축 (`canvases`)
+
+온톨로지는 하나가 아니다. **캔버스 = 도메인(부서·제품군)별 완전 격리 워크스페이스**로,
+데이터도 스키마도 0에서 시작한다. 기존 램프 FMEA 데이터는 `default` 캔버스에 귀속된다
+(179 노드 / 2,198 엣지 / 40 문서).
+
+```sql
+CREATE TABLE canvases (
+  id          TEXT PRIMARY KEY,       -- slug: 'default', 'electronics'
+  name        TEXT NOT NULL,          -- 표시명: '램프', '전장'
+  description TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at  TIMESTAMPTZ             -- 소프트 삭제(휴지통). NULL = 활성
+);
+```
+
+완전 격리이므로 **캔버스 A와 B가 같은 노드 id 를 가질 수 있다**(둘 다 `ILENS` 를 만들 수 있다).
+따라서 모든 테이블의 PK 에 `canvas_id` 가 선행한다(`lib/db/schema.sql`).
+
+| 테이블 | PK | 비고 |
+|---|---|---|
+| `nodes` | `(canvas_id, id)` | `(canvas_id, type)` → `object_types` FK — **객체타입 없는 캔버스엔 노드를 넣을 수 없다** |
+| `edges` | `(canvas_id, src, rel, dst)` | `(canvas_id, rel)` → `relation_types`, 양끝 → `nodes` ON DELETE CASCADE |
+| `sources` | `(canvas_id, file)` | 업로드 원본 바이트(`content`) 포함 |
+| `object_types` | `(canvas_id, type_id)` | |
+| `relation_types` | `(canvas_id, rel_id)` | |
+| `object_subtypes` | `(canvas_id, type_id, st_id)` | `(canvas_id, type_id)` → `object_types` |
+| `property_defs` | `(canvas_id, type_id, key)` | 〃 |
+| `meta` | `(canvas_id, key)` | `active_drawing` 이 캔버스별 |
+| `ai_opinions` | `(canvas_id, key)` | 다른 캔버스 LLM 답변이 캐시로 새면 안 됨 |
+| `change_log` | `seq` (+ `canvas_id` 컬럼) | |
+
+**메타모델도 캔버스별이다.** §1의 객체 9종 · §2의 관계 12종은 `default` 캔버스의 시드값이며,
+사용자가 만드는 캔버스는 **빈 스키마**로 시작해 `/api/schema/object-types` ·
+`/api/schema/relation-types` 로 직접 정의한다(설계 §3.4). `nodes.embedding`(pgvector 384-dim)은
+컬럼 변경 없이 유사도 쿼리에 `canvas_id` 조건만 붙는다.
+
+**마이그레이션**: `lib/db/migrations/001-canvas.sql` — 단일 온톨로지 DB를 캔버스 DB로 승격.
+단일 트랜잭션, **단방향**(되돌리기 스크립트 없음). 배포 주의사항은 [deployment.md](deployment.md).
+
+> 설계: [superpowers/specs/2026-07-20-multi-canvas-design.md](superpowers/specs/2026-07-20-multi-canvas-design.md)
+
+## 4. 저장 스키마 (초기 MVP 안 — SQLite)
+
+> 아래는 MVP 초안이다. 현행 영속 스키마는 Postgres(`lib/db/schema.sql`)이며 §3.1 의 캔버스
+> 복합 PK 를 따른다.
+
 ```sql
 CREATE TABLE objects (
   id     TEXT PRIMARY KEY,
@@ -97,6 +143,18 @@ CREATE INDEX idx_objects_type ON objects(type);
       "confidence":91,
       "trace":["PJ26→SIMILAR→PJ21","PJ21→OCCURRED_IN→FMGAP","FMGAP→REF_MASTER→MGAP"] } ],
   "traversed": { "objects":34, "edges":41, "docs":12 } }
+
+// GET /api/canvases  (?trash=1 이면 삭제된 것만)
+{ "canvases":[ { "id":"default","name":"램프","description":null,
+                 "nodeCount":179,"docCount":40,"deletedAt":null } ] }
+
+// GET /api/schema?canvas=default — 메타모델 + 스키마에서 유도한 기능 가용성
+{ "objectTypes":[…], "relationTypes":[…], "subtypes":[…], "propertyDefs":[…],
+  "capabilities": { "infer":true,"fmeaDraft":true,"contradictions":true,
+                    "bomCheck":true,"condensation":true } }
+
+// DELETE /api/sources/[file]?canvas=default — 문서 1건 삭제(근거 0이 된 객체만 함께 제거)
+{ "ok":true, "removed": { "doc":1, "nodes":8, "edges":21 }, "keptEdges":3 }
 
 // GET /api/contradictions — 전역 모순 스캔(상시 노출용, 규칙당 상한 5 · confidence 플로어 40%)
 { "items":[

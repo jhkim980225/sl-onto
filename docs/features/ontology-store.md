@@ -3,7 +3,10 @@
 ## 책임
 객체·관계·근거를 영속하고, 조회/이웃탐색 원시 연산을 제공. 스키마는 [../data-model.md](../data-model.md).
 
-## 모듈: `lib/store.ts` (인메모리)
+캔버스별 격리·문서 삭제 설계: [multi-canvas](../superpowers/specs/2026-07-20-multi-canvas-design.md) ·
+[canvas-document-crud](../superpowers/specs/2026-07-20-canvas-document-crud-design.md).
+
+## 모듈: `lib/store.ts` (Postgres 원본 + 캔버스별 인메모리 읽기 캐시)
 ```ts
 type Node = { id:string; type:ObjType; label:string; sub?:string; hero?:boolean; props?:[string,string][] }
 type Edge = { src:string; rel:string; dst:string; weight?:number; scen?:boolean }
@@ -20,9 +23,41 @@ evidenceOf(id): Doc[]                  // EVIDENCED_BY doc
 outEdges(id) / inEdges(id) / deg(id)  // 원시 접근자
 ```
 
+## 캐시 구조 — 캔버스별
+캐시는 모듈 레벨 1벌이 아니라 **캔버스마다 1벌**이다. 공개 함수 시그니처는 바뀌지 않는다 —
+`cache()` 가 `currentCanvas()`(AsyncLocalStorage, `lib/canvas-context.ts`)로 현재 캔버스 것을 집는다.
+덕분에 호출부 276곳이 무변경으로 캔버스 스코핑을 얻었다.
+
+```ts
+interface CanvasCache {
+  nodes; edges; byId; outMap; inMap; degree; edgeKeySet;
+  sources; activeDrawing; metamodel; lastSyncAt; readyPromise?; syncInFlight?;
+}
+const CACHES = new Map<string, CanvasCache>();
+const cache = () => CACHES.get(currentCanvas()) ?? (신규 생성)
+
+dropCanvasCache(canvasId)   // 캔버스 삭제 후 폐기
+reloadMetamodel()           // 스키마 편집 후 메타모델 필드만 갱신(full hydrate 회피)
+```
+
+- `ready()`·2초 재동기화 TTL·`readyPromise` 는 **캔버스별로 독립**이다.
+- 새 캐시의 기본 메타모델: `default` 캔버스는 FMEA 시드, 그 외 캔버스는 **빈 스키마**.
+- 백그라운드 임베딩 백필은 요청 ALS 컨텍스트 밖에서 돌므로 `withCanvas(canvasId, …)` 로 다시 깐다.
+- `// ponytail:` 캔버스 캐시 전량 상주. 캔버스가 수백 개 되거나 캔버스당 노드가 수만 되면 LRU 축출로 교체.
+
+## 문서 삭제 (`lib/documents.ts`)
+`deleteDocument(file)` — doc 노드 삭제 + **근거가 0이 된 객체만** 삭제(골든 룰 1의 직접 표현).
+다른 문서가 받치는 객체는 남는다. 고아 판정을 **전부 먼저 계산한 뒤** 삭제한다 — doc 노드를 먼저
+지우면 `evidenceOf` 결과가 바뀌어 공유 객체까지 오판한다.
+
+**알려진 한계**: `Edge` 에 출처 필드가 없어 "이 문서가 만든 엣지"를 특정할 수 없다. 양끝이 살아남은
+엣지는 그대로 남으며 응답의 `keptEdges` 로 보고한다. 정확 삭제가 필요해지면 `edges.props` 에
+`docs[]` 를 기록하는 방향(설계 §2 기각안 참조).
+
 ## 동작
-- **모듈 로드 시** `ingestAll()`(data/sources 파싱) 결과로 인덱스 구축. 노드가 0이거나 예외면 `lib/seed.ts` 폴백
-  (컨테이너 무상태 배포 안전). `initStore()` 같은 명시 호출은 없음 — 모듈 부수효과로 1회 구축.
+- **모듈 로드 시**(DB 모드 아닐 때) `ingestAll()`(data/sources 파싱) 결과로 `default` 캔버스 인덱스 구축.
+  노드가 0이거나 예외면 `lib/seed.ts` 폴백(컨테이너 무상태 배포 안전).
+  DB 모드에서는 `ready()` 가 스키마·시드 후 DB 적재 or 최초 ingest 를 DB 로 승격한다.
 - `byId`/`outMap`/`inMap`/`degree` 인덱스를 미리 만들고, **양끝 객체가 존재하는 링크만** 채택(무결성).
 - `getGraph({stage})`로 코어/근거문서 부분 반환(스테이지 스트리밍 지원).
 - `getObject`는 in/out 관계를 합쳐 인스펙터용으로 정리.
@@ -33,7 +68,8 @@ outEdges(id) / inEdges(id) / deg(id)  // 원시 접근자
 - 매핑 필드(`original_code`/`mapped_code`/`confidence`)는 있으면 함께 반환.
 
 ## 확장 이음새
-- 인메모리 → Postgres: 이 모듈 구현만 교체, 시그니처 유지.
+- 인메모리 → Postgres: **완료**(DB=원본, write-through). 시그니처는 그때도 지금도 불변 —
+  캔버스 스코핑도 같은 방식으로 시그니처 무변경 흡수했다.
 - 인제스천 → Docling: `ingestAll()` 출력 형태만 맞추면 store 무변경.
 
 ## 규모 (인제스천 결과)

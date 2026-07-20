@@ -6,7 +6,7 @@
 
 흩어진 FMEA 문서(xlsx/pptx/docx)를 **온톨로지로 적재**하고, 신규 설계 조건을 입력하면 그래프 탐색으로
 **근거·확신도가 붙은 설계 검토 체크리스트 + FMEA 초안(xlsx)** 을 생성하는 워크벤치.
-**MVP 완료 기준 15개 전부 충족, FEDA K8s 배포 v56 운영 중** (`http://192.168.0.100:30494/`).
+**MVP 완료 기준 15개 전부 충족, FEDA K8s 배포 v76 운영 중** (`http://192.168.0.100:30494/`).
 
 ## 2. 배포 버전 히스토리
 
@@ -22,10 +22,13 @@
 | v52 | R1 3종 — 하이브리드 검색 · 중복해소 강화 · 분류 87% |
 | v53 | **PDF 인제스천** — pyservice `/parse` (pypdf, docling 옵트인) |
 | v54 | **인제스천 LLM 구조화 옵트인** — `/api/ingest?llm=1` |
-| **v56 (현재 배포)** | **구조 리팩토링 2웨이브(-1,100줄) + 성능**(라우트 gzip · 재동기화 TTL 2s) |
+| v56 | 구조 리팩토링 2웨이브(-1,100줄) + 성능(라우트 gzip · 재동기화 TTL 2s) |
+| ~v75 | UI 대개편(결과 프레임·계층뷰·좌측 레일·근거 원문 모달) · 추론 정확도 수정 |
+| **v76 (현재 배포)** | **다중 캔버스 + 캔버스 내 문서 CRUD** — 001-canvas 마이그레이션 적용 |
 
-**미배포 로컬 커밋(7/13~7/14)**: 결과 프레임(Graph/Table/RAW) · 계층 택소노미 뷰 · 좌측 아이콘 레일 ·
-근거 문서 원문 모달+언급 강조 · 추론 정확도 3건 수정(전문가 검증) · 설계 조건 자동 드롭다운.
+**v76 배포 확인(2026-07-20)**: 마이그레이션 로그 `[db] 001-canvas 마이그레이션 적용` · 운영 데이터
+180 노드 / 2,199 엣지 / 41 문서 전부 `default` 캔버스 귀속 · `nodes` PK `(canvas_id, id)` 승격 ·
+`?canvas` 누락 400 · 없는 캔버스 404 정상([§3.9](#39-다중-캔버스--문서-crud-2026-07-20-v76-배포됨)).
 
 ## 3. 구현된 기능
 
@@ -38,8 +41,9 @@
   real-samples 측정 **BEFORE 0객체/0관계 → AFTER 42객체/36관계**.
 
 ### 3.2 온톨로지 저장소 ([features/ontology-store.md](features/ontology-store.md))
-- 인메모리 store(`lib/store.ts`), 객체 9종 · 관계 12종 · 속성/근거/확신도 모델.
-- 무상태 컨테이너: 기동 시 `data/sources` 인제스천으로 재구축 → 볼륨/DB 불필요.
+- Postgres 원본 + 인메모리 읽기 캐시(`lib/store.ts`, write-through), 객체 9종 · 관계 12종 ·
+  속성/근거/확신도 모델. 캐시는 **캔버스별** `Map<canvasId, CanvasCache>`([§3.9](#39-다중-캔버스--문서-crud-2026-07-20-v76-배포됨)).
+- 빈 DB 부팅 시에만 `data/sources` 인제스천으로 `default` 캔버스를 구축. `DATABASE_URL` 없으면 인메모리 폴백.
 
 ### 3.3 검색 — 키워드 + 자연어 ([features/search.md](features/search.md) · [features/nlsearch.md](features/nlsearch.md))
 - 키워드 검색: 라벨/동의어 매칭 + 그래프 스코어링, 입력 중 드롭다운.
@@ -73,7 +77,24 @@
 - 백본 우선 초기화면 + 전체 보기 토글 + 라벨 LOD, 인스펙터 히스토리(뒤로가기).
 - 라이트 SL 브랜드 테마(흰 배경 · 네이비 텍스트 · 시안 `#00a2e5`), `prefers-reduced-motion` 존중.
 
-## 4. API (23 라우트)
+### 3.9 다중 캔버스 + 문서 CRUD (2026-07-20, v76 배포됨)
+- **캔버스 = 도메인(부서·제품군)별 완전 격리 워크스페이스** — 데이터도 스키마도 0에서 시작.
+  기존 램프 데이터(179 노드 / 2,198 엣지 / 40 문서)는 `default` 캔버스로 귀속.
+- DB: `canvases` 신규 + 전 테이블 `canvas_id` 복합 PK 승격(마이그레이션 `lib/db/migrations/001-canvas.sql`,
+  단일 트랜잭션·**단방향**).
+- 요청 경로: `withCanvasRoute` 가 `?canvas=` 를 검증(누락 400 · 미존재 404)하고 AsyncLocalStorage 로
+  전파 → store 는 `Map<canvasId, CanvasCache>`. **공개 시그니처 불변**(호출부 276곳 무변경).
+- 기능 가용성은 스키마 유도 파생값(`lib/capabilities.ts`) — FMEA 타입 없는 캔버스는 추론·초안·모순·BOM 이
+  409, UI 버튼도 숨김. `condensation` 은 `default` 전용.
+- 문서 삭제 = **근거가 0이 된 객체만** 제거(골든 룰 1). 엣지 출처 미추적이라 양끝이 살아남은 엣지는
+  남고 `keptEdges` 로 보고한다(알려진 한계).
+- UI: 좌측 레일 드로어 4종(`▤ 캔버스` · `📄 문서` · `▣ 객체 타입` · `◈ 스키마`), 캔버스 전환은 key 리마운트.
+- 설계: [multi-canvas](superpowers/specs/2026-07-20-multi-canvas-design.md) ·
+  [canvas-document-crud](superpowers/specs/2026-07-20-canvas-document-crud-design.md)
+
+## 4. API (29 라우트 — 데이터 26 + 캔버스 관리 3)
+
+> `/api/canvases*` 3개를 제외한 전 라우트는 `?canvas=<id>` 필수(누락 400 · 없는 캔버스 404).
 
 | 엔드포인트 | 역할 |
 |---|---|
@@ -83,6 +104,7 @@
 | `POST /api/nlsearch` | 자연어 검색 |
 | `POST /api/infer` | 설계 조건 → 체크리스트 |
 | `GET /api/sources` · `/source-text?file=` | 원천 파일 목록 · **원문 전체 블록**(모달 뷰용) |
+| `DELETE`·`PUT /api/sources/[file]` | **문서 삭제·교체** — 근거 0이 된 객체만 제거(`keptEdges` 보고) / 교체는 파싱 성공 후에만 삭제 |
 | `GET /api/condensation` | 결로 지역 목록/상세 |
 | `POST /api/fmea-draft` | DFMEA xlsx 다운로드 |
 | `POST /api/ingest` | 증분 인제스천 — multipart/샘플 (`?llm=1` LLM 보강 옵트인) |
@@ -92,14 +114,19 @@
 | `GET /api/contradictions` · `/quality` · `/bom-check?item=` | 전역 모순 스캔 · 품질 지표 · BOM 정합성 |
 | `POST /api/drawing-input` · `GET /api/drawing-svg?file=` | **DXF 도면 입력**(형상 유사 탐색·취약점 검사) · SVG 미리보기 |
 | `GET /api/design-options` | 설계 조건 드롭다운(실제 proj 데이터에서 distinct) |
-| `GET /api/schema` | 메타모델 스냅샷(객체타입·관계타입·서브타입) |
+| `GET /api/schema` | 메타모델 스냅샷(객체타입·관계타입·서브타입) + `capabilities`(스키마 유도 기능 가용성) |
+| `POST`·`PATCH`·`DELETE /api/schema/object-types` · `/relation-types` | **캔버스 스키마 편집** (사용 중 타입 삭제는 409) |
+| `GET`·`POST /api/canvases` | **캔버스 목록**(노드·문서 수, `?trash=1` 휴지통) · **생성**(빈 스키마) |
+| `PATCH`·`DELETE /api/canvases/[id]` | 이름·설명 변경 · 소프트 삭제(마지막 캔버스면 409) · `?purge=1` 영구 삭제 |
+| `POST /api/canvases/[id]/restore` | 휴지통에서 복구 |
 | `POST /api/curate` | 큐레이션 — 노드/관계 삭제, 병합(원본 보존) |
 | `POST /api/admin/embed-backfill` | 임베딩 백필 재트리거 |
 
 ## 5. 품질
 
-- **테스트: 117개 (110 pass · 7 skip · 0 fail)** — 2026-07-20 확인.
-  실행: `node --test --experimental-strip-types "lib/**/*.test.ts"`.
+- **테스트: 139개 (132 pass · 7 skip · 0 fail)** — 2026-07-20 확인 (다중 캔버스 반영 후).
+  실행: `npm test` (= `node --test --experimental-strip-types "lib/**/*.test.ts"`).
+  신규: `canvas-context` · `canvases` · `capabilities` · `documents` + `store` 캔버스 격리.
 - RAG 검증 리포트 4건: [객체질문 RAG](test-reports/2026-07-09-객체질문-RAG.md) ·
   [기존문서 4/4 PASS](test-reports/2026-07-10-RAG-기존문서.md) ·
   [신규문서 전 구간 PASS](test-reports/2026-07-10-RAG-신규문서.md) ·
@@ -125,10 +152,12 @@
 
 ## 8. 남은 항목
 
-- **배포 격차**: 7/13~7/14 로컬 커밋(UI 대개편 + 추론 정확도 수정)이 v56 이후 미배포. 다음 v번호는
-  마스터 `docker images` + `kubectl get rs` 로 확인.
-- **`npm test` 스크립트 파일 미지정**: `node --test --experimental-strip-types` 만 있어 0 tests 로 통과함.
-  글롭(`"lib/**/*.test.ts"`) 붙여야 실제 117개가 돈다.
+- **배포 격차**: 7/13~7/14 로컬 커밋(UI 대개편 + 추론 정확도 수정)과 **7/20 다중 캔버스 + 문서 CRUD**가
+  v76 으로 배포 완료(2026-07-20). 다음 v번호는 마스터 `docker images` + `kubectl get rs` 로 확인.
+  **배포 전 운영 DB 백업 필수** — 001-canvas 마이그레이션이 첫 요청에 1회 자동 실행되며 단방향이다
+  ([deployment.md](deployment.md)).
+- **엣지 출처 미추적**: 문서 삭제 시 양끝 객체가 다른 문서에도 근거를 둔 엣지는 남는다(`keptEdges` 로 보고).
+  정확 삭제로 가려면 `edges.props` 에 `docs[]` 기록이 필요.
 - **보류 1건 (LOW)**: `Graph.tsx`/`Workbench.tsx` 언마운트 시 setTimeout 미정리 ([review-notes.md](review-notes.md) #4).
 - **확장 백로그** (의도적 범위 밖, 이음새 확보됨): 이미지 OCR / 스캔 PDF·표 사진(Docling 사이드카 —
   `/parse` 에 lazy 옵트인만 배선), 래스터 도면 VLM 이해, 검색·추론 랭킹의 R→G 전환(현재 RAG 는 `/api/ask`
