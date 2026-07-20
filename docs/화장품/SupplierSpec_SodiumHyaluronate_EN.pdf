@@ -1,0 +1,116 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 2409 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+1 0 0 1 54 742 Tm
+(COSMEDIA CO., LTD.  \(fictional company - sample document\)) Tj T*
+(12 Sanup-ro, Cheongju-si, Chungcheongbuk-do, Republic of Korea) Tj T*
+() Tj T*
+(SUPPLIER SPECIFICATION SHEET) Tj T*
+(Sodium Hyaluronate HMW 1.0-1.5 MDa) Tj T*
+(----------------------------------------------------------------------------------------) Tj T*
+() Tj T*
+(  Supplier          : Nova Ingredients \(fictional\)) Tj T*
+(  Trade name        : NovaHA-HM 1200) Tj T*
+(  INCI name         : Sodium Hyaluronate) Tj T*
+(  CAS number        : 9067-32-7) Tj T*
+(  EINECS            : 232-678-0) Tj T*
+(  Appearance        : White to slightly yellowish powder or granule) Tj T*
+(  Source            : Bacterial fermentation \(Streptococcus zooepidemicus\)) Tj T*
+(  Document version  : SPEC-HA-1200 rev.4  \(2025-01-20\)) Tj T*
+() Tj T*
+(SPECIFICATION) Tj T*
+(  ITEM                              SPECIFICATION            METHOD) Tj T*
+(  ----------------------------------------------------------------------------------) Tj T*
+(  Assay \(dry basis\)                 91.0 - 102.0 %           HPLC) Tj T*
+(  Molecular weight                  1.0 - 1.5 MDa            SEC-MALS) Tj T*
+(  pH \(0.1% solution\)                6.0 - 8.0                Potentiometry) Tj T*
+(  Loss on drying                    <= 10.0 %                Gravimetric) Tj T*
+(  Protein content                   <= 0.1 %                 Lowry) Tj T*
+(  Heavy metals                      <= 20 ppm                ICP-MS) Tj T*
+(  Lead                              <= 5 ppm                 ICP-MS) Tj T*
+(  Total aerobic count               <= 100 CFU/g             ISO 21149) Tj T*
+(  Yeast and mould                   <= 50 CFU/g              ISO 16212) Tj T*
+(  Endotoxin                         <= 0.5 EU/mg             LAL) Tj T*
+(  ----------------------------------------------------------------------------------) Tj T*
+() Tj T*
+(TYPICAL USE) Tj T*
+(  Recommended level : 0.05 - 0.30 % in aqueous phase) Tj T*
+(  Dispersion        : Sprinkle into water under moderate agitation, hydrate) Tj T*
+(                      for at least 30 minutes before adding electrolytes.) Tj T*
+(  Incompatibility   : High electrolyte concentration reduces viscosity.) Tj T*
+(  Note              : Insufficient hydration time has been associated with) Tj T*
+(                      graininess and viscosity deviation in finished goods.) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 1409 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+1 0 0 1 54 742 Tm
+(COSMEDIA CO., LTD.  \(fictional company - sample document\)) Tj T*
+(12 Sanup-ro, Cheongju-si, Chungcheongbuk-do, Republic of Korea) Tj T*
+() Tj T*
+(SUPPLIER SPECIFICATION SHEET - continued) Tj T*
+(Page 2 of 2) Tj T*
+(----------------------------------------------------------------------------------------) Tj T*
+() Tj T*
+(PACKAGING AND STORAGE) Tj T*
+(  Packaging   : 1 kg aluminium foil bag in fibre drum, nitrogen flushed) Tj T*
+(  Storage     : Below 25 C, relative humidity below 60 %, protect from light) Tj T*
+(  Shelf life  : 36 months from date of manufacture in unopened package) Tj T*
+(  Re-test     : 12 months after first opening) Tj T*
+() Tj T*
+(REGULATORY) Tj T*
+(  Korea Cosmetics Act                : Compliant) Tj T*
+(  Regulation \(EC\) No 1223/2009       : Compliant, not restricted) Tj T*
+(  MoCRA \(USA\)                        : Supported by supplier dossier) Tj T*
+(  China NMPA IECIC                   : Listed) Tj T*
+(  ISO 22716 GMP                      : Certified manufacturing site) Tj T*
+() Tj T*
+(USE IN FINISHED GOODS) Tj T*
+(  CP-101 Hydra Moisture Cream 50ml       0.15 %) Tj T*
+(  CP-102 Vita-C Brightening Ampoule 30ml 0.20 %) Tj T*
+(  CP-203 Cica Soothing Toner 200ml       0.10 %) Tj T*
+(  CP-204 Collagen Lifting Eye Cream 20ml 0.10 %) Tj T*
+() Tj T*
+(  Fictional document generated for ontology workbench demonstration.) Tj T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000002707 00000 n 
+0000002833 00000 n 
+0000004293 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+4390
+%%EOF

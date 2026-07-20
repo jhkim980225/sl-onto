@@ -1,0 +1,121 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 2562 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+1 0 0 1 54 742 Tm
+(COSMEDIA CO., LTD.  \(fictional company - sample document\)) Tj T*
+(12 Sanup-ro, Cheongju-si, Chungcheongbuk-do, Republic of Korea) Tj T*
+() Tj T*
+(CERTIFICATE OF ANALYSIS) Tj T*
+(Raw material: Ceramide NP) Tj T*
+(----------------------------------------------------------------------------------------) Tj T*
+() Tj T*
+(  INCI name        : Ceramide NP) Tj T*
+(  Lot number       : CER-25034) Tj T*
+(  Manufacturer     : Nova Ingredients \(fictional supplier\)) Tj T*
+(  Manufacture date : 2025-02-10) Tj T*
+(  Expiry date      : 2027-02-09) Tj T*
+(  Quantity         : 200 kg \(8 drums x 25 kg\)) Tj T*
+(  Storage          : 2 - 25 C, protect from light) Tj T*
+() Tj T*
+(TEST RESULTS) Tj T*
+(  ITEM                              SPECIFICATION            RESULT) Tj T*
+(  ----------------------------------------------------------------------------------) Tj T*
+(  Appearance                        White to off-white powderConforms) Tj T*
+(  Identification \(HPLC\)             Conforms to reference    Conforms) Tj T*
+(  Assay \(HPLC\)                      >= 96.0 %                97.8 %) Tj T*
+(  Melting range                     98 - 108 C               103 C) Tj T*
+(  Loss on drying                    <= 2.0 %                 0.62 %) Tj T*
+(  Residual solvent \(MeOH\)           <= 300 ppm               42 ppm) Tj T*
+(  Acid value                        <= 2.0 mg KOH/g          0.4) Tj T*
+(  Colour \(Gardner\)                  <= 3                     1) Tj T*
+(  Particle size D50                 <= 50 um                 31 um) Tj T*
+(  Sulphated ash                     <= 0.2 %                 0.03 %) Tj T*
+(  ----------------------------------------------------------------------------------) Tj T*
+() Tj T*
+(  Overall judgement : PASS) Tj T*
+() Tj T*
+(MICROBIOLOGICAL DATA) Tj T*
+(  Total aerobic microbial count     <= 100 CFU/g            < 10 CFU/g) Tj T*
+(  Yeast and mould                   <= 50 CFU/g             < 10 CFU/g) Tj T*
+(  Escherichia coli                  Absent / 1 g            Absent) Tj T*
+(  Pseudomonas aeruginosa            Absent / 1 g            Absent) Tj T*
+(  Staphylococcus aureus             Absent / 1 g            Absent) Tj T*
+() Tj T*
+(HEAVY METALS) Tj T*
+(  Lead                              <= 10 ppm               < 1 ppm) Tj T*
+(  Arsenic                           <= 2 ppm                < 0.5 ppm) Tj T*
+(  Mercury                           <= 1 ppm                < 0.1 ppm) Tj T*
+(  Cadmium                           <= 1 ppm                < 0.1 ppm) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 1328 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+1 0 0 1 54 742 Tm
+(COSMEDIA CO., LTD.  \(fictional company - sample document\)) Tj T*
+(12 Sanup-ro, Cheongju-si, Chungcheongbuk-do, Republic of Korea) Tj T*
+() Tj T*
+(CERTIFICATE OF ANALYSIS - continued) Tj T*
+(Lot CER-25034  Page 2 of 2) Tj T*
+(----------------------------------------------------------------------------------------) Tj T*
+() Tj T*
+(REGULATORY STATEMENTS) Tj T*
+(  BSE / TSE free              : Yes, no animal derived raw material used) Tj T*
+(  GMO                         : Not derived from genetically modified organisms) Tj T*
+(  Allergen \(EU 26 substances\) : Not present above declarable level) Tj T*
+(  Ethylene oxide / 1,4-dioxane: Not detected \(LOQ 1 ppm\)) Tj T*
+(  Nitrosamine                 : Not detected) Tj T*
+(  REACH                       : Registered) Tj T*
+(  ISO 22716 GMP               : Manufactured under certified GMP system) Tj T*
+() Tj T*
+(USE IN FINISHED GOODS) Tj T*
+(  CP-101 Hydra Moisture Cream 50ml / CP-204 Collagen Lifting Eye Cream 20ml) Tj T*
+() Tj T*
+(RELEASE) Tj T*
+(  Tested by   : QC Laboratory, Nova Ingredients) Tj T*
+(  Approved by : QC Manager) Tj T*
+(  Issue date  : 2025-02-12) Tj T*
+() Tj T*
+(  This certificate refers to the lot identified above only.) Tj T*
+(  Fictional document generated for ontology workbench demonstration.) Tj T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000002860 00000 n 
+0000002986 00000 n 
+0000004365 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+4462
+%%EOF
