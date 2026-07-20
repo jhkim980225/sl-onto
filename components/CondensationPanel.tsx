@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import CondensationDrawing from "./CondensationDrawing";
 import PanelHeader from "./PanelHeader";
 import { riskColor, type CondensationDetail, type RegionKey, type RegionSummary } from "./condensationTypes";
+import { apiFetch } from "@/lib/api-client";
 
 interface CondensationPanelProps {
   regions: RegionSummary[];
@@ -26,7 +27,7 @@ export default function CondensationPanel({ regions, onSelectObject, onOpenEvide
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/condensation?region=${encodeURIComponent(activeRegion)}`)
+    apiFetch(`/api/condensation?region=${encodeURIComponent(activeRegion)}`)
       .then((res) => {
         if (!res.ok) throw new Error(`지역 상세 조회 실패 (${res.status})`);
         return res.json() as Promise<CondensationDetail>;

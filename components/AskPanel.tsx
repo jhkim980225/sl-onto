@@ -7,6 +7,7 @@ import { useState } from "react";
 import type { AskRel } from "@/lib/ask";
 import { relKo } from "./relLabels";
 import PanelHeader from "./PanelHeader";
+import { apiFetch } from "@/lib/api-client";
 
 export interface AskEntry {
   objectId: string;
@@ -62,7 +63,7 @@ export default function AskPanel({ objectId, objectLabel, history, onAppend, onF
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/ask", {
+      const res = await apiFetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ objectId, question: q }),

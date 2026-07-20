@@ -12,6 +12,7 @@ import type { CheckItem, DesignInput, InferResponse } from "@/lib/types";
 import { buildChains, findIdByText, parseHop, type NodeIndex } from "./nodeIndex";
 import ConfidenceBar from "./ConfidenceBar";
 import { TraceChain } from "./TraceNode";
+import { apiFetch } from "@/lib/api-client";
 
 interface ChecklistProps {
   loading: boolean;
@@ -60,7 +61,7 @@ export default function Checklist({
     setOpinionLoading(true);
     setOpinionError(false);
     try {
-      const res = await fetch("/api/review-opinion", {
+      const res = await apiFetch("/api/review-opinion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(condition),
@@ -99,7 +100,7 @@ export default function Checklist({
     if (dl) return;
     setDl(true);
     try {
-      const res = await fetch("/api/fmea-draft", {
+      const res = await apiFetch("/api/fmea-draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(condition),

@@ -651,5 +651,43 @@ mark.ft-hl{background:#ffe27a;color:var(--ink);font-weight:700;border-radius:2px
 .ing-hist-row .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ing-hist-row .ct{font-family:var(--mono);font-size:10px;color:var(--amber);white-space:nowrap}
 
+/* ── 좌측 드로어: 캔버스 패널(.cv-*) · 스키마 패널(.sc-*) ── */
+/* 드로어 폭 252px 안에서 동작. 활성 캔버스는 .lr-ico.active 와 같은 시안 좌측 보더로 표시. */
+.cv-panel,.sc-panel{padding:12px 12px 18px;display:flex;flex-direction:column;gap:10px}
+.cv-err,.sc-err{font-size:11.5px;line-height:1.5;color:#c2415a;background:#fdf0f3;border:1px solid #f3ccd6;border-radius:6px;padding:7px 9px}
+.cv-list,.sc-list{list-style:none;display:flex;flex-direction:column;gap:2px}
+.cv-item{display:flex;align-items:center;gap:2px;border-left:3px solid transparent;border-radius:0 6px 6px 0;padding-right:2px}
+.cv-item:hover{background:var(--line-soft)}
+.cv-item.active{border-left-color:var(--amber);background:rgba(0,162,229,.10)}
+.cv-pick{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:7px 8px;text-align:left;border-radius:6px}
+.cv-name{font-size:12.5px;color:var(--ink);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cv-item.active .cv-name{font-weight:600}
+.cv-meta{font-family:var(--mono);font-size:9.5px;color:var(--ink-faint)}
+.cv-act,.sc-act{flex:none;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink-faint);border-radius:4px}
+.cv-act:hover:not(:disabled),.sc-act:hover{color:var(--ink);background:#e2e8f1}
+.cv-act:disabled{opacity:.3;cursor:not-allowed}
+.cv-new,.sc-new{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line-soft);padding-top:10px}
+.cv-new input,.sc-new input{background:var(--bg-raise);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;font-family:var(--sans);color:var(--ink);width:100%}
+.cv-new input::placeholder,.sc-new input::placeholder{color:var(--ink-faint)}
+.cv-new button,.sc-new button{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;color:var(--amber);font-weight:600}
+.cv-new button:hover:not(:disabled),.sc-new button:hover:not(:disabled){background:rgba(0,162,229,.10);border-color:#bfe3f6}
+.cv-new button:disabled,.sc-new button:disabled{color:var(--ink-faint);cursor:not-allowed}
+.cv-trash-toggle{font-size:11.5px;color:var(--ink-dim);text-align:left;padding:6px 4px;border-top:1px solid var(--line-soft)}
+.cv-trash-toggle:hover{color:var(--ink)}
+.cv-trash .cv-item{padding:5px 4px 5px 8px}
+.cv-empty,.sc-empty{font-size:11.5px;color:var(--ink-faint);padding:6px 4px;line-height:1.5}
+/* 스키마 패널 */
+.sc-h{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--ink-faint);text-transform:uppercase;font-weight:600;margin-top:4px}
+.sc-item{display:flex;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px solid var(--line-soft);font-size:12px;color:var(--ink-dim)}
+.sc-item:last-child{border-bottom:none}
+.sc-item code{font-family:var(--mono);font-size:10px;color:var(--amber);background:rgba(0,162,229,.10);border-radius:3px;padding:2px 5px;flex:none;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc-item span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 빈 캔버스 안내 — 그래프 캔버스 중앙 */
+.cv-empty-guide{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:20;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 34px rgba(0,33,87,.10);padding:22px 26px;text-align:left}
+.cv-empty-guide h3{font-size:15px;color:var(--ink);margin-bottom:12px}
+.cv-empty-guide ol{margin:0 0 12px 18px;display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--ink-dim);line-height:1.6}
+.cv-empty-guide ol b{color:var(--amber);font-weight:600}
+.cv-empty-note{font-size:11.5px;color:var(--ink-faint);border-top:1px solid var(--line-soft);padding-top:10px}
+
 @media (max-width:1180px){.main,.main.left-open{grid-template-columns:48px 1fr 320px}.lr-drawer{position:absolute;left:48px;top:0;bottom:0;z-index:40;box-shadow:2px 0 16px rgba(0,33,87,.14)}}
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }

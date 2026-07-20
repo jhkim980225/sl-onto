@@ -5,6 +5,7 @@
 // setError 는 큐레이션 액션 실패를 품질 패널에 표시하기 위해 함께 노출.
 import { useCallback, useEffect, useState } from "react";
 import type { QualityIssue, QualityResponse } from "@/lib/quality";
+import { apiFetch } from "@/lib/api-client";
 
 export function useQualityScan(ontologyBuilt: boolean) {
   const [items, setItems] = useState<QualityIssue[]>([]);
@@ -13,7 +14,7 @@ export function useQualityScan(ontologyBuilt: boolean) {
 
   const refresh = useCallback(() => {
     setLoading(true);
-    return fetch("/api/quality")
+    return apiFetch("/api/quality")
       .then((res) => {
         if (!res.ok) throw new Error(`품질 스캔 실패 (${res.status})`);
         return res.json() as Promise<QualityResponse>;

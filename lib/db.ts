@@ -542,3 +542,59 @@ export async function restoreCanvas(id: string): Promise<void> {
 export async function purgeCanvas(id: string): Promise<void> {
   await getPool().query(`DELETE FROM canvases WHERE id = $1`, [id]);
 }
+
+/* ────────────────────────── 스키마 편집 (캔버스별 메타모델) ──────────────────────────
+ * 캔버스 스코핑 대상 — 전부 currentCanvas() 로 자기 캔버스의 메타모델만 건드린다. */
+
+export async function upsertObjectType(t: {
+  type_id: string; label_ko: string; color: string | null; icon: string | null; description: string | null;
+}): Promise<void> {
+  await getPool().query(
+    `INSERT INTO object_types (canvas_id, type_id, label_ko, color, icon, description)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (canvas_id, type_id) DO UPDATE
+       SET label_ko = EXCLUDED.label_ko, color = EXCLUDED.color,
+           icon = EXCLUDED.icon, description = EXCLUDED.description`,
+    [currentCanvas(), t.type_id, t.label_ko, t.color, t.icon, t.description]
+  );
+}
+
+/** 그 타입의 노드가 남아 있으면 삭제하지 않는다(FK 위반·고아 노드 방지). @returns 남은 노드 수 */
+export async function objectTypeUsage(typeId: string): Promise<number> {
+  const r = await getPool().query<{ n: string }>(
+    "SELECT count(*)::text AS n FROM nodes WHERE canvas_id = $1 AND type = $2",
+    [currentCanvas(), typeId]
+  );
+  return Number(r.rows[0].n);
+}
+
+export async function deleteObjectType(typeId: string): Promise<void> {
+  // 서브타입·속성정의는 FK CASCADE 로 함께 사라진다.
+  await getPool().query("DELETE FROM object_types WHERE canvas_id = $1 AND type_id = $2", [currentCanvas(), typeId]);
+}
+
+export async function upsertRelationType(r: {
+  rel_id: string; label_ko: string; description: string | null; src_types: string[]; dst_types: string[];
+}): Promise<void> {
+  await getPool().query(
+    `INSERT INTO relation_types (canvas_id, rel_id, label_ko, description, src_types, dst_types, directed)
+     VALUES ($1,$2,$3,$4,$5,$6,true)
+     ON CONFLICT (canvas_id, rel_id) DO UPDATE
+       SET label_ko = EXCLUDED.label_ko, description = EXCLUDED.description,
+           src_types = EXCLUDED.src_types, dst_types = EXCLUDED.dst_types`,
+    [currentCanvas(), r.rel_id, r.label_ko, r.description, r.src_types, r.dst_types]
+  );
+}
+
+/** 그 관계의 엣지가 남아 있으면 삭제하지 않는다(edges.rel 은 relation_types FK). @returns 남은 엣지 수 */
+export async function relationTypeUsage(relId: string): Promise<number> {
+  const r = await getPool().query<{ n: string }>(
+    "SELECT count(*)::text AS n FROM edges WHERE canvas_id = $1 AND rel = $2",
+    [currentCanvas(), relId]
+  );
+  return Number(r.rows[0].n);
+}
+
+export async function deleteRelationType(relId: string): Promise<void> {
+  await getPool().query("DELETE FROM relation_types WHERE canvas_id = $1 AND rel_id = $2", [currentCanvas(), relId]);
+}

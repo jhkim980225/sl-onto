@@ -10,6 +10,8 @@ import Checklist from "./Checklist";
 import DesignConditionForm from "./DesignConditionForm";
 import SourcePanel from "./SourcePanel";
 import LeftRail from "./LeftRail";
+import CanvasPanel from "./CanvasPanel";
+import SchemaPanel from "./SchemaPanel";
 import SourceModal from "./SourceModal";
 import Stepper from "./Stepper";
 import SearchResults from "./SearchResults";
@@ -27,6 +29,7 @@ import RawView from "./RawView";
 import HierarchyView from "./HierarchyView";
 import OverviewPanel from "./OverviewPanel";
 import type { View } from "@/lib/view-table";
+import type { Capability } from "@/lib/capabilities";
 import { buildNodeIndex, type NodeIndex } from "./nodeIndex";
 import { useContradictions } from "./useContradictions";
 import { useQualityScan } from "./useQualityScan";
@@ -46,6 +49,7 @@ import type {
   SearchHit,
   SearchResponse,
 } from "@/lib/types";
+import { apiFetch, withCanvasUrl } from "@/lib/api-client";
 
 type Stage = 1 | 2 | 3;
 
@@ -82,7 +86,13 @@ function parseTraceIds(trace: string[], idSet: Set<string>): string[] {
   return [...found];
 }
 
-export default function Workbench({ onReset }: { onReset: () => void }) {
+interface WorkbenchProps {
+  canvas: string; // 현재 캔버스 id — CanvasPanel 활성 표시용(데이터 스코핑은 apiFetch 가 담당)
+  onSwitchCanvas: (id: string) => void;
+  onReset: () => void;
+}
+
+export default function Workbench({ canvas, onSwitchCanvas, onReset }: WorkbenchProps) {
   const graphRef = useRef<GraphHandle | null>(null);
   const graphDataRef = useRef<GraphResponse | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -117,6 +127,9 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
   const [stCounts, setStCounts] = useState<Record<string, Record<string, number>>>({});
   // 서브타입 라벨 매핑(GET /api/schema 메타모델) — 구축 완료 후 1회 조회
   const [subtypeDefs, setSubtypeDefs] = useState<{ type_id: string; st_id: string; label_ko: string }[]>([]);
+  // 기능 가용성(GET /api/schema capabilities) — 이 캔버스 스키마에 필요한 객체타입이 없으면
+  // 해당 기능 버튼을 아예 감춘다. 로드 전에는 {} 라 감춰진 상태로 시작한다(설계 §5).
+  const [caps, setCaps] = useState<Partial<Record<Capability, boolean>>>({});
   const [viewInfo, setViewInfo] = useState<ViewInfo | null>(null);
   const [focusInfo, setFocusInfo] = useState<FocusInfo | null>(null);
   // 결과 프레임 — Graph/Table/RAW 토글 + 현재 뷰 스냅샷(Table/RAW/오버뷰 공용).
@@ -190,7 +203,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
   // ── STAGE 1: 실제 원천 파일 목록 조회 (온톨로지 구축 전에도 "흩어진 원천"이 실데이터임을 보여준다) ──
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/sources")
+    apiFetch("/api/sources")
       .then((res) => {
         if (!res.ok) throw new Error(`원천 조회 실패 (${res.status})`);
         return res.json() as Promise<SourcesResponse>;
@@ -228,17 +241,24 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
   // pyservice /reason 유도 관계 — 배지("🔗 유도 관계 N건", DB 미반영 조회 전용 오버레이).
   const { derivedRelations, loading: reasonLoading, error: reasonError } = useReason(ontologyBuilt);
 
-  // 서브타입 라벨 매핑(형식 온톨로지 1차) — 실패해도 탐색기 서브타입 트리만 생략(치명 아님).
+  // 서브타입 라벨 매핑(형식 온톨로지 1차) + 기능 가용성 — 같은 /api/schema 한 번으로 둘 다 받는다.
+  // 실패해도 탐색기 서브타입 트리·조건부 버튼만 생략(치명 아님).
+  // ontologyBuilt 를 기다리지 않는다 — 라우트가 ready() 를 보장하고, 빈 캔버스에서도 캡이 필요하다.
   useEffect(() => {
-    if (!ontologyBuilt) return;
-    fetch("/api/schema")
+    apiFetch("/api/schema")
       .then((res) => {
         if (!res.ok) throw new Error(`스키마 조회 실패 (${res.status})`);
-        return res.json() as Promise<{ subtypes: { type_id: string; st_id: string; label_ko: string }[] }>;
+        return res.json() as Promise<{
+          subtypes: { type_id: string; st_id: string; label_ko: string }[];
+          capabilities?: Partial<Record<Capability, boolean>>;
+        }>;
       })
-      .then((d) => setSubtypeDefs(d.subtypes))
+      .then((d) => {
+        setSubtypeDefs(d.subtypes);
+        setCaps(d.capabilities ?? {});
+      })
       .catch(() => {});
-  }, [ontologyBuilt]);
+  }, []);
 
   // ── 결로 지역별 분석 시나리오 진입 (Inspector에서 아우터 렌즈/결로·습기 선택 시) ──
   const handleOpenCondensation = useCallback(() => {
@@ -246,7 +266,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
     if (condensationRegions || condensationLoading) return; // 이미 로드됨/로딩 중이면 재요청하지 않음
     setCondensationLoading(true);
     setCondensationError(null);
-    fetch("/api/condensation")
+    apiFetch("/api/condensation")
       .then((res) => {
         if (!res.ok) throw new Error(`지역 목록 조회 실패 (${res.status})`);
         return res.json() as Promise<RegionsResponse>;
@@ -307,7 +327,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
           return [...prev, { id, label, via, fresh }];
         });
       }
-      fetch(`/api/object/${encodeURIComponent(id)}`)
+      apiFetch(`/api/object/${encodeURIComponent(id)}`)
         .then((res) => {
           if (!res.ok) throw new Error(`객체 조회 실패 (${res.status})`);
           return res.json() as Promise<ObjectDetail>;
@@ -417,7 +437,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
       setIngestVisible(!instant);
       setOntologyError(null);
 
-      fetch("/api/ontology")
+      apiFetch("/api/ontology")
         .then((res) => {
           if (!res.ok) throw new Error(`온톨로지 조회 실패 (${res.status})`);
           return res.json() as Promise<GraphResponse>;
@@ -485,7 +505,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
 
     const gd = graphDataRef.current;
 
-    fetch("/api/infer", {
+    apiFetch("/api/infer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(inferInput),
@@ -543,7 +563,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
             return { method: "POST", body: fd };
           })()
         : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sample: true }) };
-    fetch("/api/drawing-input", init)
+    apiFetch("/api/drawing-input", init)
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok || !data.ok) throw new Error(data.error ?? `도면 분석 실패 (${res.status})`);
@@ -580,7 +600,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
       setInferLoading(true);
       setInferError(null);
       setRightPanelMode("checklist");
-      fetch("/api/infer", {
+      apiFetch("/api/infer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
@@ -607,7 +627,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
   mergeSourceRef.current = mergeSource;
 
   const curate = useCallback((body: Record<string, unknown>) => {
-    return fetch("/api/curate", {
+    return apiFetch("/api/curate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -740,7 +760,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
       setInferLoading(true);
       setInferError(null);
       setRightPanelMode("checklist");
-      fetch("/api/infer", {
+      apiFetch("/api/infer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
@@ -777,7 +797,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
       }
       if (!ontologyBuilt) return; // 그래프가 아직 없으면 검색을 걸지 않는다.
       searchDebounceRef.current = setTimeout(() => {
-        fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        apiFetch(`/api/search?q=${encodeURIComponent(query)}`)
           .then((res) => {
             if (!res.ok) throw new Error(`검색 실패 (${res.status})`);
             return res.json() as Promise<SearchResponse>;
@@ -828,7 +848,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
       setNlResult(null);
       setRightPanelMode("nlsearch");
 
-      fetch("/api/nlsearch", {
+      apiFetch("/api/nlsearch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
@@ -861,7 +881,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
 
   // ── 문서 인제스천 — 성공 시 좌측 원천 패널의 파일 목록/카운트를 최신화 ──
   const refreshSources = useCallback(() => {
-    fetch("/api/sources")
+    apiFetch("/api/sources")
       .then((res) => {
         if (!res.ok) throw new Error(`원천 조회 실패 (${res.status})`);
         return res.json() as Promise<SourcesResponse>;
@@ -881,7 +901,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
         typeof body === "string"
           ? { method: "POST", headers: { "Content-Type": "application/json" }, body }
           : { method: "POST", body };
-      fetch("/api/ingest", init)
+      apiFetch("/api/ingest", init)
         .then(async (res) => {
           const data = (await res.json().catch(() => null)) as
             | (IngestResponse | { ok: false; error?: string })
@@ -1039,7 +1059,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
         >
           📥 문서 인제스천
         </button>
-        {contradictions.length > 0 && (
+        {caps.contradictions && contradictions.length > 0 && (
           <button
             className="btn btn-ghost"
             id="btnContradictions"
@@ -1091,7 +1111,7 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
           <a
             className="btn btn-ghost"
             id="btnExportTtl"
-            href="/api/ontology/export?format=ttl"
+            href={withCanvasUrl("/api/ontology/export?format=ttl")}
             download
             title="온톨로지 전체(스키마+인스턴스)를 RDF Turtle 파일로 내보내기"
           >
@@ -1101,43 +1121,53 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
         <button className="btn btn-ghost" id="btnReset" onClick={handleReset}>
           처음부터
         </button>
-        <button
-          className="btn btn-primary"
-          id="btnScenario"
-          disabled={!ontologyBuilt}
-          title={
-            inspectorObj?.type === "item"
-              ? `선택 부품 '${inspectorObj.label}' 설계 조건 패널 열기 (조건 확인 후 '추론 실행')`
-              : "설계 조건 패널 열기 (조건 선택 후 '추론 실행')"
-          }
-          onClick={() => setRightPanelMode("checklist")}
-        >
-          {inspectorObj?.type === "item"
-            ? `▶ '${inspectorObj.label.length > 10 ? inspectorObj.label.slice(0, 10) + "…" : inspectorObj.label}' 설계 검토`
-            : "▶ 신규 설계 추론"}
-        </button>
+        {caps.infer && (
+          <button
+            className="btn btn-primary"
+            id="btnScenario"
+            disabled={!ontologyBuilt}
+            title={
+              inspectorObj?.type === "item"
+                ? `선택 부품 '${inspectorObj.label}' 설계 조건 패널 열기 (조건 확인 후 '추론 실행')`
+                : "설계 조건 패널 열기 (조건 선택 후 '추론 실행')"
+            }
+            onClick={() => setRightPanelMode("checklist")}
+          >
+            {inspectorObj?.type === "item"
+              ? `▶ '${inspectorObj.label.length > 10 ? inspectorObj.label.slice(0, 10) + "…" : inspectorObj.label}' 설계 검토`
+              : "▶ 신규 설계 추론"}
+          </button>
+        )}
       </header>
 
       <div className={"main" + (leftPanel ? " left-open" : "")}>
-        <LeftRail active={leftPanel} onSelect={setLeftPanel}>
-          <SourcePanel
-            counts={graphCounts}
-            activeType={activeType}
-            onSelectType={(t) => {
-              setActiveType(t);
-              setActiveSt(null);
-              graphRef.current?.filterByType(t);
-            }}
-            subtypeDefs={subtypeDefs}
-            stCounts={stCounts}
-            activeSubtype={activeSt}
-            onSelectSubtype={(t, st) => {
-              setActiveType(t);
-              setActiveSt(st);
-              graphRef.current?.filterByType(st ? `${t}:${st}` : t);
-            }}
-          />
-        </LeftRail>
+        <LeftRail
+          active={leftPanel}
+          onSelect={setLeftPanel}
+          panels={{
+            canvases: <CanvasPanel current={canvas} onSwitch={onSwitchCanvas} />,
+            types: (
+              <SourcePanel
+                counts={graphCounts}
+                activeType={activeType}
+                onSelectType={(t) => {
+                  setActiveType(t);
+                  setActiveSt(null);
+                  graphRef.current?.filterByType(t);
+                }}
+                subtypeDefs={subtypeDefs}
+                stCounts={stCounts}
+                activeSubtype={activeSt}
+                onSelectSubtype={(t, st) => {
+                  setActiveType(t);
+                  setActiveSt(st);
+                  graphRef.current?.filterByType(st ? `${t}:${st}` : t);
+                }}
+              />
+            ),
+            schema: <SchemaPanel />,
+          }}
+        />
 
         <section className="canvas-wrap" id="cw">
           <div className="stagechip" id="stageChip">
@@ -1157,6 +1187,21 @@ export default function Workbench({ onReset }: { onReset: () => void }) {
               </span>
             )}
           </div>
+          {/* 빈 캔버스 — 스키마 정의 → 문서 인제스천 순서를 안내한다(타입이 없으면 적재되지 않는다). */}
+          {ontologyBuilt && fullTotals?.nodes === 0 && (
+            <div className="cv-empty-guide">
+              <h3>빈 캔버스입니다</h3>
+              <ol>
+                <li>
+                  <b>◈ 스키마</b> 드로어에서 객체타입·관계타입을 정의하세요.
+                </li>
+                <li>
+                  <b>📥 문서 인제스천</b>으로 문서를 부어 온톨로지를 구축하세요.
+                </li>
+              </ol>
+              <p className="cv-empty-note">타입이 없으면 문서를 넣어도 적재되지 않습니다.</p>
+            </div>
+          )}
           {/* 전체 덤프(숨겨진 객체 모두 보기) 버튼 제거 — 174노드/2171엣지 일괄 렌더가 렉 유발.
               대신 기본 = 대분류 앵커(부품·프로젝트)만, 노드 클릭 시 1홉 관계를 펼쳐 본다. */}
           {mergeSource && (

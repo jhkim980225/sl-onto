@@ -10,6 +10,7 @@ import type { BomFinding } from "@/lib/bom-consistency";
 import { TYPES, TYPE_NAMES } from "./typeStyles";
 import { groupRelations, relKo } from "./relLabels";
 import ConfidenceBar from "./ConfidenceBar";
+import { apiFetch } from "@/lib/api-client";
 
 /** 탐색 히스토리 한 항목 — via는 "어떻게 이 객체에 도달했는가"(관계명+방향 또는 진입 경로 태그). */
 export interface NavEntry {
@@ -432,7 +433,7 @@ function BomCheckSection({ obj, onGo }: { obj: ObjectDetail; onGo: (id: string, 
     let live = true;
     setLoading(true);
     setError(null);
-    fetch(`/api/bom-check?item=${encodeURIComponent(obj.id)}`)
+    apiFetch(`/api/bom-check?item=${encodeURIComponent(obj.id)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((data) => {
         if (live) setFindings(Array.isArray(data.findings) ? data.findings : []);

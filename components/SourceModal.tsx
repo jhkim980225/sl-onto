@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { SourceInfo } from "./sourceTypes";
+import { apiFetch, withCanvasUrl } from "@/lib/api-client";
 
 interface SourceModalProps {
   source: SourceInfo;
@@ -32,7 +33,7 @@ export default function SourceModal({ source, highlightIds, onClose }: SourceMod
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const drawingUrl = /\.dxf$/i.test(source.file)
-    ? `/api/drawing-svg?file=${encodeURIComponent(source.file)}`
+    ? withCanvasUrl(`/api/drawing-svg?file=${encodeURIComponent(source.file)}`)
     : null;
 
   // ESC 로 닫기 + 배경 스크롤 잠금.
@@ -58,7 +59,7 @@ export default function SourceModal({ source, highlightIds, onClose }: SourceMod
     setFtStatus("loading");
     setFt(null);
     setFtError("");
-    fetch(`/api/source-text?file=${encodeURIComponent(source.file)}`)
+    apiFetch(`/api/source-text?file=${encodeURIComponent(source.file)}`)
       .then(async (r) => {
         const body = await r.json().catch(() => ({}));
         if (cancelled) return;

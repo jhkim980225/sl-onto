@@ -110,6 +110,16 @@ export function getMetamodel(): Metamodel {
   return cache().metamodel;
 }
 
+/** 스키마 편집 후 메타모델 캐시 갱신 — 다음 요청이 새 타입을 즉시 본다.
+ * c.metamodel 은 hydrate() 에서만 채워지고 TTL 재동기화(syncFromDb)는 노드·엣지·소스만 다시 읽는다.
+ * 따라서 스키마 편집 뒤에는 이 함수를 명시적으로 불러야 한다.
+ * dropCanvasCache 로 캐시를 통째로 버리면 readyPromise 까지 날아가 다음 요청이 full hydrate
+ * (loadAll + 재인덱스 + 서브타입 백필 + 임베딩 백필)를 탄다 — 메타모델 1필드 갱신에는 과하다. */
+export async function reloadMetamodel(): Promise<void> {
+  if (!HAS_DB) return;
+  cache().metamodel = await db.loadMetamodel();
+}
+
 function push(map: Map<string, Edge[]>, k: string, e: Edge) {
   const arr = map.get(k);
   if (arr) arr.push(e);

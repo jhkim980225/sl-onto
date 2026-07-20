@@ -4,6 +4,7 @@
 // refresh 는 큐레이션(병합/삭제) 후 재스캔에 재사용된다.
 import { useCallback, useEffect, useState } from "react";
 import type { Contradiction, ContradictionsResponse } from "@/lib/types";
+import { apiFetch } from "@/lib/api-client";
 
 export function useContradictions(ontologyBuilt: boolean) {
   const [items, setItems] = useState<Contradiction[]>([]);
@@ -12,7 +13,7 @@ export function useContradictions(ontologyBuilt: boolean) {
 
   const refresh = useCallback(() => {
     setLoading(true);
-    return fetch("/api/contradictions")
+    return apiFetch("/api/contradictions")
       .then((res) => {
         if (!res.ok) throw new Error(`모순 스캔 실패 (${res.status})`);
         return res.json() as Promise<ContradictionsResponse>;

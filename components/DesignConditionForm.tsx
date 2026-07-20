@@ -4,6 +4,7 @@
 // 조건 옵션은 실제 프로젝트 데이터에서 자동 생성(GET /api/design-options) — 시장·광원 드롭다운, 형상 토글 칩.
 import { useEffect, useState } from "react";
 import type { DesignInput } from "@/lib/types";
+import { apiFetch } from "@/lib/api-client";
 
 interface DesignConditionFormProps {
   condition: DesignInput;
@@ -36,7 +37,7 @@ export default function DesignConditionForm({
   const [opts, setOpts] = useState<Options>(FALLBACK);
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/design-options")
+    apiFetch("/api/design-options")
       .then((r) => (r.ok ? r.json() : null))
       .then((d: Options | null) => {
         if (cancelled || !d) return;
