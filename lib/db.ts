@@ -23,7 +23,19 @@ export function dbEnabled(): boolean {
 // ── Pool 싱글턴 ──
 let pool: Pool | undefined;
 export function getPool(): Pool {
-  if (!pool) pool = new PgPool({ connectionString: process.env.DATABASE_URL });
+  if (!pool) {
+    pool = new PgPool({
+      connectionString: process.env.DATABASE_URL,
+      // Postgres 가 내려가 있으면 pool.connect() 가 OS TCP 타임아웃(수 분)까지 매달려
+      // 모든 요청이 응답 없이 쌓인다. 빠르게 실패시키고 다음 요청이 재시도하게 한다.
+      connectionTimeoutMillis: 5000,
+    });
+    // 유휴 클라이언트가 끊기면(Postgres 재시작·볼륨 재부착) Pool 이 'error' 를 emit 한다.
+    // 리스너가 없으면 EventEmitter 규약상 프로세스가 종료된다 — 파드가 통째로 죽는다.
+    pool.on("error", (err) => {
+      console.error("[db] 유휴 커넥션 오류(무시하고 계속):", err.message);
+    });
+  }
   return pool;
 }
 
@@ -121,6 +133,16 @@ export async function loadMetamodel(): Promise<Metamodel> {
     p.query<PropertyDefSeed & { options: string[] }>("SELECT type_id, key, label_ko, datatype, options, required FROM property_defs WHERE canvas_id = $1", [cv]),
   ]);
   return { objectTypes: ot.rows, relationTypes: rt.rows, subtypes: st.rows, propertyDefs: pd.rows };
+}
+
+/** 이 캔버스에 쓰기 이력이 있었는가. hydrate 의 "최초 부팅" 판정용 —
+ * 노드 수 0 은 "한 번도 안 채웠다" 와 "채웠다가 다 지웠다" 를 구분하지 못한다. */
+export async function changeLogCount(): Promise<number> {
+  const r = await getPool().query<{ n: string }>(
+    "SELECT count(*)::text AS n FROM change_log WHERE canvas_id = $1",
+    [currentCanvas()]
+  );
+  return Number(r.rows[0].n);
 }
 
 export async function nodeCount(): Promise<number> {

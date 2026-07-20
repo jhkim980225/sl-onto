@@ -3,7 +3,7 @@
 // 좌측 드로어 — 이 캔버스에 적재된 문서 목록 · 교체(⟳) · 삭제(✕).
 // 등록은 우측 IngestPanel 이 담당한다(설계문서 §6) — 여기는 목록/수정/삭제 전용.
 // 삭제는 "이 문서만 근거로 삼는 객체"를 함께 지운다. 엣지에는 출처가 없어 양끝이 다른 문서에도
-// 근거를 둔 관계는 남는다 — 서버가 준 keptEdges 를 그대로 노출해 한계를 드러낸다(설계문서 §2).
+// 근거를 둔 객체는 남는다 — 서버가 준 keptNodes 를 노출해 무엇이 남았는지 드러낸다(설계문서 §2).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import type { SourceInfo, SourcesResponse } from "./sourceTypes";
@@ -22,12 +22,12 @@ interface Removed {
 interface MutateResult {
   removed?: Removed;
   added?: { nodes: number; edges: number };
-  keptEdges?: number;
+  keptNodes?: number;
 }
 
 /** 남은 관계 안내 — 0건이면 문장을 붙이지 않는다. */
 function keptNote(kept: number | undefined): string {
-  return kept ? ` 다른 문서도 근거인 관계 ${kept}개는 남았습니다.` : "";
+  return kept ? ` 객체 ${kept}개는 다른 문서에도 근거가 있어 남았습니다.` : "";
 }
 
 export default function DocumentPanel({ onChanged }: Props) {
@@ -72,7 +72,7 @@ export default function DocumentPanel({ onChanged }: Props) {
     const d = ((await r.json().catch(() => null)) ?? {}) as MutateResult;
     setNote(
       `"${s.file}" 삭제 — 객체 ${d.removed?.nodes ?? 0}개 · 관계 ${d.removed?.edges ?? 0}개 제거.` +
-        keptNote(d.keptEdges)
+        keptNote(d.keptNodes)
     );
     await load();
     onChanged();
@@ -97,7 +97,7 @@ export default function DocumentPanel({ onChanged }: Props) {
     setNote(
       `"${target}" 교체 — 제거 객체 ${d.removed?.nodes ?? 0}개 / 추가 객체 ${d.added?.nodes ?? 0}개 · 관계 ${
         d.added?.edges ?? 0
-      }개.` + keptNote(d.keptEdges)
+      }개.` + keptNote(d.keptNodes)
     );
     await load();
     onChanged();

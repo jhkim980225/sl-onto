@@ -7,7 +7,7 @@ import { getNode, inEdges, evidenceOf, removeNode, removeSource, allEdges } from
 export interface DeleteResult {
   removed: { doc: number; nodes: number; edges: number };
   /** 이 문서가 근거였지만 다른 문서가 받쳐 살아남은 객체들 사이에 남은 관계 수(알려진 한계 보고용). */
-  keptEdges: number;
+  keptNodes: number;
 }
 
 /** 문서 1건과 그에 딸린 고아 객체를 제거. 없는 문서면 null(라우트가 404). */
@@ -40,8 +40,10 @@ export async function deleteDocument(file: string): Promise<DeleteResult | null>
   }
   await removeSource(file);
 
-  // ponytail: 엣지 출처 미추적. 양끝이 다른 문서에도 근거를 둔 엣지는 이 문서가 만들었어도 남는다.
-  // 남는 수만 보고한다. 실제 문제가 되면 edges.props 에 docs[] 를 기록하고 정확 삭제로 전환.
-  const keptEdges = allEdges().filter((e) => kept.has(e.src) && kept.has(e.dst)).length;
-  return { removed: { doc: 1, nodes, edges }, keptEdges };
+  // 예전에는 "생존 객체 사이의 모든 엣지" 를 keptEdges 로 보고했는데, 그 값에는 이 문서가
+  // 만든 적 없는 엣지(다른 문서·수동 큐레이션이 그은 것)까지 섞여 사용자가 읽는 의미와 달랐다.
+  // 엣지에 출처가 없어 "이 문서가 만들었지만 남은 엣지" 는 원리적으로 셀 수 없다.
+  // 그래서 셀 수 있는 것만 보고한다 — 다른 문서도 근거라서 유지된 객체 수.
+  // ponytail: 정확히 세려면 edges.props 에 docs[] 를 기록해야 한다. 지금은 필요 없다.
+  return { removed: { doc: 1, nodes, edges }, keptNodes: kept.size };
 }

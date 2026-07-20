@@ -68,7 +68,9 @@ test("근거가 2개 이상인 공유 객체는 살아남는다 (삭제 순서 �
   assert.ok(getNode(s1), "다른 문서(B)가 받치는 객체가 지워졌다 — 고아 판정이 doc 삭제 뒤에 돌았다");
   assert.ok(getNode(s2));
   assert.ok(getNode(`doc:${B}`));
-  assert.equal(r.keptEdges, 1); // 살아남은 공유 객체끼리의 HAS_FM 1개
+  // 다른 문서(B)도 근거인 객체 s1·s2 두 개가 유지된다.
+  // (엣지 수가 아니라 객체 수 — 엣지에는 출처가 없어 '이 문서가 만든 엣지'를 셀 수 없다.)
+  assert.equal(r.keptNodes, 2);
 });
 
 test("없는 문서면 null", async () => {

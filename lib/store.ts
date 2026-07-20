@@ -227,7 +227,10 @@ async function hydrate(c: CanvasCache, canvasId: string): Promise<void> {
   // await 뒤는 ALS 컨텍스트가 유실될 수 있다 — 이후 DB 호출 전체를 캔버스 컨텍스트로 다시 감싼다.
   await withCanvas(canvasId, async () => {
     c.metamodel = await db.loadMetamodel(); // 자동 등록된 관계 타입 포함 — 검증·내보내기의 기준
-    if ((await db.nodeCount()) === 0 && canvasId === DEFAULT_CANVAS) {
+    // 최초 부팅 판정에 change_log 를 함께 본다. 노드 수 0 만 보면 "한 번도 안 채웠다" 와
+    // "채웠다가 문서를 전부 지웠다" 를 구분하지 못해, 사용자가 정리한 뒤 파드가 재시작하면
+    // data/sources 40건이 조용히 되살아난다. 쓰기 이력이 있으면 이미 채운 적이 있는 캔버스다.
+    if ((await db.nodeCount()) === 0 && canvasId === DEFAULT_CANVAS && (await db.changeLogCount()) === 0) {
       // 부트스트랩 캔버스 최초 부팅에만 data/sources 인제스천을 DB 로 승격.
       // 사용자가 만든 빈 캔버스는 비어 있는 것이 정상이다(설계 §3.4).
       const seed = ingestOrSeed(c.metamodel);
