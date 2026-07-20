@@ -191,7 +191,8 @@ rg -n '그래프-추론|FMEA-초안생성|BOM-정합성|모순-검사|결로-시
 
 ```bash
 # md 파일 안의 상대 링크가 실제 파일을 가리키는지 확인
-for f in $(find docs -name '*.md') CLAUDE.md; do
+# docs/superpowers/ 는 제외한다 — 스펙·계획 문서는 아직 없는 파일을 예시로 인용하므로 오탐이다
+for f in $(find docs -name '*.md' -not -path 'docs/superpowers/*') CLAUDE.md; do
   d=$(dirname "$f")
   grep -o '](\.\?\.\?/\?[^)#]*\.md' "$f" 2>/dev/null | sed 's/^](//' | while read -r l; do
     [ -f "$d/$l" ] || echo "BROKEN  $f  ->  $l"
@@ -914,7 +915,8 @@ FMEA(SL 자동차 램프)는 1차 MVP 를 검증한 **레거시 도메인**이�
 
 ```bash
 # 링크 전수 확인
-for f in $(find docs -name '*.md') CLAUDE.md; do
+# docs/superpowers/ 는 제외한다 — 스펙·계획 문서는 아직 없는 파일을 예시로 인용하므로 오탐이다
+for f in $(find docs -name '*.md' -not -path 'docs/superpowers/*') CLAUDE.md; do
   d=$(dirname "$f")
   grep -o '](\.\?\.\?/\?[^)#]*\.md' "$f" 2>/dev/null | sed 's/^](//' | while read -r l; do
     [ -f "$d/$l" ] || echo "BROKEN  $f  ->  $l"
@@ -967,7 +969,8 @@ Expected: 출력 없음, `exit=1`
 - [ ] **Step 3: 깨진 링크 0건**
 
 ```bash
-for f in $(find docs -name '*.md') CLAUDE.md; do
+# docs/superpowers/ 는 제외한다 — 스펙·계획 문서는 아직 없는 파일을 예시로 인용하므로 오탐이다
+for f in $(find docs -name '*.md' -not -path 'docs/superpowers/*') CLAUDE.md; do
   d=$(dirname "$f")
   grep -o '](\.\?\.\?/\?[^)#]*\.md' "$f" 2>/dev/null | sed 's/^](//' | while read -r l; do
     [ -f "$d/$l" ] || echo "BROKEN  $f  ->  $l"
