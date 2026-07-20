@@ -7,6 +7,7 @@ import { ready } from "@/lib/store";
 import { buildAskContext, askKey } from "@/lib/ask";
 import { llmAsk } from "@/lib/llm";
 import { dbEnabled, getAiOpinion, saveAiOpinion } from "@/lib/db";
+import { withCanvasRoute } from "@/lib/canvas-route";
 
 // 사내 vLLM 첫 생성 60~90초 — review-opinion 과 동일 여유.
 export const maxDuration = 180;
@@ -17,51 +18,53 @@ const InputSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  await ready();
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
-  }
-  const parsed = InputSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid input", issues: parsed.error.flatten() }, { status: 400 });
-  }
-  const { objectId, question } = parsed.data;
-
-  const ctx = buildAskContext(objectId);
-  if (!ctx) return NextResponse.json({ error: "객체를 찾을 수 없습니다" }, { status: 404 });
-
-  const key = askKey(objectId, question);
-  if (dbEnabled()) {
-    const cached = await getAiOpinion(key);
-    if (cached) {
-      return NextResponse.json({
-        answer: cached.opinion,
-        citedRels: cached.citedChecks,
-        rels: ctx.rels,
-        docs: ctx.docs,
-        cached: true,
-        generatedAt: cached.createdAt,
-      });
+  return withCanvasRoute(req, async () => {
+    await ready();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
     }
-  }
+    const parsed = InputSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "invalid input", issues: parsed.error.flatten() }, { status: 400 });
+    }
+    const { objectId, question } = parsed.data;
 
-  const t0 = Date.now();
-  const llm = await llmAsk(question, ctx.contextText);
-  if (!llm) return NextResponse.json({ error: "사내 LLM 응답 지연·혼잡" }, { status: 503 });
+    const ctx = buildAskContext(objectId);
+    if (!ctx) return NextResponse.json({ error: "객체를 찾을 수 없습니다" }, { status: 404 });
 
-  if (dbEnabled()) {
-    await saveAiOpinion(key, { objectId, question }, llm.answer, llm.citedRels);
-  }
-  return NextResponse.json({
-    answer: llm.answer,
-    citedRels: llm.citedRels,
-    rels: ctx.rels,
-    docs: ctx.docs,
-    cached: false,
-    generatedAt: new Date().toISOString(),
-    ms: Date.now() - t0,
+    const key = askKey(objectId, question);
+    if (dbEnabled()) {
+      const cached = await getAiOpinion(key);
+      if (cached) {
+        return NextResponse.json({
+          answer: cached.opinion,
+          citedRels: cached.citedChecks,
+          rels: ctx.rels,
+          docs: ctx.docs,
+          cached: true,
+          generatedAt: cached.createdAt,
+        });
+      }
+    }
+
+    const t0 = Date.now();
+    const llm = await llmAsk(question, ctx.contextText);
+    if (!llm) return NextResponse.json({ error: "사내 LLM 응답 지연·혼잡" }, { status: 503 });
+
+    if (dbEnabled()) {
+      await saveAiOpinion(key, { objectId, question }, llm.answer, llm.citedRels);
+    }
+    return NextResponse.json({
+      answer: llm.answer,
+      citedRels: llm.citedRels,
+      rels: ctx.rels,
+      docs: ctx.docs,
+      cached: false,
+      generatedAt: new Date().toISOString(),
+      ms: Date.now() - t0,
+    });
   });
 }

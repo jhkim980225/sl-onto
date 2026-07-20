@@ -33,3 +33,17 @@ test("memoizeByGraphSize — 그래프 크기 불변이면 캐시, 병합으로 
   assert.equal(await get(), 2); // 노드 수 증가 → 재계산
   assert.equal(calls, 2);
 });
+
+test("캔버스가 다르면 그래프 크기가 같아도 캐시를 공유하지 않는다", async () => {
+  const { withCanvas } = await import("./canvas-context.ts");
+  let calls = 0;
+  const memo = memoizeByGraphSize(() => ++calls);
+  const a1 = await withCanvas("memo-a", () => memo());
+  const b1 = await withCanvas("memo-b", () => memo());
+  assert.notEqual(a1, b1, "다른 캔버스는 각자 계산해야 한다");
+  assert.equal(calls, 2);
+  // 같은 캔버스 재호출은 캐시 히트 — 캔버스를 오가도 서로 축출하지 않는다
+  assert.equal(await withCanvas("memo-a", () => memo()), a1);
+  assert.equal(await withCanvas("memo-b", () => memo()), b1);
+  assert.equal(calls, 2, "재계산 없음");
+});

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { memoizeByGraphSize } from "@/lib/graph-memo";
 import { scanQuality, scanDupSemantic, type QualityResponse } from "@/lib/quality";
 import { ready } from "@/lib/store";
+import { withCanvasRoute } from "@/lib/canvas-route";
 
 // 전역 스캔은 O(전체 그래프) — 매 요청 재계산 대신 그래프 크기 키로 메모이즈(lib/graph-memo).
 const scan = memoizeByGraphSize<QualityResponse>(async () => {
@@ -13,7 +14,9 @@ const scan = memoizeByGraphSize<QualityResponse>(async () => {
 });
 
 // GET /api/quality — 온톨로지 품질 스캔(중복 후보·고립 노드·근거 누락).
-export async function GET() {
-  await ready();
-  return NextResponse.json(await scan());
+export async function GET(req: Request) {
+  return withCanvasRoute(req, async () => {
+    await ready();
+    return NextResponse.json(await scan());
+  });
 }

@@ -17,7 +17,8 @@ import { readDoc } from "@/lib/ingest/docx";
 import { withTempFile } from "@/lib/ingest/tempfile";
 import { llmExtract } from "@/lib/llm";
 import { parseDocument, parseEnabled } from "@/lib/parse";
-import { mergeDelta, registerSource, allNodes, allEdges, ready } from "@/lib/store";
+import { mergeDelta, registerSource, allNodes, allEdges, getMetamodel, ready } from "@/lib/store";
+import { withCanvasRoute } from "@/lib/canvas-route";
 
 export const runtime = "nodejs";
 
@@ -32,26 +33,36 @@ const ingestBufferAs = (fileName: string, buf: Buffer) =>
   withTempFile(fileName, buf, (tmp) => ingestOne(tmp, fileName));
 
 export async function POST(req: Request) {
-  await ready();
-  try {
-    const ct = req.headers.get("content-type") ?? "";
-    if (ct.includes("multipart/form-data")) return await handleUpload(req);
-
-    let body: unknown;
+  return withCanvasRoute(req, async () => {
+    await ready();
+    // 객체타입이 없는 캔버스에는 노드를 물리적으로 넣을 수 없다 —
+    // nodes.type → object_types(canvas_id, type_id) FK 가 막는다. FK 위반 500 대신 선제 안내(설계 §8).
+    if (getMetamodel().objectTypes.length === 0) {
+      return NextResponse.json(
+        { error: "이 캔버스에는 객체타입이 없습니다. ◈ 스키마에서 먼저 정의하세요", needsSchema: true },
+        { status: 409 }
+      );
+    }
     try {
-      body = await req.json();
-    } catch {
-      return bad(400, "본문은 multipart/form-data(file) 또는 JSON 이어야 합니다");
+      const ct = req.headers.get("content-type") ?? "";
+      if (ct.includes("multipart/form-data")) return await handleUpload(req);
+
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return bad(400, "본문은 multipart/form-data(file) 또는 JSON 이어야 합니다");
+      }
+      if (body !== null && typeof body === "object" && (body as Record<string, unknown>).sample === true) {
+        return handleSample();
+      }
+      return bad(400, '지원하지 않는 요청 — multipart field "file" 또는 { "sample": true }');
+    } catch (err) {
+      // 어떤 입력에도 서버가 죽지 않는다(견고성).
+      console.error("POST /api/ingest failed:", err);
+      return bad(422, `인제스천 실패: ${err instanceof Error ? err.message : String(err)}`);
     }
-    if (body !== null && typeof body === "object" && (body as Record<string, unknown>).sample === true) {
-      return handleSample();
-    }
-    return bad(400, '지원하지 않는 요청 — multipart field "file" 또는 { "sample": true }');
-  } catch (err) {
-    // 어떤 입력에도 서버가 죽지 않는다(견고성).
-    console.error("POST /api/ingest failed:", err);
-    return bad(422, `인제스천 실패: ${err instanceof Error ? err.message : String(err)}`);
-  }
+  });
 }
 
 async function handleUpload(req: Request) {
