@@ -17,7 +17,7 @@ import { readDoc } from "@/lib/ingest/docx";
 import { withTempFile } from "@/lib/ingest/tempfile";
 import { llmExtract } from "@/lib/llm";
 import { parseDocument, parseEnabled } from "@/lib/parse";
-import { mergeDelta, registerSource, allNodes, allEdges, getMetamodel, ready } from "@/lib/store";
+import { mergeDelta, registerSource, allNodes, allEdges, getMetamodel, ready, getRuntimeSources } from "@/lib/store";
 import { withCanvasRoute } from "@/lib/canvas-route";
 
 export const runtime = "nodejs";
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     // nodes.type → object_types(canvas_id, type_id) FK 가 막는다. FK 위반 500 대신 선제 안내(설계 §8).
     if (getMetamodel().objectTypes.length === 0) {
       return NextResponse.json(
-        { error: "이 캔버스에는 객체타입이 없습니다. ◈ 스키마에서 먼저 정의하세요", needsSchema: true },
+        { ok: false, error: "이 캔버스에는 객체타입이 없습니다. ◈ 스키마에서 먼저 정의하세요", needsSchema: true },
         { status: 409 }
       );
     }
@@ -76,6 +76,17 @@ async function handleUpload(req: Request) {
   if (!ALLOWED_EXT.test(name)) return bad(400, "지원 형식은 .xlsx / .pptx / .docx / .dxf / .pdf 입니다");
   if (f.size === 0) return bad(400, "빈 파일입니다");
   if (f.size > MAX_BYTES) return bad(400, "파일이 10MB 를 초과합니다");
+
+  // 같은 이름의 문서가 이미 있으면 막는다. 덮어쓰면 sources 행만 새 파일로 교체되고
+  // mergeDelta 는 추가만 하므로 옛 파일이 만든 노드가 그대로 남는다 — 그 노드들이
+  // 내용이 다른 문서를 근거로 갖게 되어 골든 룰 1(근거 우선)이 깨진다.
+  // 교체는 PUT /api/sources/[file] (문서 드로어의 ⟳)이 삭제 후 재적재로 처리한다.
+  if (getRuntimeSources().some((s) => s.file === name)) {
+    return NextResponse.json(
+      { ok: false, error: `"${name}" 문서가 이미 있습니다. 내용을 바꾸려면 📄 문서에서 ⟳ 교체를 쓰세요.`, duplicate: true, file: name },
+      { status: 409 }
+    );
+  }
 
   const buf = Buffer.from(await f.arrayBuffer());
   let pdfText = "";
