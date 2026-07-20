@@ -24,3 +24,6 @@ data/real-samples/
 .gstack/
 __pycache__/
 2026-07-13 09_11_18.788.png
+
+# TypeScript 증분 빌드 캐시(산출물)
+tsconfig.tsbuildinfo
