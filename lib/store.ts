@@ -9,7 +9,7 @@ import { NODES as SEED_NODES, EDGES as SEED_EDGES } from "./seed";
 import { ingestAll } from "./ingest/index";
 import type { SourceInfo } from "./ingest/index";
 import * as db from "./db";
-import { backfillEmbeddings } from "./embed";
+import { backfillEmbeddings, backfillChunks } from "./embed";
 import { OBJECT_TYPES, RELATION_TYPES, OBJECT_SUBTYPES, PROPERTY_DEFS } from "./db/seed-metamodel";
 import type { Metamodel } from "./db/seed-metamodel";
 import { classifyMissing } from "./schema/classify";
@@ -32,9 +32,16 @@ function scheduleEmbedBackfill(canvasId: string) {
     return;
   }
   backfillRunning = true;
-  void withCanvas(canvasId, () => backfillEmbeddings())
+  void withCanvas(canvasId, async () => {
+    const nodes = await backfillEmbeddings();
+    const chunks = await backfillChunks(); // 노드 다음 — 둘 다 멱등이라 순서는 성능 문제일 뿐
+    return { nodes, chunks };
+  })
     .then((r) => {
-      if (!r.skipped && r.embedded > 0) console.log(`[embed] auto-backfill: ${r.embedded}개 임베딩 생성`);
+      if (!r.nodes.skipped && r.nodes.embedded > 0)
+        console.log(`[embed] auto-backfill: 노드 ${r.nodes.embedded}개 임베딩 생성`);
+      if (!r.chunks.skipped && (r.chunks.chunked > 0 || r.chunks.embedded > 0))
+        console.log(`[embed] auto-backfill: 청크 ${r.chunks.chunked}개 생성 / ${r.chunks.embedded}개 임베딩`);
     })
     .catch(() => {})
     .finally(() => {

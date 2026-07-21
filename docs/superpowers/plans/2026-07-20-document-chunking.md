@@ -758,7 +758,7 @@ git commit -m "feat(pyservice): e5-base 768dim + docask 태스크 (v8, limit 3Gi
 - Consumes: `chunkBlocks` (Task 2), `replaceChunks`/`chunksMissingEmbedding`/`setChunkEmbedding` (Task 3), `embedPassage` (Task 1)
 - Produces: `backfillChunks(): Promise<{ chunked: number; embedded: number; skipped: boolean }>`
 
-- [ ] **Step 1: `lib/embed.ts` 에 청크 백필 추가**
+- [x] **Step 1: `lib/embed.ts` 에 청크 백필 추가**
 
 `backfillEmbeddings` 아래에:
 
@@ -824,7 +824,7 @@ import { chunkBlocks } from "./chunk";
 
 `chunkCountOf` 는 Task 3 에서 이미 `lib/db.ts` 에 만들었다 — import 만 추가한다.
 
-- [ ] **Step 2: `scheduleEmbedBackfill` 에서 이어 실행**
+- [x] **Step 2: `scheduleEmbedBackfill` 에서 이어 실행**
 
 `lib/store.ts` 의 백필 호출을 바꾼다:
 
@@ -846,12 +846,12 @@ import { chunkBlocks } from "./chunk";
 기존 `backfillRunning`/`backfillPending` 대기열 로직은 **그대로 둔다**. import 에
 `backfillChunks` 를 추가한다.
 
-- [ ] **Step 3: 타입체크 + 전체 테스트**
+- [x] **Step 3: 타입체크 + 전체 테스트**
 
 Run: `npx tsc --noEmit && npm test`
 Expected: 에러 0 · `fail 0`
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add lib/embed.ts lib/store.ts lib/db.ts
