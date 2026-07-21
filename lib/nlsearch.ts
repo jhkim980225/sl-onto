@@ -5,7 +5,7 @@ import type { NLSearchResponse, SearchHit, ObjType, Node } from "./types";
 import { allNodes, getNode, neighbors, deg, outEdges, evidenceOf, getActiveDrawing } from "./store";
 import { featuresFromProps, hasFeatures, rankSimilarByShape } from "./shape-sim";
 import { dbEnabled, semanticSearch } from "./db";
-import { embedEnabled, embedOne } from "./embed";
+import { embedEnabled, embedQuery } from "./embed";
 import { llmNLSearch } from "./llm";
 import { findConsumerMentions } from "./contradictions";
 
@@ -389,7 +389,7 @@ export async function nlSearch(query: string): Promise<NLSearchResponse> {
   let embedIds: string[] = [];
   if (dbEnabled() && embedEnabled()) {
     try {
-      const vec = await embedOne(q);
+      const vec = await embedQuery(q);
       if (vec) embedIds = await semanticSearch(vec, 20);
     } catch {
       embedIds = []; // 의미검색 실패는 조용히 폴백(검색 자체는 규칙기반으로 계속)

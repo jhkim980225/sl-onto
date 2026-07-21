@@ -120,8 +120,8 @@ const SEMANTIC_K = 10;
 async function defaultSemanticIds(q: string): Promise<string[]> {
   // ponytail: env 직접 확인 — DB/pyservice 미가용(테스트 포함)이면 pg 모듈 로드 자체를 피한다
   if (!process.env.DATABASE_URL || !process.env.PYSERVICE_URL) return [];
-  const [{ semanticSearch }, { embedOne }] = await Promise.all([import("./db"), import("./embed")]);
-  const vec = await embedOne(q);
+  const [{ semanticSearch }, { embedQuery }] = await Promise.all([import("./db"), import("./embed")]);
+  const vec = await embedQuery(q);
   return vec ? semanticSearch(vec, SEMANTIC_K) : [];
 }
 
