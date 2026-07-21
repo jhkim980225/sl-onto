@@ -872,7 +872,7 @@ git commit -m "feat(chunk): 청크 백필을 임베딩 백필 대기열에 연�
   - `llmDocAsk(context: string, question: string): Promise<{answer:string; citedChunks:number[]} | null>` (`lib/llm.ts`)
   - `POST /api/doc-ask?canvas=<id>` — §설계 §6 계약
 
-- [ ] **Step 1: `lib/llm.ts` 에 docask 래퍼 추가**
+- [x] **Step 1: `lib/llm.ts` 에 docask 래퍼 추가**
 
 `llmAsk` 옆에 같은 모양으로:
 
@@ -893,7 +893,7 @@ export async function llmDocAsk(
 `REVIEW_TIMEOUT_MS`(130000)를 쓰는 이유는 `llmAsk` 와 같다 — pyservice 하드 상한(120s)보다
 크게 잡아 앱이 먼저 끊지 않게 한다.
 
-- [ ] **Step 2: 라우트 작성**
+- [x] **Step 2: 라우트 작성**
 
 `app/api/doc-ask/route.ts`:
 
@@ -978,12 +978,12 @@ export async function POST(req: Request) {
 `/api/ask` 가 `citedRels` 를 `cited_checks` 컬럼에 재사용하는 것과 같은 방식으로
 `citedChunks` 를 담는다.
 
-- [ ] **Step 3: 타입체크 + 빌드**
+- [x] **Step 3: 타입체크 + 빌드**
 
 Run: `npx tsc --noEmit && npm run build`
 Expected: 에러 0 · `/api/doc-ask` 가 동적(ƒ) 라우트로 등록
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add app/api/doc-ask lib/llm.ts

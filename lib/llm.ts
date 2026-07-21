@@ -90,3 +90,15 @@ export interface LlmAskResult {
 export async function llmAsk(question: string, context: string): Promise<LlmAskResult | null> {
   return callLlm<LlmAskResult>({ task: "ask", question, context }, REVIEW_TIMEOUT_MS);
 }
+
+export interface LlmDocAskResult {
+  answer: string;
+  citedChunks: number[];
+}
+
+/** 문서 청크 컨텍스트 기반 Q&A. 실패·미가용이면 null(라우트가 503).
+ * REVIEW_TIMEOUT_MS 를 쓰는 이유는 llmAsk 와 같다 — pyservice 하드 상한(120s)보다 크게 잡아
+ * 앱이 먼저 끊지 않게 한다. */
+export async function llmDocAsk(context: string, question: string): Promise<LlmDocAskResult | null> {
+  return callLlm<LlmDocAskResult>({ task: "docask", context, question }, REVIEW_TIMEOUT_MS);
+}
