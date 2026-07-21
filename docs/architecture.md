@@ -109,7 +109,7 @@ Route Handler
 | `/api/reason` | GET | — | 사이드카 유도 관계 overlay(조회 전용, store 미병합) |
 | `/api/source-text` | GET | `?file=` | 원본 문서 텍스트 |
 | `/api/quality` | GET | — | 품질 스캔(중복·고립·근거없음 + 형식 온톨로지 위반) |
-| `/api/curate` | POST | `{action, ...}` | 병합·삭제 실행(사람 승인 후) |
+| `/api/curate` | POST | `{op, ...}` | 병합·삭제 실행(사람 승인 후) |
 | `/api/ingest` | POST | multipart `file` | `{added, merged}` · 빈 스키마면 409 `{needsSchema}` · 중복 파일명 409 `{duplicate}` |
 | `/api/admin/embed-backfill` | POST | — | `{embedded, skipped}` — 임베딩 백필 재트리거 |
 | `/api/fmea-draft` | POST | 설계 조건 | DFMEA xlsx — **레거시** |
