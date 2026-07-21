@@ -1270,7 +1270,7 @@ curl -s -o /dev/null -X DELETE "$B/api/canvases/$(node -pe "encodeURIComponent(p
 
 Expected: 삭제 전 청크 수가 20 이상, 삭제 후 **0**. 0이 아니면 FK CASCADE 가 안 걸린 것이다.
 
-- [ ] **Step 8: 문서 갱신**
+- [x] **Step 8: 문서 갱신**
 
 `docs/architecture.md`(요청 경로에 doc-ask 추가) · `docs/data-model.md`(`doc_chunks` 스키마) ·
 `docs/dev-summary.md`(API 표·테스트 수) · `docs/deployment.md`(002 마이그레이션 주의 — 단방향,
@@ -1287,10 +1287,10 @@ git commit -m "docs: 문서 청킹 반영 + vN 배포 기록"
 
 ## 최종 검증 (전체 태스크 완료 후)
 
-- [ ] `npm test` → `fail 0` (기준선 140 + 신규 12 = 약 152)
-- [ ] `npx tsc --noEmit` → 에러 0
-- [ ] `npm run build` → 성공
-- [ ] `grep -rn "embedOne\|embed(" lib/ app/ --include=*.ts | grep -v embedQuery | grep -v embedPassage | grep -v embedRaw | grep -v embedEnabled` → 접두어 없는 임베딩 호출 0건
+- [x] `npm test` → `fail 0` (기준선 140 + 신규 12 = 약 152)
+- [x] `npx tsc --noEmit` → 에러 0
+- [x] `npm run build` → 성공
+- [x] `grep -rn "embedOne\|embed(" lib/ app/ --include=*.ts | grep -v embedQuery | grep -v embedPassage | grep -v embedRaw | grep -v embedEnabled` → 접두어 없는 임베딩 호출 0건
 - [ ] 운영: `nodes.embedding` 245개 · `doc_chunks` 전량 임베딩 완료
 - [ ] 운영: 원문에만 있는 수치를 묻는 질문에 근거와 함께 답변
 - [ ] 운영: 캔버스 격리 — 타 캔버스 청크가 안 섞임
