@@ -65,7 +65,7 @@
 | 레이어 | MVP | 확장 |
 |---|---|---|
 | 앱 | Next.js (App Router, TypeScript) | 동일 |
-| API | Route Handlers (`app/api/*`) — 7개 엔드포인트 | 동일 |
+| API | Route Handlers (`app/api/*`) — 29개 엔드포인트(26개 캔버스 스코프) | 동일 |
 | 저장소 | Postgres(DB=원본, 인메모리=캐시, `DATABASE_URL` 없으면 인메모리 폴백) | 동일 |
 | 검색 | 키워드 + 그래프 1-hop 확장 + pgvector 후보확장 | 위 "검색 · RAG 스택" 절 참고 |
 | 자연어 검색 | 규칙기반 엔티티 링크(`lib/nlsearch.ts`) + pgvector 후보확장. 사내 LLM 은 `NL_USE_LLM=1` 옵트인 | 동일 |

@@ -89,3 +89,4 @@ FMEA 타입이 없는 캔버스에서는 추론·초안·모순·BOM 이 409(`li
 | `docs/features/*` | 기능별 상세 |
 | `docs/features/legacy-fmea/*` | FMEA 전용 레거시 기능 |
 | `docs/legacy/과제요구-구현현황.md` | (아카이브) FMEA 과제 대응 기록 — 1차 MVP |
+| `docs/legacy/dev-summary.md` | (아카이브) 개발 완료 내역 스냅샷 — 1차 MVP, FMEA 중심 서술 |

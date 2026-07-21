@@ -28,7 +28,7 @@ docker run -p 8000:8000 sl-ontoground
   (부품·원인·조치) 부착, "이미 반영됨" 케이스 제거, 완료 시 결로·습기 자동 포커스.
 - v26: 노드 삭제 후 직전 탐색 항목 자동 복귀(포커스·인스펙터 유지).
 - v27: 포커스 종류별 캡에서 신규(fresh) 노드 최우선 — 인제스천 직후 새 노드 3개가 잘려 1개로 보이던 문제 수정.
-- v28~v29(현재): FMEA 초안 다운로드 클릭 → **취약점 분석 리포트(이미지) 모달** → 모달 내 다운로드 버튼으로
+- v28~v29: FMEA 초안 다운로드 클릭 → **취약점 분석 리포트(이미지) 모달** → 모달 내 다운로드 버튼으로
   xlsx 다운로드. 이미지는 `public/vuln-analysis.png`(원본 `data/도면취약점.png`) — standalone 은 public/ 을
   자동 포함하지 않으므로 **Dockerfile 에 `COPY /app/public ./public` 필수**(v29 에서 수정).
 - 대상: FEDA K8s (fedamaster1 192.168.0.100, Rocky 9.7, v1.30.14, containerd, 워커 12+).

@@ -84,7 +84,7 @@ Route Handler
 컨텍스트를 조립 → LLM 이 그 안에서만 답하고 `[R n]` 으로 관계 인용.
 
 > STAGE 1/2/3 3단계 연출은 1차 MVP 의 램프 캔버스 전용 서사다 →
-> [features/legacy-fmea/](features/legacy-fmea/)
+> [features/워크벤치-UI.md](features/워크벤치-UI.md)
 
 ## 4. API 계약 (요약)
 | 엔드포인트 | 메서드 | 입력 | 출력 |
