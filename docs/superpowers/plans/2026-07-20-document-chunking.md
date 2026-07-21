@@ -655,7 +655,7 @@ git commit -m "feat(db): doc_chunks 테이블 + 임베딩 768 마이그레이션
 **Interfaces:**
 - Produces: `POST /llm {task:"docask", context, question}` → `{ok, result:{answer, citedChunks:number[]}}`
 
-- [ ] **Step 1: 모델 교체**
+- [x] **Step 1: 모델 교체**
 
 `pyservice/main.py:15`:
 
@@ -665,7 +665,7 @@ MODEL_NAME = "intfloat/multilingual-e5-base"  # 768-dim, 512 tokens, Korean-stro
 # 여기서 붙이면 이미 붙은 텍스트에 이중으로 들어간다.
 ```
 
-- [ ] **Step 2: `DOCASK_SYSTEM` 추가**
+- [x] **Step 2: `DOCASK_SYSTEM` 추가**
 
 `ASK_SYSTEM` 정의 바로 아래에:
 
@@ -678,7 +678,7 @@ DOCASK_SYSTEM = (
 )
 ```
 
-- [ ] **Step 3: `LLMRequest` 에 필드 추가**
+- [x] **Step 3: `LLMRequest` 에 필드 추가**
 
 `class LLMRequest(BaseModel)` 에 `context`·`question` 이 이미 있으면(ask 태스크용) 재사용한다.
 없으면 추가한다. 확인:
@@ -687,7 +687,7 @@ DOCASK_SYSTEM = (
 grep -n "class LLMRequest" -A 12 pyservice/main.py
 ```
 
-- [ ] **Step 4: `_messages` 에 분기 추가**
+- [x] **Step 4: `_messages` 에 분기 추가**
 
 `if req.task == "ask":` 블록 **다음**에:
 
@@ -699,7 +699,7 @@ grep -n "class LLMRequest" -A 12 pyservice/main.py
         ]
 ```
 
-- [ ] **Step 5: 응답 정제에 분기 추가**
+- [x] **Step 5: 응답 정제에 분기 추가**
 
 `if req.task == "ask":` 정제 블록 **다음**에:
 
@@ -711,11 +711,11 @@ grep -n "class LLMRequest" -A 12 pyservice/main.py
         return {"ok": True, "result": {"answer": answer, "citedChunks": _to_int_list(out.get("citedChunks"))}}
 ```
 
-- [ ] **Step 6: 메모리 limit 상향**
+- [x] **Step 6: 메모리 limit 상향**
 
 `k8s/pyservice.yaml` 의 `limits.memory` 를 `2Gi` → `3Gi`. e5-base 실측 피크 RSS 1,687MB.
 
-- [ ] **Step 7: 빌드·배포·검증**
+- [ ] **Step 7: 빌드·배포·검증** — ⏸ 보류: 운영 클러스터 변경이라 Task 8 배포 때 한 번에 수행(코드·매니페스트는 준비 완료)
 
 ```bash
 # 마스터에서
@@ -740,7 +740,7 @@ v=json.load(r)['vectors'][0]; print('dim', len(v))"
 
 Expected: `dim 768`
 
-- [ ] **Step 8: 커밋**
+- [x] **Step 8: 커밋**
 
 ```bash
 git add pyservice/main.py k8s/pyservice.yaml

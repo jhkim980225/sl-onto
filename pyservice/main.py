@@ -12,7 +12,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from rdflib import Graph, Namespace, URIRef
 
-MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"  # 384-dim, Korean-capable
+MODEL_NAME = "intfloat/multilingual-e5-base"  # 768-dim, 512 tokens, Korean-strong
+# ⚠ e5 계열은 "query: " / "passage: " 접두어를 요구한다. 접두어는 호출자(lib/embed.ts)가 붙인다 —
+# 여기서 붙이면 이미 붙은 텍스트에 이중으로 들어간다.
 
 app = FastAPI(title="sl-ontoground-embed")
 
@@ -352,6 +354,12 @@ ASK_SYSTEM = (
     '컨텍스트에 없는 사실은 창작하지 말고, 컨텍스트로 답할 수 없으면 그렇게 말하라. '
     'JSON만 출력: {"answer":"...","citedRels":[n,...]} /no_think'
 )
+DOCASK_SYSTEM = (
+    '너는 사내 문서 질의응답 어시스턴트다. 아래 "문서 청크" 만 근거로 사용자 질문에 한국어 3~6문장으로 답하라. '
+    '근거로 삼은 청크 번호를 본문에 [C n] 형식으로 인용하라. 수치·날짜는 청크에 적힌 값을 그대로 옮기고 '
+    '계산하거나 추정하지 마라. 청크에 없는 사실은 창작하지 말고, 청크로 답할 수 없으면 그렇게 말하라. '
+    'JSON만 출력: {"answer":"...","citedChunks":[n,...]} /no_think'
+)
 EXTRACT_SYSTEM = (
     '너는 FMEA 문서 개체 추출기다. 문서에서 부품(item)·고장모드(fm)·원인(cause)·조치(action)·프로젝트(proj) '
     '개체와 관계(HAS_FAILURE/CAUSED_BY/MITIGATED_BY/OCCURRED_IN)만 추출하라. '
@@ -430,6 +438,11 @@ def _messages(req: LLMRequest) -> list[dict]:
         return [
             {"role": "system", "content": ASK_SYSTEM},
             {"role": "user", "content": f"/no_think 선택 객체 컨텍스트:\n{req.context}\n\n질문: {req.question}"},
+        ]
+    if req.task == "docask":
+        return [
+            {"role": "system", "content": DOCASK_SYSTEM},
+            {"role": "user", "content": f"/no_think 문서 청크:\n{req.context}\n\n질문: {req.question}"},
         ]
     if req.task == "extract":
         return [
@@ -519,6 +532,11 @@ async def llm(req: LLMRequest) -> dict:
         if not answer:
             return {"ok": False, "error": "empty answer"}
         return {"ok": True, "result": {"answer": answer, "citedRels": _to_int_list(out.get("citedRels"))}}
+    if req.task == "docask":
+        answer = str(out.get("answer") or "").strip()
+        if not answer:
+            return {"ok": False, "error": "empty answer"}
+        return {"ok": True, "result": {"answer": answer, "citedChunks": _to_int_list(out.get("citedChunks"))}}
     opinion = str(out.get("opinion") or "").strip()
     if not opinion:
         return {"ok": False, "error": "empty opinion"}
