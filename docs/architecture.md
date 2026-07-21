@@ -4,29 +4,31 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  브라우저 (클라이언트 컴포넌트)                            │
-│  Graph(포커스·타입 존·방사형) · Inspector · Checklist ·   │
-│  SourcePanel · NLSearchPanel · Condensation{Panel,Drawing}│
+│  LeftRail · Canvas/Schema/Document Panel                 │
+│  Graph · Hierarchy · Table · RAW 4뷰 · Inspector         │
+│  Search · NLSearch · Ask · Reason · Quality              │
 └───────────────┬─────────────────────────────────────────┘
-                │  fetch  (JSON)
+                │  fetch  (?canvas=<id> 자동 부착 · api-client.ts)
 ┌───────────────▼─────────────────────────────────────────┐
 │  Next.js Route Handlers  (app/api/*)                     │
-│  /ontology /object/[id] /search /nlsearch /infer         │
-│  /sources /condensation                                  │
+│  캔버스·스키마 · 인제스천·문서 · 검색·질의응답 · 품질     │
+│  데이터 라우트 26개 = withCanvasRoute 래퍼 (§2.1)         │
 └───────────────┬─────────────────────────────────────────┘
                 │  함수 호출
 ┌───────────────▼─────────────────────────────────────────┐
 │  도메인 로직  (lib/)  — 프레임워크 비의존                 │
-│  store · search · nlsearch · infer · seed · types        │
-│  ingest/(파서·normalize) · scenario/condensation         │
-└───────────────┬─────────────────────────────────────────┘
-                │
-┌───────────────▼─────────────────────────────────────────┐
-│  저장소  Postgres(원본) + 인메모리 읽기 캐시(store)        │
-│  캔버스별 캐시 Map<canvasId, CanvasCache> · §2.1          │
-│  nodes · edges · evidence  (DB 없으면 인메모리 폴백)      │
-└─────────────────────────────────────────────────────────┘
+│  store · search · nlsearch · ask · embed · quality       │
+│  ingest/(파서·normalize) · schema/(classify·validate)     │
+│  canvases · documents · capabilities · taxonomy · view-* │
+└───────┬───────────────────────────────┬─────────────────┘
+        │                               │  HTTP
+┌───────▼─────────────────────┐ ┌───────▼─────────────────┐
+│ 저장소                       │ │ Python 사이드카          │
+│ Postgres(원본) + pgvector    │ │ /embed  384-dim 임베딩   │
+│ 캔버스별 인메모리 읽기 캐시   │ │ /reason 관계 유도(overlay)│
+│ (DB 없으면 인메모리 폴백)     │ │ /parse  · /llm           │
+└─────────────────────────────┘ └─────────────────────────┘
 ```
-확장 시 `ingest/`←Docling(Python), `search.ts`/`nlsearch.ts`←임베딩·LLM, `infer.ts`←LLM RAG 를 HTTP로 갈아끼운다.
 
 ## 2. 레이어 책임
 | 레이어 | 책임 | 하지 않는 것 |
@@ -67,13 +69,22 @@ Route Handler
 > 설계: [superpowers/specs/2026-07-20-multi-canvas-design.md](superpowers/specs/2026-07-20-multi-canvas-design.md) ·
 > [superpowers/specs/2026-07-20-canvas-document-crud-design.md](superpowers/specs/2026-07-20-canvas-document-crud-design.md)
 
-## 3. 데이터 흐름 (3단계)
-1. **STAGE 1 — 흩어진 원천:** 정적 카오스 연출(원천 카운트). API 불필요.
-2. **STAGE 2 — 온톨로지 구축:** `GET /api/ontology` → 노드·엣지 로드하며 스폰 애니메이션.
-   (선택) `?stage=core|docs`로 코어→근거문서 순차 스트리밍.
-3. **STAGE 3 — 신규 설계 추론:** 조건 칩 편집 → `POST /api/infer {시장,광원,형상,구성}`
-   → 그래프 탐색 → 관련 노드 점등 웨이브 + 체크리스트 렌더.
-   노드 클릭 시 언제든 `GET /api/object/[id]`로 인스펙터 갱신. `GET /api/search?q=`로 하이라이트.
+## 3. 데이터 흐름
+
+**적재:** 캔버스 선택 → 객체타입 정의(`/api/schema/object-types`) → 문서 업로드(`POST /api/ingest`)
+→ 파서 → `normalize.resolveOrCreate` → 노드·엣지 upsert → DB 커밋 성공 시에만 캐시 병합
+→ 새 노드 임베딩 백필 비차단 예약(`scheduleEmbedBackfill`).
+
+**조회:** `GET /api/ontology` → 그래프/계층/표/RAW 4뷰 렌더. 노드 클릭 → `GET /api/object/[id]` 인스펙터.
+
+**검색:** 입력 중 = 키워드 드롭다운(`GET /api/search`). Enter = 자연어(`POST /api/nlsearch`,
+규칙기반 엔티티 링크 + 벡터 후보확장 + 그래프 1-hop). 근거 칩 클릭 → `GET /api/source-text` 원문.
+
+**질의응답:** 객체 선택 → `POST /api/ask` → `lib/ask.ts` 가 속성·관계(최대 30)·근거 문서(최대 8)로
+컨텍스트를 조립 → LLM 이 그 안에서만 답하고 `[R n]` 으로 관계 인용.
+
+> STAGE 1/2/3 3단계 연출은 1차 MVP 의 램프 캔버스 전용 서사다 →
+> [features/워크벤치-UI.md](features/워크벤치-UI.md)
 
 ## 4. API 계약 (요약)
 | 엔드포인트 | 메서드 | 입력 | 출력 |
@@ -82,9 +93,9 @@ Route Handler
 | `/api/object/[id]` | GET | path id | `{id,type,label,props,relations[],evidence[]}` |
 | `/api/search` | GET | `?q=` | `{hits[], neighbors[]}` |
 | `/api/nlsearch` | POST | `{query}` | `{answer, interpretation?, hits[], neighbors[], mode}` |
-| `/api/infer` | POST | `{market,lightSource,shape,components[]}` | `{checklist[], total?, traversed{objects,edges,docs}}` |
+| `/api/infer` | POST | `{market,lightSource,shape,components[]}` | `{checklist[], total?, traversed{objects,edges,docs}}` — **레거시(FMEA 전용, 타 캔버스 409)** |
 | `/api/sources` | GET | — | `SourceInfo[]`(파일별 추출 요약·미리보기) |
-| `/api/condensation` | GET | `?region?` | 지역 목록 또는 `CondensationDetail`(앵커·지역상세·규제·근거·설계도 스펙) |
+| `/api/condensation` | GET | `?region?` | 지역 목록 또는 `CondensationDetail`(앵커·지역상세·규제·근거·설계도 스펙) — **레거시(`default` 캔버스 전용)** |
 | `/api/sources/[file]` | DELETE | path 파일명 | `{ok, removed{doc,nodes,edges}, keptEdges}` — 문서 삭제 |
 | `/api/sources/[file]` | PUT | multipart `file` | `{ok, replaced, removed, added}` — 교체(파싱 성공 후에만 삭제) |
 | `/api/schema` | GET | — | 메타모델 + `capabilities`(스키마 유도) |
@@ -93,6 +104,20 @@ Route Handler
 | `/api/canvases` | GET/POST | `?trash=1` / `{name,description?}` | 캔버스 목록(노드·문서 수) / 생성(빈 스키마) |
 | `/api/canvases/[id]` | PATCH/DELETE | `?purge=1` | 이름·설명 변경 / 소프트 삭제(마지막이면 409) · 영구 삭제 |
 | `/api/canvases/[id]/restore` | POST | — | 휴지통에서 복구 |
+| `/api/ontology/export` | GET | `?format=ttl` | RDF Turtle 내보내기(pyservice `/export`, 미설정 시 503) |
+| `/api/ask` | POST | `{objectId, question}` | `{answer, rels[], docs[]}` — 선택 객체 RAG 질의응답 |
+| `/api/reason` | GET | — | 사이드카 유도 관계 overlay(조회 전용, store 미병합) |
+| `/api/source-text` | GET | `?file=` | 원본 문서 텍스트 |
+| `/api/quality` | GET | — | 품질 스캔(중복·고립·근거없음 + 형식 온톨로지 위반) |
+| `/api/curate` | POST | `{op, ...}` | 병합·삭제 실행(사람 승인 후) |
+| `/api/ingest` | POST | multipart `file` | `{added, merged}` · 빈 스키마면 409 `{needsSchema}` · 중복 파일명 409 `{duplicate}` |
+| `/api/admin/embed-backfill` | POST | — | `{embedded, skipped}` — 임베딩 백필 재트리거 |
+| `/api/fmea-draft` | POST | 설계 조건 | DFMEA xlsx — **레거시** |
+| `/api/contradictions` | GET | — | 모순 스캔 — **레거시** |
+| `/api/bom-check` | GET | `?item=` | BOM 정합 — **레거시** |
+| `/api/drawing-input` · `/api/drawing-svg` | POST/GET | 도면 | 2D 설계도 — **레거시** |
+| `/api/design-options` | GET | — | 설계 조건 드롭다운 — **레거시** |
+| `/api/review-opinion` | POST | 추론 결과 | AI 종합 소견 — **레거시** |
 > `/api/canvases*` 를 제외한 모든 라우트는 `?canvas=<id>` 필수(§2.1).
 > JSON 상세 형태는 [data-model.md](data-model.md). 알고리즘은 [features/](features/).
 
@@ -109,17 +134,16 @@ Route Handler
 
 ## 5. 배포
 - `output: 'standalone'` + Docker 단일 이미지. `$PORT` 대응. 무상태(기동 시 인제스천 재구축).
-- **배포됨(v2):** FEDA K8s, ns `sl-ontoground`, 레지스트리 `192.168.0.100:5000`, NodePort 30494. → [deployment.md](deployment.md).
+- **배포됨(v79):** FEDA K8s, ns `sl-ontoground`, 레지스트리 `192.168.0.100:5000`, NodePort 30494. → [deployment.md](deployment.md).
 
 ## 6. 확장 이음새 (seam)
 | 지금 | 교체 대상 | 바뀌는 파일 |
 |---|---|---|
 | `lib/ingest/*` 파싱 | Docling(스캔/이미지 PDF) 서비스 | `lib/ingest/*`만 |
-| `lib/search.ts` 키워드 | 임베딩+벡터DB | `lib/search.ts`만 |
-| `lib/nlsearch.ts` 규칙기반 | 사내 LLM(`NL_USE_LLM=1`)/임베딩 | `lib/nlsearch.ts`만 |
-| `lib/infer.ts` 규칙 | LLM RAG | `lib/infer.ts`만 |
-| 인메모리 store | Postgres+pgvector | `lib/store.ts`만 |
+| 노드 라벨 임베딩(384-dim) | 문서 청크 임베딩 + e5-base | `lib/embed.ts` · pyservice — [계획됨](superpowers/specs/2026-07-20-document-chunking-design.md) |
+| `lib/nlsearch.ts` 규칙기반 해석 | 사내 LLM(`NL_USE_LLM=1`) | `lib/nlsearch.ts`만 |
+| `lib/ask.ts` 그래프 컨텍스트 RAG | + 문서 원문 청크 컨텍스트 | `lib/ask.ts`만 — [계획됨](superpowers/specs/2026-07-20-document-chunking-design.md) |
 프론트/Route Handler 계약이 고정이라 위 교체는 UI에 무영향.
 
 ## 7. Non-goals
-멀티유저·쓰기·대규모 성능·멀티모달·외부데이터 — MVP 범위 밖([requirements.md](requirements.md) §4).
+멀티유저·권한·대규모 성능(HPA)·멀티모달(VLM)·외부데이터 연계 — 범위 밖([requirements.md](requirements.md) §4).

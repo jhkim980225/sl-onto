@@ -14,7 +14,9 @@
 
 - **코드 변경 0.** `lib/` `app/` `components/` `scripts/` 파일을 수정하면 이 계획 위반이다. 문서가 코드와 다르면 문서를 고친다.
 - **"발표용" · "보고용" · "데모용" 표현 금지.** 전부 **"1차 MVP"** 로 쓴다.
-- **배포 버전은 `v76` 하나로 통일.** (2026-07-20 배포. `CLAUDE.md:21` 기준)
+- **현재 배포 버전은 `v79` 하나로 통일.** (2026-07-21 사용자 확인. 배포일 미상 — 날짜를 지어내지 말 것)
+  단, **"v76 에 무엇이 나갔다"는 이력 서술은 그대로 둔다** — 001-canvas 마이그레이션은 실제로 v76(2026-07-20)에 배포됐다.
+  바꾸는 것은 "현재 배포본"을 가리키는 표기뿐이다. (`docs/deployment.md:130`, `dev-summary.md` 릴리스 표의 v76 행 등은 유지)
 - **램프 캔버스 규모는 `180 노드 / 2,199 엣지 / 문서 41` 로 통일.** (커밋 079c9e4 실측값)
 - **미구현을 구현으로 쓰지 않는다.** 문서 청킹 RAG 는 `docs/superpowers/specs/2026-07-20-document-chunking-design.md` 설계만 존재 → 반드시 "계획됨"으로 표기. 구현된 RAG 는 `lib/ask.ts` 의 그래프 컨텍스트 RAG 뿐.
 - **legacy 문서는 지우지 않는다.** `git mv` 로 이동해 `git log --follow` 히스토리를 보존한다.
@@ -52,7 +54,7 @@ docs/
 - Modify: `docs/과제요구-구현현황.md:185`
 
 **Interfaces:**
-- Produces: 전 문서에서 배포 버전 문자열이 `v76` 단일값. 이후 모든 태스크는 이 값을 그대로 쓴다.
+- Produces: 전 문서에서 현재 배포 버전 문자열이 `v79` 단일값. 이후 모든 태스크는 이 값을 그대로 쓴다.
 
 - [ ] **Step 1: 현재 위반 건수 측정 (기준선)**
 
@@ -63,18 +65,18 @@ rg -n '발표용|보고용|데모용' docs/ CLAUDE.md
 
 Expected: 배포 버전 4건(architecture:112, requirements:39/57/75, CLAUDE:84), 금지 표현 3건(과제요구:185, CLAUDE:78, features/인제스천:48)
 
-- [ ] **Step 2: 배포 버전을 v76 으로 통일**
+- [ ] **Step 2: 현재 배포 버전을 v79 로 통일**
 
 `docs/architecture.md:112`:
 ```markdown
-- **배포됨(v76, 2026-07-20):** FEDA K8s, ns `sl-ontoground`, 레지스트리 `192.168.0.100:5000`, NodePort 30494. → [deployment.md](deployment.md).
+- **배포됨(v79):** FEDA K8s, ns `sl-ontoground`, 레지스트리 `192.168.0.100:5000`, NodePort 30494. → [deployment.md](deployment.md).
 ```
 
-`docs/requirements.md` 의 `v7` 3곳을 `v76` 으로 바꾼다(39·57·75줄).
+`docs/requirements.md` 의 `v7` 3곳을 `v79` 로 바꾼다(39·57·75줄).
 
 `CLAUDE.md:84` 문서맵 행:
 ```markdown
-| `docs/deployment.md` | Docker standalone → FEDA K8s 배포(v76 · 레지스트리 :5000 · NodePort 30494) |
+| `docs/deployment.md` | Docker standalone → FEDA K8s 배포(v79 · 레지스트리 :5000 · NodePort 30494) |
 ```
 
 - [ ] **Step 3: 금지 표현 제거**
@@ -99,16 +101,16 @@ Expected: 출력 없음, `exit=1` (rg 는 매치 없으면 1)
 ```bash
 rg -no 'v\d+' docs/architecture.md docs/requirements.md CLAUDE.md docs/deployment.md | grep -o 'v[0-9]*$' | sort -u
 ```
-Expected: `v76` 만 (그 외 값이 나오면 그 줄을 확인 — 무관한 버전 표기일 수 있으니 문맥 확인 후 판단)
+Expected: `v79` 만 (v76 이 남으면 이력 서술인지 확인. 그 외 값이 나오면 그 줄을 확인 — 무관한 버전 표기일 수 있으니 문맥 확인 후 판단)
 
 - [ ] **Step 5: 커밋**
 
 ```bash
 git add docs/ CLAUDE.md
-git commit -m "docs: 배포 버전 v76 통일 + 발표용 표현 제거
+git commit -m "docs: 현재 배포 버전 v79 통일 + 발표용 표현 제거
 
 architecture v2 / requirements v7 / CLAUDE v8 로 갈라져 있던 배포 버전을
-실제 배포본 v76 하나로 맞췄다. '발표용/데모용' 표현은 1차 MVP 로 교체."
+실제 배포본 v79 하나로 맞췄다. '발표용/데모용' 표현은 1차 MVP 로 교체."
 ```
 
 ---
@@ -189,7 +191,8 @@ rg -n '그래프-추론|FMEA-초안생성|BOM-정합성|모순-검사|결로-시
 
 ```bash
 # md 파일 안의 상대 링크가 실제 파일을 가리키는지 확인
-for f in $(find docs -name '*.md') CLAUDE.md; do
+# docs/superpowers/ 는 제외한다 — 스펙·계획 문서는 아직 없는 파일을 예시로 인용하므로 오탐이다
+for f in $(find docs -name '*.md' -not -path 'docs/superpowers/*') CLAUDE.md; do
   d=$(dirname "$f")
   grep -o '](\.\?\.\?/\?[^)#]*\.md' "$f" 2>/dev/null | sed 's/^](//' | while read -r l; do
     [ -f "$d/$l" ] || echo "BROKEN  $f  ->  $l"
@@ -219,7 +222,7 @@ FMEA 는 1차 MVP 를 검증한 도메인이고 더 이상 목표가 아니다. 
 - Modify: `docs/requirements.md` (전면)
 
 **Interfaces:**
-- Consumes: Task 1 의 `v76`, Task 2 의 `legacy/` 경로.
+- Consumes: Task 1 의 `v79`, Task 2 의 `legacy/` 경로.
 - Produces: §4 범위 정의. Task 4(architecture §7 Non-goals)와 Task 10(README 정체성)이 이 절과 모순되면 안 된다.
 
 - [ ] **Step 1: 새 본문 작성**
@@ -266,7 +269,7 @@ FMEA 는 1차 MVP 를 검증한 도메인이고 더 이상 목표가 아니다. 
 - **관계 유도** — Python 사이드카가 유도한 관계를 overlay 로 조회(store 병합 안 함, 원본 보존)
 - **품질·정리** — 중복·고립·근거없음 스캔 + 형식 온톨로지 위반 검증 → 사람 승인 후 병합·삭제
 - **UI** — 그래프·계층·표·RAW 4뷰 + 인스펙터 + 원문 열람. 라이트 SL 브랜드 테마
-- **배포** — Docker standalone → FEDA K8s v76, NodePort 30494
+- **배포** — Docker standalone → FEDA K8s v79, NodePort 30494
 
 ### 🔜 계획됨 (설계만 있고 코드 없음)
 - **문서 청킹 + 원문 RAG** — 노드 라벨이 아니라 문서 본문 청크를 임베딩해 검색·인용
@@ -295,7 +298,7 @@ FMEA 추론·초안생성·모순검사·BOM 정합·결로 시나리오·2D 설
 - [x] 문서 삭제 시 다른 문서가 받치는 객체는 남는다(`keptEdges` 로 보고)
 - [x] 인제스천 결과 램프 캔버스 **180 노드 / 2,199 엣지 / 문서 41**
 - [x] `npm test` green
-- [x] FEDA K8s 배포 — ns `sl-ontoground`, v76, NodePort 30494 → `http://192.168.0.100:30494/`
+- [x] FEDA K8s 배포 — ns `sl-ontoground`, v79, NodePort 30494 → `http://192.168.0.100:30494/`
 ```
 
 - [ ] **Step 2: 검증 — 금지 사항 없는지**
@@ -898,7 +901,7 @@ FMEA(SL 자동차 램프)는 1차 MVP 를 검증한 **레거시 도메인**이�
 | `docs/architecture.md` | 시스템 구조·데이터흐름·API·캔버스 스코핑·배포 |
 | `docs/data-model.md` | 메타모델·캔버스 스키마·JSON 형태 |
 | `docs/design.md` | UI 디자인 시스템(라이트 SL 브랜드 · 그래프 존/방사형 레이아웃) |
-| `docs/deployment.md` | Docker standalone → FEDA K8s(v76 · 레지스트리 :5000 · NodePort 30494) |
+| `docs/deployment.md` | Docker standalone → FEDA K8s(v79 · 레지스트리 :5000 · NodePort 30494) |
 | `docs/features/*` | 기능별 상세 |
 | `docs/features/legacy-fmea/*` | FMEA 전용 레거시 기능 |
 | `docs/legacy/과제요구-구현현황.md` | (아카이브) FMEA 과제 대응 기록 — 1차 MVP |
@@ -912,7 +915,8 @@ FMEA(SL 자동차 램프)는 1차 MVP 를 검증한 **레거시 도메인**이�
 
 ```bash
 # 링크 전수 확인
-for f in $(find docs -name '*.md') CLAUDE.md; do
+# docs/superpowers/ 는 제외한다 — 스펙·계획 문서는 아직 없는 파일을 예시로 인용하므로 오탐이다
+for f in $(find docs -name '*.md' -not -path 'docs/superpowers/*') CLAUDE.md; do
   d=$(dirname "$f")
   grep -o '](\.\?\.\?/\?[^)#]*\.md' "$f" 2>/dev/null | sed 's/^](//' | while read -r l; do
     [ -f "$d/$l" ] || echo "BROKEN  $f  ->  $l"
@@ -950,7 +954,8 @@ README 인덱스를 features 21개 + legacy 7개 전수로 재작성하고 카�
 - [ ] **Step 1: 배포 버전 단일값**
 
 ```bash
-rg -n 'v[0-9]+' docs/ CLAUDE.md | rg -v 'v76' | rg 'K8s|배포|deploy|NodePort'
+rg -n 'v[0-9]+' docs/ CLAUDE.md | rg -v 'v79|v76' | rg 'K8s|배포|deploy|NodePort'
+# v76 매치가 나오면 이력 서술인지 확인 — 이력이면 정상, '현재 배포'를 뜻하면 v79 로 고친다
 ```
 Expected: 출력 없음
 
@@ -964,7 +969,8 @@ Expected: 출력 없음, `exit=1`
 - [ ] **Step 3: 깨진 링크 0건**
 
 ```bash
-for f in $(find docs -name '*.md') CLAUDE.md; do
+# docs/superpowers/ 는 제외한다 — 스펙·계획 문서는 아직 없는 파일을 예시로 인용하므로 오탐이다
+for f in $(find docs -name '*.md' -not -path 'docs/superpowers/*') CLAUDE.md; do
   d=$(dirname "$f")
   grep -o '](\.\?\.\?/\?[^)#]*\.md' "$f" 2>/dev/null | sed 's/^](//' | while read -r l; do
     [ -f "$d/$l" ] || echo "BROKEN  $f  ->  $l"

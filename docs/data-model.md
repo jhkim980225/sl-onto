@@ -1,6 +1,8 @@
 # data-model.md — 온톨로지 데이터 모델
 
-출처: 데모 `FMEA_온톨로지_시연_v2.html`의 `TYPES` / `CORE` / `CORE_EDGES` / `DOC_RULES`.
+> **이 문서의 §1·§2 는 `default`(램프) 캔버스의 시드 메타모델이다.** 제품 전체의 고정 스키마가 아니다.
+> 새 캔버스는 **빈 스키마**로 시작하고 사용자가 `/api/schema/*` 로 직접 객체타입·관계타입을 정의한다(§3.1).
+> 아래 9종/12종은 "이 정도 밀도의 도메인 모델이 실제로 돌아간다"는 레퍼런스로 읽으면 된다.
 
 ## 1. 객체 유형 (9종)
 | 코드 | glyph | 유형 | 대표 속성 | 예시 |
@@ -47,7 +49,7 @@
 
 온톨로지는 하나가 아니다. **캔버스 = 도메인(부서·제품군)별 완전 격리 워크스페이스**로,
 데이터도 스키마도 0에서 시작한다. 기존 램프 FMEA 데이터는 `default` 캔버스에 귀속된다
-(179 노드 / 2,198 엣지 / 40 문서).
+(180 노드 / 2,199 엣지 / 41 문서).
 
 ```sql
 CREATE TABLE canvases (
@@ -85,43 +87,14 @@ CREATE TABLE canvases (
 
 > 설계: [superpowers/specs/2026-07-20-multi-canvas-design.md](superpowers/specs/2026-07-20-multi-canvas-design.md)
 
-## 4. 저장 스키마 (초기 MVP 안 — SQLite)
+## 4. 저장 스키마
+현행 영속 스키마는 Postgres — `lib/db/schema.sql`. 캔버스 복합 PK 는 §3.1 표 참조.
+마이그레이션은 `lib/db/migrations/001-canvas.sql`(단방향).
 
-> 아래는 MVP 초안이다. 현행 영속 스키마는 Postgres(`lib/db/schema.sql`)이며 §3.1 의 캔버스
-> 복합 PK 를 따른다.
-
-```sql
-CREATE TABLE objects (
-  id     TEXT PRIMARY KEY,
-  type   TEXT NOT NULL,          -- item|fm|cause|action|reg|proj|master|spec|doc
-  label  TEXT NOT NULL,
-  sub    TEXT,                   -- 부제
-  props  TEXT NOT NULL DEFAULT '{}'  -- JSON (S,O,original_code,mapped_code,confidence…)
-);
-CREATE TABLE links (
-  src    TEXT NOT NULL,
-  rel    TEXT NOT NULL,
-  dst    TEXT NOT NULL,
-  weight REAL,                   -- SIMILAR 유사도 등
-  scen   INTEGER NOT NULL DEFAULT 0,  -- 시나리오 전용 여부
-  PRIMARY KEY (src, rel, dst)
-);
-CREATE TABLE evidence (          -- doc 노드 = objects(type='doc')와 1:1, 부모 링크 별도
-  id       TEXT PRIMARY KEY,
-  parent   TEXT NOT NULL,        -- EVIDENCED_BY 대상 객체
-  ext      TEXT NOT NULL,        -- PTS|PPTX|XLSX|TIF|BOM|SPEC
-  filename TEXT NOT NULL,
-  props    TEXT NOT NULL DEFAULT '{}'
-);
-CREATE INDEX idx_links_src ON links(src);
-CREATE INDEX idx_links_dst ON links(dst);
-CREATE INDEX idx_objects_type ON objects(type);
-```
-> 대안: 데이터가 작으면 `lib/seed.ts`의 인메모리 구조로 대체 가능(스키마는 동일 형태 유지).
-
-## 5. 시드 데이터 규모 (데모 기준)
-- 코어 객체 ≈ 35, 관계 ≈ 40, 근거 문서 위성 ≈ 240 (`DOC_RULES` 생성) → 총 노드 ≈ 275.
-- 실 과제 전환 시 이 시드만 Docling 출력으로 교체.
+## 5. 데이터 규모
+- `default`(램프) 캔버스 — 인제스천 실측 **180 노드 / 2,199 엣지 / 문서 41** (auto-create 포함)
+- `DATABASE_URL` 없는 인메모리 폴백 — `lib/seed.ts` 코어 ≈35 객체 / ≈40 관계 + 근거 위성 ≈240
+- 새 캔버스 — 0 노드 / 0 스키마에서 시작
 
 ## 6. API JSON 형태
 ```jsonc
@@ -146,7 +119,7 @@ CREATE INDEX idx_objects_type ON objects(type);
 
 // GET /api/canvases  (?trash=1 이면 삭제된 것만)
 { "canvases":[ { "id":"default","name":"램프","description":null,
-                 "nodeCount":179,"docCount":40,"deletedAt":null } ] }
+                 "nodeCount":180,"docCount":41,"deletedAt":null } ] }
 
 // GET /api/schema?canvas=default — 메타모델 + 스키마에서 유도한 기능 가용성
 { "objectTypes":[…], "relationTypes":[…], "subtypes":[…], "propertyDefs":[…],

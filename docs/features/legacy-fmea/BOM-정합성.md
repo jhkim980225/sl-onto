@@ -1,5 +1,10 @@
 # feature: BOM 정합성 검증
 
+> **레거시 — FMEA 전용.** 이 기능은 동작하지만 신규 투자 대상이 아니다.
+> 실제 요구 타입은 `item` 하나뿐이다(`lib/capabilities.ts`) — FMEA 가 아니어도 `item` 타입을 정의한
+> 캔버스면 통과하고, 없는 캔버스에서는 409 로 막힌다. 매핑 상세는 [../기능-가용성.md](../기능-가용성.md).
+> 제품의 현재 방향은 [../../README.md](../../README.md) 참조.
+
 ## 책임
 부품의 BOM 구성(`CONSISTS_OF`)과 재질 속성을 온톨로지와 **교차 검증**해, 행 단위로는 정상인
 BOM에서 조합 리스크를 찾아낸다. 시연 시나리오 5단계("BOM 정합성").
@@ -21,7 +26,7 @@ checkBom(itemId: string): BomFinding[]
 구성 없는 부품은 빈 배열(오탐 없음).
 
 ## 데이터 흐름
-BOM xlsx (`BOM_*.xlsx`, `ingestXlsxBom` — [인제스천.md](인제스천.md)) → `CONSISTS_OF` + 재질/수량 props
+BOM xlsx (`BOM_*.xlsx`, `ingestXlsxBom` — [인제스천.md](../인제스천.md)) → `CONSISTS_OF` + 재질/수량 props
 → `checkBom` → `GET /api/bom-check?item=<id>` → Inspector item 카드 "BOM 정합성" 섹션
 (기존 체크리스트 CSS 재사용, trace 칩 클릭 → 그래프 포커스).
 

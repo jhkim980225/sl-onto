@@ -1,5 +1,9 @@
 # feature: 워크벤치 UI
 
+> **1차 MVP 서사.** 아래 STAGE 1/2/3 3단계 연출·`Stepper`·`Checklist` 배선은 1차 MVP 램프 캔버스의
+> 시연 흐름이다. 현재 UI 구성(컴포넌트 전체 목록 포함)은 [architecture.md §1](../architecture.md#1-컴포넌트-다이어그램)
+> 을 기준으로 본다 — 아래 컴포넌트 목록은 갱신되지 않았다(`components/` 42개 중 11개만 열거).
+
 ## 책임
 데모의 3단계 워크벤치를 API 구동으로 재현. 시각 스펙은 [../design.md](../design.md).
 **재작성 아님** — 데모 `<script>`(SVG 포스 그래프)를 클라이언트 컴포넌트로 이식 + `fetch` 배선.
