@@ -70,7 +70,7 @@
   - `E5_PASSAGE = "passage: "` / `E5_QUERY = "query: "` (테스트가 참조)
   - 기존 `embed`/`embedOne` 은 **제거**한다(접두어 없이 부를 수 있는 문을 남기지 않는다)
 
-- [ ] **Step 1: 실패하는 테스트를 작성한다**
+- [x] **Step 1: 실패하는 테스트를 작성한다**
 
 `lib/embed.test.ts`:
 
@@ -117,12 +117,12 @@ test("접두어 없이 부를 수 있는 embed/embedOne 은 남아 있지 않다
 });
 ```
 
-- [ ] **Step 2: 실패를 확인한다**
+- [x] **Step 2: 실패를 확인한다**
 
 Run: `node --test --experimental-strip-types lib/embed.test.ts`
 Expected: FAIL — `E5_PASSAGE` 없음, `embed(` 존재
 
-- [ ] **Step 3: `lib/embed.ts` 를 교체한다**
+- [x] **Step 3: `lib/embed.ts` 를 교체한다**
 
 ```ts
 // Python 사이드카(/embed) 태스크 래퍼 — 상태 없음. 질의·문서 텍스트 → 768dim 벡터.
@@ -180,7 +180,7 @@ export async function backfillEmbeddings(): Promise<{ embedded: number; skipped:
 }
 ```
 
-- [ ] **Step 4: 호출부를 고친다**
+- [x] **Step 4: 호출부를 고친다**
 
 `embed`/`embedOne` 을 쓰던 곳을 찾아 바꾼다:
 
@@ -191,12 +191,12 @@ grep -rn "embedOne\|from \"@/lib/embed\"\|from \"./embed\"" lib/ app/
 `lib/nlsearch.ts` 의 `embedOne(q)` → `embedQuery(q)`. 다른 호출부가 나오면 용도에 맞게
 `embedPassage`(문서·노드) 또는 `embedQuery`(질의)로 바꾼다.
 
-- [ ] **Step 5: 통과 확인**
+- [x] **Step 5: 통과 확인**
 
 Run: `node --test --experimental-strip-types lib/embed.test.ts && npx tsc --noEmit`
 Expected: 4 tests pass · tsc 에러 0
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add lib/embed.ts lib/embed.test.ts lib/nlsearch.ts
@@ -221,7 +221,7 @@ git commit -m "refactor(embed): e5 접두어 분리 — embedQuery/embedPassage"
   - `chunkBlocks(blocks: SourceBlock[]): Chunk[]`
   - `CHUNK_CHARS = 800`
 
-- [ ] **Step 1: `extractSourceBlocks` 에 무절단 옵션을 넣는다**
+- [x] **Step 1: `extractSourceBlocks` 에 무절단 옵션을 넣는다**
 
 `lib/source-text.ts` 는 `capLines(MAX_LINES=2000)` 으로 잘라낸다. 뷰어에는 맞지만 청킹에는
 문서 뒷부분이 통째로 사라진다. 옵션을 추가한다.
@@ -261,7 +261,7 @@ export function extractSourceBlocks(
 }
 ```
 
-- [ ] **Step 2: 실패하는 테스트를 작성한다**
+- [x] **Step 2: 실패하는 테스트를 작성한다**
 
 `lib/chunk.test.ts`:
 
@@ -363,12 +363,12 @@ test("seq 는 문서 전체에서 0부터 연속이다", () => {
 });
 ```
 
-- [ ] **Step 3: 실패를 확인한다**
+- [x] **Step 3: 실패를 확인한다**
 
 Run: `node --test --experimental-strip-types lib/chunk.test.ts`
 Expected: FAIL — `Cannot find module ... chunk.ts`
 
-- [ ] **Step 4: `lib/chunk.ts` 구현**
+- [x] **Step 4: `lib/chunk.ts` 구현**
 
 ```ts
 // lib/chunk.ts — 원문 블록 → 임베딩·검색용 청크. 순수 함수(DB·네트워크 무관).
@@ -450,12 +450,12 @@ export function chunkBlocks(blocks: SourceBlock[]): Chunk[] {
 }
 ```
 
-- [ ] **Step 5: 통과 확인**
+- [x] **Step 5: 통과 확인**
 
 Run: `node --test --experimental-strip-types lib/chunk.test.ts`
 Expected: 8 tests pass
 
-- [ ] **Step 6: 실제 문서로 확인한다**
+- [x] **Step 6: 실제 문서로 확인한다**
 
 임시 스크립트로 화장품 문서를 청킹해 눈으로 본다(커밋하지 않는다):
 
@@ -486,7 +486,7 @@ rm -f /tmp/ck.ts
 Expected: 40개 파일 전부 청크 1개 이상, 최대 길이가 1,100자를 넘지 않음. 총 청크는 수백 개 규모.
 넘거나 0청크 파일이 있으면 `chunkBlocks` 를 고친다.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add lib/chunk.ts lib/chunk.test.ts lib/source-text.ts

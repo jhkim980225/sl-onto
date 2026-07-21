@@ -41,8 +41,15 @@ function capLines(blocks: SourceBlock[]): SourceBlock[] {
   return out;
 }
 
-/** 확장자별 전체 원문 블록 추출. pdf/dxf/미지원은 빈 blocks(라우트가 상태코드 처리). */
-export function extractSourceBlocks(fileName: string, buf: Buffer): SourceText {
+/** 확장자별 전체 원문 블록 추출. pdf/dxf/미지원은 빈 blocks(라우트가 상태코드 처리).
+ * opts.cap=false 면 라인 상한을 적용하지 않는다 — 청킹은 문서 전체가 필요하다(뷰어만 자른다). */
+export function extractSourceBlocks(
+  fileName: string,
+  buf: Buffer,
+  opts: { cap?: boolean } = {}
+): SourceText {
+  const cap = opts.cap !== false;
+  const limit = (blocks: SourceBlock[]) => (cap ? capLines(blocks) : blocks);
   const ext = path.extname(fileName).toLowerCase();
   if (ext === ".xlsx") {
     const { sheets } = withTempFile(fileName, buf, (tmp) => readWorkbookGrids(tmp));
@@ -51,16 +58,16 @@ export function extractSourceBlocks(fileName: string, buf: Buffer): SourceText {
       const grid = s.grid.filter((row) => row.some((c) => c.trim() !== ""));
       return { label: s.name, rows: grid, lines: grid.map((row) => row.join(" │ ")) };
     });
-    return { format: "xlsx", blocks: capLines(blocks) };
+    return { format: "xlsx", blocks: limit(blocks) };
   }
   if (ext === ".pptx") {
     const { slides } = withTempFile(fileName, buf, (tmp) => readDeck(tmp));
     const blocks = slides.map((s) => ({ label: `슬라이드 ${s.index}`, lines: s.lines }));
-    return { format: "pptx", blocks: capLines(blocks) };
+    return { format: "pptx", blocks: limit(blocks) };
   }
   if (ext === ".docx") {
     const { paragraphs } = withTempFile(fileName, buf, (tmp) => readDoc(tmp));
-    return { format: "docx", blocks: capLines([{ label: "본문", lines: paragraphs }]) };
+    return { format: "docx", blocks: limit([{ label: "본문", lines: paragraphs }]) };
   }
   if (ext === ".dxf") return { format: "dxf", blocks: [] }; // 도면은 프론트 이미지 뷰
   return { format: ext.replace(/^\./, "") || "unknown", blocks: [] };
