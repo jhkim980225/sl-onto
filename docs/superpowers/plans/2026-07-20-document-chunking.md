@@ -511,7 +511,7 @@ git commit -m "feat(chunk): 형식별 문서 청커 — 표는 헤더 반복, �
   - `chunkCount(): Promise<number>` — 캔버스 전체 청크 수
   - `chunkCountOf(file: string): Promise<number>` — 문서 1건의 청크 수(백필이 "이미 청킹됐나" 판정에 쓴다)
 
-- [ ] **Step 1: 마이그레이션 SQL**
+- [x] **Step 1: 마이그레이션 SQL**
 
 `lib/db/migrations/002-chunks.sql`:
 
@@ -538,13 +538,13 @@ CREATE TABLE doc_chunks (
 );
 ```
 
-- [ ] **Step 2: `schema.sql` 에 신규 설치 경로 반영**
+- [x] **Step 2: `schema.sql` 에 신규 설치 경로 반영**
 
 `lib/db/schema.sql` 에서 `nodes.embedding` 을 `vector(768)` 로 바꾸고, `sources` 정의 **뒤에**
 같은 `doc_chunks` 정의를 `CREATE TABLE IF NOT EXISTS` 형태로 추가한다. 마이그레이션 결과와
 최종 형태가 **완전히 같아야 한다** — 다르면 신규 배포와 기존 배포가 갈린다.
 
-- [ ] **Step 3: `doReady()` 에 002 분기 추가**
+- [x] **Step 3: `doReady()` 에 002 분기 추가**
 
 `lib/db.ts` 의 `doReady()` 에서 001 마이그레이션 처리 **다음**에 넣는다:
 
@@ -560,7 +560,7 @@ CREATE TABLE doc_chunks (
   }
 ```
 
-- [ ] **Step 4: `lib/db.ts` 에 청크 CRUD 추가**
+- [x] **Step 4: `lib/db.ts` 에 청크 CRUD 추가**
 
 파일 끝에 추가:
 
@@ -633,12 +633,12 @@ export async function chunkCountOf(file: string): Promise<number> {
 }
 ```
 
-- [ ] **Step 5: 타입체크 + 전체 테스트**
+- [x] **Step 5: 타입체크 + 전체 테스트**
 
 Run: `npx tsc --noEmit && npm test`
 Expected: 에러 0 · `fail 0` (DB 없는 인메모리 경로라 기존 테스트 영향 없음)
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add lib/db/migrations/002-chunks.sql lib/db/schema.sql lib/db.ts

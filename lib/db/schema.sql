@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS nodes (
   type       TEXT NOT NULL,
   label      TEXT NOT NULL,
   props      JSONB NOT NULL DEFAULT '{}'::jsonb,   -- Node 의 sub/hero/hidden/ax/ay/parent/ext/props 수용
-  embedding  vector(384),                          -- pgvector, 1차 임베딩 검색용(NULL 허용)
+  embedding  vector(768),                          -- pgvector, multilingual-e5-base(NULL 허용)
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (canvas_id, id),
@@ -104,6 +104,18 @@ CREATE TABLE IF NOT EXISTS sources (
   content     BYTEA,                               -- 업로드 원본 바이트(베이스라인은 NULL)
   uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (canvas_id, file)
+);
+
+-- 문서 원문 청크 — 원문 RAG(/api/doc-ask). 002-chunks.sql 의 최종 형태와 동일해야 한다.
+CREATE TABLE IF NOT EXISTS doc_chunks (
+  canvas_id  TEXT NOT NULL,
+  file       TEXT NOT NULL,
+  seq        INTEGER NOT NULL,
+  block      TEXT NOT NULL,
+  text       TEXT NOT NULL,
+  embedding  vector(768),
+  PRIMARY KEY (canvas_id, file, seq),
+  FOREIGN KEY (canvas_id, file) REFERENCES sources(canvas_id, file) ON DELETE CASCADE
 );
 
 -- ④ 이력 — 감사·원본 보존 (Foundry Action 대응)

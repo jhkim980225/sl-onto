@@ -67,6 +67,16 @@ async function doReady(): Promise<void> {
     console.log("[db] 001-canvas 마이그레이션 적용 — 기존 데이터를 'default' 캔버스로 귀속");
   }
 
+  // 002 — 임베딩 768 전환 + 청크 테이블. doc_chunks 부재로 감지(001 과 같은 방식).
+  const needChunks = await p.query<{ need: boolean }>(
+    `SELECT to_regclass('public.nodes') IS NOT NULL AND to_regclass('public.doc_chunks') IS NULL AS need`
+  );
+  if (needChunks.rows[0]?.need) {
+    const sql = fs.readFileSync(path.join(dbDir, "migrations", "002-chunks.sql"), "utf8");
+    await tx(async (c) => { await c.query(sql); });
+    console.log("[db] 002-chunks 마이그레이션 적용 — 임베딩 768 전환 + doc_chunks 생성");
+  }
+
   await p.query(fs.readFileSync(path.join(dbDir, "schema.sql"), "utf8"));
 
   // 부트스트랩: 캔버스가 하나도 없는 완전 신규 DB 에만 default 캔버스 + FMEA 메타모델 시드.
@@ -628,4 +638,71 @@ export async function relationTypeUsage(relId: string): Promise<number> {
 
 export async function deleteRelationType(relId: string): Promise<void> {
   await getPool().query("DELETE FROM relation_types WHERE canvas_id = $1 AND rel_id = $2", [currentCanvas(), relId]);
+}
+
+/* ────────────────────────── 문서 청크 (원문 RAG) ────────────────────────── */
+
+/** 문서의 청크를 통째로 교체한다. 재청킹·문서 교체가 같은 경로를 쓴다(멱등). */
+export async function replaceChunks(
+  file: string,
+  chunks: { seq: number; block: string; text: string }[]
+): Promise<void> {
+  const cv = currentCanvas();
+  await tx(async (c) => {
+    await c.query("DELETE FROM doc_chunks WHERE canvas_id = $1 AND file = $2", [cv, file]);
+    for (const ch of chunks) {
+      await c.query(
+        `INSERT INTO doc_chunks (canvas_id, file, seq, block, text) VALUES ($1,$2,$3,$4,$5)`,
+        [cv, file, ch.seq, ch.block, ch.text]
+      );
+    }
+  });
+}
+
+export async function chunksMissingEmbedding(): Promise<{ file: string; seq: number; text: string }[]> {
+  const { rows } = await getPool().query<{ file: string; seq: number; text: string }>(
+    "SELECT file, seq, text FROM doc_chunks WHERE canvas_id = $1 AND embedding IS NULL",
+    [currentCanvas()]
+  );
+  return rows;
+}
+
+export async function setChunkEmbedding(file: string, seq: number, vector: number[]): Promise<void> {
+  await getPool().query(
+    "UPDATE doc_chunks SET embedding = $4::vector WHERE canvas_id = $1 AND file = $2 AND seq = $3",
+    [currentCanvas(), file, seq, toVectorLiteral(vector)]
+  );
+}
+
+/** 질의 벡터에 가까운 청크 top-k. 거리도 함께 돌려준다(노드 검색과 달리 UI 가 근거로 쓴다). */
+export async function chunkSearch(
+  vector: number[],
+  k: number
+): Promise<{ file: string; block: string; text: string; dist: number }[]> {
+  const { rows } = await getPool().query<{ file: string; block: string; text: string; dist: number }>(
+    `SELECT file, block, text, (embedding <=> $1::vector)::float8 AS dist
+       FROM doc_chunks
+      WHERE canvas_id = $3 AND embedding IS NOT NULL
+      ORDER BY embedding <=> $1::vector
+      LIMIT $2`,
+    [toVectorLiteral(vector), k, currentCanvas()]
+  );
+  return rows.map((r) => ({ ...r, dist: Number(r.dist) }));
+}
+
+export async function chunkCount(): Promise<number> {
+  const r = await getPool().query<{ n: string }>(
+    "SELECT count(*)::text AS n FROM doc_chunks WHERE canvas_id = $1",
+    [currentCanvas()]
+  );
+  return Number(r.rows[0].n);
+}
+
+/** 문서 1건의 청크 수 — 백필이 "이미 청킹된 문서인가" 를 판정한다. */
+export async function chunkCountOf(file: string): Promise<number> {
+  const r = await getPool().query<{ n: string }>(
+    "SELECT count(*)::text AS n FROM doc_chunks WHERE canvas_id = $1 AND file = $2",
+    [currentCanvas(), file]
+  );
+  return Number(r.rows[0].n);
 }
