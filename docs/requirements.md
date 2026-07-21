@@ -53,7 +53,7 @@
 ### 🗄 레거시 (동작하지만 신규 투자 없음)
 FMEA 추론·초안생성·모순검사·BOM 정합·결로 시나리오·2D 설계도.
 `default`(램프) 캔버스 전용이며, 추론·초안생성·모순검사·BOM 정합·결로 시나리오는
-`lib/capabilities.ts` 가 다른 캔버스에서 409 로 막는다(2D 설계도는 게이트 없이 빈 결과).
+`lib/capabilities.ts` 가 요구 객체타입이 없는 캔버스에서 409 로 막는다.
 → [features/legacy-fmea/](features/legacy-fmea/) · 과제 기록 [legacy/과제요구-구현현황.md](legacy/과제요구-구현현황.md)
 
 ## 5. 완료 기준 (Definition of Done)

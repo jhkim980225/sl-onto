@@ -62,9 +62,10 @@ Route Handler
 
 **기능 가용성**(`lib/capabilities.ts`)은 설정값이 아니라 **스키마에서 유도한 파생값**이다.
 `fm`·`cause`·`item` 같은 요구 객체타입이 없는 캔버스에서는 `/api/infer` `/fmea-draft`
-`/contradictions` `/bom-check` 가 **409 + 사유**를 돌려주고, `GET /api/schema` 가 실어 보내는
-`capabilities` 로 UI 가 애초에 버튼을 감춘다. `condensation` 은 노드 id 하드코딩(`ILENS`·`FMFOG`)
-때문에 `default` 캔버스 전용이다.
+`/contradictions` `/bom-check` `/drawing-input` `/design-options` `/review-opinion` 이
+**409 + 사유**를 돌려주고, `GET /api/schema` 가 실어 보내는 `capabilities` 로 UI 가 애초에 버튼을
+감춘다. `condensation` 은 노드 id 하드코딩(`ILENS`·`FMFOG`) 때문에 `default` 캔버스 전용이다.
+`/api/drawing-svg` 는 DXF→SVG 렌더러라 도메인 무관이며 게이트하지 않는다.
 
 > 설계: [superpowers/specs/2026-07-20-multi-canvas-design.md](superpowers/specs/2026-07-20-multi-canvas-design.md) ·
 > [superpowers/specs/2026-07-20-canvas-document-crud-design.md](superpowers/specs/2026-07-20-canvas-document-crud-design.md)
@@ -115,9 +116,10 @@ Route Handler
 | `/api/fmea-draft` | POST | 설계 조건 | DFMEA xlsx — **레거시** |
 | `/api/contradictions` | GET | — | 모순 스캔 — **레거시** |
 | `/api/bom-check` | GET | `?item=` | BOM 정합 — **레거시** |
-| `/api/drawing-input` · `/api/drawing-svg` | POST/GET | 도면 | 2D 설계도 — **레거시** |
-| `/api/design-options` | GET | — | 설계 조건 드롭다운 — **레거시** |
-| `/api/review-opinion` | POST | 추론 결과 | AI 종합 소견 — **레거시** |
+| `/api/drawing-input` | POST | multipart `file`(.dxf) | 2D 설계도 — **레거시**(`drawing` 409) |
+| `/api/drawing-svg` | GET | `?file=` | DXF→SVG 렌더 — 게이트 없음(도메인 무관) |
+| `/api/design-options` | GET | — | 설계 조건 드롭다운 — **레거시**(`drawing` 409) |
+| `/api/review-opinion` | POST | 추론 결과 | AI 종합 소견 — **레거시**(`reviewOpinion` 409) |
 > `/api/canvases*` 를 제외한 모든 라우트는 `?canvas=<id>` 필수(§2.1).
 > JSON 상세 형태는 [data-model.md](data-model.md). 알고리즘은 [features/](features/).
 

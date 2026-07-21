@@ -7,6 +7,7 @@ import { dbEnabled, getAiOpinion, saveAiOpinion } from "@/lib/db";
 import { DesignInputSchema, parseJsonBody } from "@/lib/schemas";
 import { ready } from "@/lib/store";
 import { withCanvasRoute } from "@/lib/canvas-route";
+import { requireCapability } from "@/lib/capabilities";
 import type { DesignInput } from "@/lib/types";
 
 // Next 타임아웃 대비 — 소견 생성은 사내 LLM 응답까지 60~90초 걸릴 수 있다.
@@ -17,6 +18,8 @@ export const maxDuration = 180;
 export async function POST(req: Request) {
   return withCanvasRoute(req, async () => {
     await ready();
+    const blocked = requireCapability("reviewOpinion");
+    if (blocked) return blocked;
     const parsed = await parseJsonBody(req, DesignInputSchema);
     if (!parsed.ok) return parsed.response;
 

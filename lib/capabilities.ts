@@ -4,7 +4,9 @@ import type { Metamodel } from "./db/seed-metamodel";
 import { DEFAULT_CANVAS, currentCanvas } from "./canvas-context";
 import { getMetamodel } from "./store";
 
-export type Capability = "infer" | "fmeaDraft" | "contradictions" | "bomCheck" | "condensation";
+export type Capability =
+  | "infer" | "fmeaDraft" | "contradictions" | "bomCheck" | "condensation"
+  | "drawing" | "reviewOpinion";
 
 /** 각 기능이 동작하려면 반드시 있어야 하는 객체타입. */
 const REQUIRES: Record<Exclude<Capability, "condensation">, string[]> = {
@@ -12,6 +14,10 @@ const REQUIRES: Record<Exclude<Capability, "condensation">, string[]> = {
   fmeaDraft: ["fm", "action"],
   contradictions: ["fm", "reg"],
   bomCheck: ["item"],
+  // 도면 입력·설계조건 드롭다운은 proj props(형상특징·시장·광원)를 읽고, 고장 이력을 붙인다.
+  drawing: ["proj", "fm"],
+  // 종합 소견은 infer() + scanContradictions() 를 둘 다 호출한다 — 두 요구의 합집합.
+  reviewOpinion: ["fm", "cause", "item", "reg"],
 };
 
 export function capabilities(m: Metamodel, canvasId: string): Record<Capability, boolean> {
@@ -22,6 +28,8 @@ export function capabilities(m: Metamodel, canvasId: string): Record<Capability,
     fmeaDraft: ok(REQUIRES.fmeaDraft),
     contradictions: ok(REQUIRES.contradictions),
     bomCheck: ok(REQUIRES.bomCheck),
+    drawing: ok(REQUIRES.drawing),
+    reviewOpinion: ok(REQUIRES.reviewOpinion),
     // 결로 시나리오는 노드 id(ILENS·FMFOG)를 하드코딩한다 — 일반화 전까지 기본 캔버스 전용.
     condensation: canvasId === DEFAULT_CANVAS,
   };
