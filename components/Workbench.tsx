@@ -23,6 +23,7 @@ import IngestPanel from "./IngestPanel";
 import DrawingPanel, { type DrawingResult } from "./DrawingPanel";
 import ContradictionsPanel from "./ContradictionsPanel";
 import AskPanel, { type AskEntry } from "./AskPanel";
+import DocAskPanel from "./DocAskPanel";
 import QualityPanel from "./QualityPanel";
 import ReasonPanel from "./ReasonPanel";
 import ViewToggle, { type ViewMode } from "./ViewToggle";
@@ -163,6 +164,7 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
     | "quality"
     | "reason"
     | "ask"
+    | "docask"
   >("inspector");
   // 객체 질문(Q&A) 대화 이력 — 패널이 인스펙터로 전환돼도 유지되도록 Workbench 가 보관.
   const [askHistory, setAskHistory] = useState<AskEntry[]>([]);
@@ -1147,6 +1149,14 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
         >
           🤖 질문
         </button>
+        <button
+          className="btn btn-ghost"
+          id="btnDocAsk"
+          title="캔버스 문서 원문에 자유롭게 질문(객체 선택 불필요)"
+          onClick={() => setRightPanelMode("docask")}
+        >
+          📖 문서 질문
+        </button>
         {derivedRelations.length > 0 && (
           <button
             className="btn btn-ghost"
@@ -1453,6 +1463,11 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
               onAppend={(entry) => setAskHistory((prev) => [...prev, entry])}
               onFocusNode={handleAskFocus}
               onOpenDoc={handleOpenEvidenceFile}
+              onClose={() => setRightPanelMode("inspector")}
+            />
+          ) : rightPanelMode === "docask" ? (
+            <DocAskPanel
+              onOpenDoc={(f) => handleOpenEvidenceFile(f)}
               onClose={() => setRightPanelMode("inspector")}
             />
           ) : rightPanelMode === "reason" ? (

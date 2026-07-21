@@ -1001,7 +1001,7 @@ git commit -m "feat(api): /api/doc-ask — 문서 원문 RAG"
 **Interfaces:**
 - Consumes: `apiFetch` (`lib/api-client.ts`), `reasonOf` (`components/apiError.ts`), `POST /api/doc-ask` (Task 6)
 
-- [ ] **Step 1: 패널 작성**
+- [x] **Step 1: 패널 작성**
 
 `components/DocAskPanel.tsx`:
 
@@ -1090,7 +1090,7 @@ export default function DocAskPanel({ onOpenDoc }: Props) {
 }
 ```
 
-- [ ] **Step 2: `Workbench.tsx` 배선**
+- [x] **Step 2: `Workbench.tsx` 배선**
 
 상단바에 버튼을 추가한다(`🤖 질문` 버튼 옆). **capability 게이팅은 하지 않는다** — 문서 질문은
 FMEA 타입과 무관하다.
@@ -1111,7 +1111,7 @@ FMEA 타입과 무관하다.
 
 `handleOpenEvidenceFile` 는 이미 있는 근거 문서 모달 열기 함수다 — 재사용한다.
 
-- [ ] **Step 3: CSS**
+- [x] **Step 3: CSS**
 
 `app/globals.css` 끝에 추가한다. 새 색을 도입하지 않고 기존 변수만 쓴다.
 인용된 청크는 `.lr-ico.active` 와 같은 어휘(시안 좌측 보더)로 강조한다.
@@ -1139,12 +1139,12 @@ FMEA 타입과 무관하다.
 `.da-text` 의 `overflow-x:auto` 가 중요하다 — 표 청크는 `A │ B │ C` 형태라 가로로 길다.
 없으면 우측 패널이 밀려 레이아웃이 깨진다.
 
-- [ ] **Step 4: 타입체크·테스트·빌드**
+- [x] **Step 4: 타입체크·테스트·빌드**
 
 Run: `npx tsc --noEmit && npm test && npm run build`
 Expected: 에러 0 · `fail 0` · 빌드 성공
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add components/DocAskPanel.tsx components/Workbench.tsx app/globals.css

@@ -700,3 +700,21 @@ mark.ft-hl{background:#ffe27a;color:var(--ink);font-weight:700;border-radius:2px
 
 @media (max-width:1180px){.main,.main.left-open{grid-template-columns:48px 1fr 320px}.lr-drawer{position:absolute;left:48px;top:0;bottom:0;z-index:40;box-shadow:2px 0 16px rgba(0,33,87,.14)}}
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* 문서 질문 패널 — 자유 질문 RAG. 인용 청크는 시안 좌측 보더로 강조(.lr-ico.active 와 같은 어휘). */
+.da-panel{display:flex;flex-direction:column;gap:10px;padding:12px}
+.da-hint{margin:0;font-size:11.5px;color:var(--ink-dim)}
+.da-input{display:flex;gap:6px}
+.da-input input{flex:1;min-width:0;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;color:var(--ink);background:#fff}
+.da-input input:focus{outline:none;border-color:var(--amber)}
+.da-input button{padding:7px 12px;border:none;border-radius:6px;background:var(--amber);color:#fff;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.da-input button:disabled{opacity:.4;cursor:default}
+.da-err{margin:0;padding:8px 10px;border:1px solid #f3ccd6;border-radius:6px;background:#fdf0f3;color:#c2415a;font-size:12px}
+.da-answer{padding:10px 12px;border:1px solid var(--line-soft);border-radius:8px;background:var(--bg-raise);font-size:13px;line-height:1.65;color:var(--ink);white-space:pre-wrap}
+.da-h{margin:6px 0 0;font-size:11.5px;font-weight:600;color:var(--ink-dim)}
+.da-chunks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.da-chunk{border:1px solid var(--line-soft);border-left:3px solid transparent;border-radius:6px;padding:8px 10px;background:#fff}
+.da-chunk.cited{border-left-color:var(--amber);background:rgba(0,162,229,.06)}
+.da-src{display:block;width:100%;text-align:left;border:none;background:none;padding:0 0 4px;font-size:11.5px;font-weight:600;color:var(--amber);cursor:pointer}
+.da-src:hover{text-decoration:underline}
+.da-text{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.55;color:var(--ink-dim);white-space:pre-wrap;overflow-x:auto;max-height:180px;overflow-y:auto}
