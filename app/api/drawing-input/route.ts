@@ -11,6 +11,7 @@ import { withTempFile } from "@/lib/ingest/tempfile";
 import { allEdges, allNodes, getMetamodel, getRuntimeSources, mergeDelta, ready, registerSource, setActiveDrawing } from "@/lib/store";
 import { assessDrawing } from "@/lib/drawing-risk";
 import { withCanvasRoute } from "@/lib/canvas-route";
+import { requireCapability } from "@/lib/capabilities";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,8 @@ const bad = (status: number, error: string) => NextResponse.json({ ok: false, er
 export async function POST(req: Request) {
   return withCanvasRoute(req, async () => {
     await ready();
+    const blocked = requireCapability("drawing");
+    if (blocked) return blocked;
     try {
       let name: string;
       let buf: Buffer;

@@ -1090,15 +1090,17 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
             e.target.value = "";
           }}
         />
-        <button
-          className="btn btn-ghost"
-          id="btnDrawing"
-          disabled={!ontologyBuilt || drawingLoading}
-          title={ontologyBuilt ? "도면(.dxf)을 업로드해 형상 유사 과거 설계를 탐색" : "온톨로지 구축 후 사용 가능"}
-          onClick={() => setRightPanelMode("drawing")}
-        >
-          {drawingLoading ? "📐 분석 중…" : "📐 도면 분석"}
-        </button>
+        {caps.drawing && (
+          <button
+            className="btn btn-ghost"
+            id="btnDrawing"
+            disabled={!ontologyBuilt || drawingLoading}
+            title={ontologyBuilt ? "도면(.dxf)을 업로드해 형상 유사 과거 설계를 탐색" : "온톨로지 구축 후 사용 가능"}
+            onClick={() => setRightPanelMode("drawing")}
+          >
+            {drawingLoading ? "📐 분석 중…" : "📐 도면 분석"}
+          </button>
+        )}
         <button
           className="btn btn-ghost"
           id="btnIngest"

@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { allNodes, ready } from "@/lib/store";
 import { withCanvasRoute } from "@/lib/canvas-route";
+import { requireCapability } from "@/lib/capabilities";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,8 @@ function distinctFromProps(match: (key: string) => boolean, filter?: (v: string)
 export async function GET(req: Request) {
   return withCanvasRoute(req, async () => {
     await ready();
+    const blocked = requireCapability("drawing");
+    if (blocked) return blocked;
     const markets = distinctFromProps((k) => /시장|market/i.test(k));
     const lightSources = distinctFromProps((k) => /광원|light/i.test(k));
     // 형상: 하우징·렌즈·형태 관련 키만 + 잡음 필터. (형상.커넥터=IP67, 형상.개스킷소재=EPDM 등 제외)
