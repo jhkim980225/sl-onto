@@ -29,7 +29,7 @@ pgvector 384-dim + Python 임베딩 사이드카 pyservice) · 그래프 RAG(`/a
 ## 레포 구조
 ```
 app/            Next.js App Router (페이지 + api/ Route Handlers)
-  api/          /ontology /ontology/export /object/[id] /search /nlsearch /ask /reason /source-text
+  api/          /ontology /ontology/export /object/[id] /search /nlsearch /ask /doc-ask /reason /source-text
                 /infer /fmea-draft /design-options /review-opinion /drawing-input /drawing-svg
                 /sources · /sources/[file](DELETE·PUT=문서 삭제·교체) /ingest /condensation
                 /bom-check /contradictions /curate /quality
@@ -40,8 +40,9 @@ components/     클라이언트 컴포넌트 (Graph·Inspector·Checklist·Sourc
 lib/            도메인 로직 (store, search, nlsearch, infer, seed, types) — 프레임워크 비의존
                 canvas-context.ts(AsyncLocalStorage 현재 캔버스) · canvas-route.ts(withCanvasRoute) ·
                 canvases.ts(캔버스 CRUD) · documents.ts(문서 삭제) · capabilities.ts(기능 가용성) ·
+                chunk.ts(형식별 문서 청커: 표=헤더반복·산문=문단오버랩) · embed.ts(e5 접두어 query/passage) ·
                 api-client.ts(클라이언트 fetch 에 ?canvas= 부착)
-  db/migrations/ 001-canvas.sql (단일 온톨로지 → 다중 캔버스, 단방향)
+  db/migrations/ 001-canvas.sql(단일 온톨로지 → 다중 캔버스) · 002-chunks.sql(임베딩 384→768 + doc_chunks) — 둘 다 단방향
   ingest/       원천 파일 파서 + 정규화 (xlsx/pptx/docx → 온톨로지, auto-create·견고 파싱)
   scenario/     condensation.ts (결로 지역별 시나리오 = 온톨로지 + 지역 축 + 설계도 스펙)
 scripts/        gen-sources.ts(데모 원천 생성) · gen-real-samples.ts(지저분한 실무 샘플) ·
@@ -70,7 +71,7 @@ FMEA 타입이 없는 캔버스에서는 추론·초안·모순·BOM 이 409(`li
 - TypeScript strict. 도메인 로직은 `lib/`에 두고 프레임워크(Next) 비의존으로 유지 → 테스트·재사용 용이.
 - API 응답 형태는 `docs/data-model.md`의 JSON 스키마를 따른다.
 - 기존 데모의 SVG 포스 그래프는 **재작성하지 말고** 클라이언트 컴포넌트로 이식, `fetch`만 연결.
-- 각 MVP 구성요소는 확장 대상으로 "갈아끼우기" 가능하게(시드→Docling, 인메모리→Postgres, 키워드→벡터 — 뒤 둘은 완료. 다음 갈아끼우기: 문서 원문 청킹 RAG).
+- 각 MVP 구성요소는 확장 대상으로 "갈아끼우기" 가능하게(시드→Docling, 인메모리→Postgres, 키워드→벡터, 문서 원문 청킹 RAG — 뒤 셋은 코드 완료. 청킹 RAG 는 배포 대기(브랜치 feat/document-chunking, 002 마이그레이션 미적용). 다음 갈아끼우기: 시드→Docling PDF).
 
 ## 작업 방식
 - 서브에이전트 위임 규칙: `AGENTS.md`

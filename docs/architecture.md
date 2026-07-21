@@ -24,7 +24,7 @@
         │                               │  HTTP
 ┌───────▼─────────────────────┐ ┌───────▼─────────────────┐
 │ 저장소                       │ │ Python 사이드카          │
-│ Postgres(원본) + pgvector    │ │ /embed  384-dim 임베딩   │
+│ Postgres(원본) + pgvector    │ │ /embed  768-dim(e5-base) │
 │ 캔버스별 인메모리 읽기 캐시   │ │ /reason 관계 유도(overlay)│
 │ (DB 없으면 인메모리 폴백)     │ │ /parse  · /llm           │
 └─────────────────────────────┘ └─────────────────────────┘
@@ -81,8 +81,13 @@ Route Handler
 **검색:** 입력 중 = 키워드 드롭다운(`GET /api/search`). Enter = 자연어(`POST /api/nlsearch`,
 규칙기반 엔티티 링크 + 벡터 후보확장 + 그래프 1-hop). 근거 칩 클릭 → `GET /api/source-text` 원문.
 
-**질의응답:** 객체 선택 → `POST /api/ask` → `lib/ask.ts` 가 속성·관계(최대 30)·근거 문서(최대 8)로
+**질의응답(객체 앵커):** 객체 선택 → `POST /api/ask` → `lib/ask.ts` 가 속성·관계(최대 30)·근거 문서(최대 8)로
 컨텍스트를 조립 → LLM 이 그 안에서만 답하고 `[R n]` 으로 관계 인용.
+
+**질의응답(문서 원문 RAG):** 객체 선택 없이 자유 질문 → `POST /api/doc-ask` → 질의 임베딩(`query: `)으로
+`doc_chunks` 코사인 top-8 → LLM 이 그 청크만 근거로 답하고 `[C n]` 으로 청크 인용. 원문 블록은
+형식별 청커(`lib/chunk.ts`: 표=헤더 반복, 산문=문단 오버랩)로 쪼개 부팅·병합 시 자동 백필된다.
+임베딩 모델은 `multilingual-e5-base`(768dim). 근거 청크(파일·블록·원문)를 응답에 실어 UI 가 노출.
 
 > STAGE 1/2/3 3단계 연출은 1차 MVP 의 램프 캔버스 전용 서사다 →
 > [features/워크벤치-UI.md](features/워크벤치-UI.md)
@@ -107,6 +112,7 @@ Route Handler
 | `/api/canvases/[id]/restore` | POST | — | 휴지통에서 복구 |
 | `/api/ontology/export` | GET | `?format=ttl` | RDF Turtle 내보내기(pyservice `/export`, 미설정 시 503) |
 | `/api/ask` | POST | `{objectId, question}` | `{answer, rels[], docs[]}` — 선택 객체 RAG 질의응답 |
+| `/api/doc-ask` | POST | `{question}` | `{answer, citedChunks[], chunks[]}` — 문서 원문 RAG(청크 top-8, `[C n]` 인용) · 청크 0이면 409 `needsDocs` |
 | `/api/reason` | GET | — | 사이드카 유도 관계 overlay(조회 전용, store 미병합) |
 | `/api/source-text` | GET | `?file=` | 원본 문서 텍스트 |
 | `/api/quality` | GET | — | 품질 스캔(중복·고립·근거없음 + 형식 온톨로지 위반) |
@@ -142,9 +148,9 @@ Route Handler
 | 지금 | 교체 대상 | 바뀌는 파일 |
 |---|---|---|
 | `lib/ingest/*` 파싱 | Docling(스캔/이미지 PDF) 서비스 | `lib/ingest/*`만 |
-| 노드 라벨 임베딩(384-dim) | 문서 청크 임베딩 + e5-base | `lib/embed.ts` · pyservice — [계획됨](superpowers/specs/2026-07-20-document-chunking-design.md) |
+| ~~노드 라벨 임베딩(384-dim)~~ → e5-base 768 + 문서 청크 임베딩 | (완료, 이 브랜치) | `lib/embed.ts` · `lib/chunk.ts` · pyservice v8 — [설계](superpowers/specs/2026-07-20-document-chunking-design.md) |
 | `lib/nlsearch.ts` 규칙기반 해석 | 사내 LLM(`NL_USE_LLM=1`) | `lib/nlsearch.ts`만 |
-| `lib/ask.ts` 그래프 컨텍스트 RAG | + 문서 원문 청크 컨텍스트 | `lib/ask.ts`만 — [계획됨](superpowers/specs/2026-07-20-document-chunking-design.md) |
+| 그래프 컨텍스트 RAG(`/api/ask`) | + 문서 원문 청크 RAG(`/api/doc-ask`) | `lib/chunk.ts` · `app/api/doc-ask` — (완료, 이 브랜치) |
 프론트/Route Handler 계약이 고정이라 위 교체는 UI에 무영향.
 
 ## 7. Non-goals

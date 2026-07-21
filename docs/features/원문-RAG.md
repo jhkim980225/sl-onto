@@ -1,9 +1,12 @@
-# feature: 원문 RAG — 문서 원문 기반 자유 질문 (계획됨)
+# feature: 원문 RAG — 문서 원문 기반 자유 질문 (코드 완료 · 배포 대기)
 
-> **계획됨 — 코드에 없다.** 설계만 존재한다:
-> [document-chunking](../superpowers/specs/2026-07-20-document-chunking-design.md) ·
-> 구현 계획 [2026-07-20-document-chunking.md](../superpowers/plans/2026-07-20-document-chunking.md) (8 태스크)
-> 현재 구현된 RAG 는 노드 컨텍스트 기반뿐이다 → [질의응답.md](질의응답.md)
+> **코드 완료 · 운영 미배포.** 브랜치 `feat/document-chunking` 에 구현됨:
+> `lib/chunk.ts`(형식별 청커) · `doc_chunks` 테이블(`002-chunks.sql`) · `app/api/doc-ask` ·
+> `components/DocAskPanel.tsx` · pyservice v8(e5-base 768dim + `task=docask`).
+> 운영 배포는 002 마이그레이션(단방향, pyservice 선행) 때문에 대기 — [deployment.md](../deployment.md).
+> 설계 [document-chunking](../superpowers/specs/2026-07-20-document-chunking-design.md) ·
+> 계획 [2026-07-20-document-chunking.md](../superpowers/plans/2026-07-20-document-chunking.md).
+> 노드 컨텍스트 기반 RAG(`/api/ask`)는 별개다 → [질의응답.md](질의응답.md)
 
 ## 문제 — 지금 시스템이 못 하는 것
 문서는 파싱 시점에 노드·엣지로 "소화"될 뿐, 원문 텍스트 자체는 어디에도 벡터화되지 않는다.

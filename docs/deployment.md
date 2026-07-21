@@ -151,10 +151,28 @@ docker run -p 8000:8000 sl-ontoground
 
 설계: [superpowers/specs/2026-07-20-multi-canvas-design.md](superpowers/specs/2026-07-20-multi-canvas-design.md) §3.
 
+## ⚠ 002-chunks 마이그레이션 (임베딩 768 전환 + 문서 청킹 — 다음 배포 시 1회)
+
+문서 원문 RAG 도입으로 임베딩 모델이 `multilingual-e5-base`(768dim)로 바뀌고 `doc_chunks`
+테이블이 생긴다. **아직 미배포** — 코드·매니페스트는 준비 완료(브랜치 `feat/document-chunking`).
+
+- **적용 시점**: 자동. `doReady()` 가 `nodes` 는 있는데 `doc_chunks` 가 없으면
+  `002-chunks.sql` 을 부팅 후 1회 실행. `nodes.embedding` 을 `vector(768)` 로 DROP/ADD 하고
+  `doc_chunks` 를 만든다(단일 트랜잭션·**단방향**·되돌리기 없음).
+- **기존 384dim 임베딩을 폐기한다.** 배포 전 `pg_dump` 백업 필수 — 회수 경로는 백업뿐.
+- **⚠ 배포 순서: pyservice v8(768dim)이 앱보다 먼저 떠야 한다.** 앱이 먼저 뜨면 컬럼은 768로
+  바뀌었는데 구버전 pyservice(384dim)로 백필을 시도해 **조용히 전부 실패**한다(에러 없이 임베딩
+  NULL 로 남음). 앱은 되돌릴 수 있어도 DB 스키마는 안 된다.
+- pyservice 메모리 limit 은 e5-base 실측 피크(1,687MB) 때문에 2Gi→3Gi(`k8s/pyservice.yaml`).
+- **성공 확인**: 파드 로그 `[db] 002-chunks 마이그레이션 적용` · `nodes_emb` 245 ·
+  `doc_chunks` 수백 · `chunks_emb == chunks`.
+
+설계: [superpowers/specs/2026-07-20-document-chunking-design.md](superpowers/specs/2026-07-20-document-chunking-design.md).
+
 ## 상태 구성 (Postgres 전환 완료)
 - 앱 Deployment 에 `DATABASE_URL`(클러스터 내 Postgres) 주입 — DB=원본, 인메모리=읽기 캐시.
 - `PYSERVICE_URL=http://pyservice.sl-ontoground:8000` — 임베딩 사이드카(`k8s/pyservice.yaml`,
-  sentence-transformers 다국어 MiniLM). 임베딩 백필은 부팅·병합 후 자동(재트리거 `POST /api/admin/embed-backfill`).
+  `multilingual-e5-base` 768dim, v8부터). 임베딩·청크 백필은 부팅·병합 후 자동(재트리거 `POST /api/admin/embed-backfill`).
 - Docling 등 추가 Python 기능도 같은 사이드카 패턴으로 확장.
 
 ## 원천 파일 포함

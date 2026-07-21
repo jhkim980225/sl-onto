@@ -69,6 +69,7 @@ CREATE TABLE canvases (
 | `nodes` | `(canvas_id, id)` | `(canvas_id, type)` → `object_types` FK — **객체타입 없는 캔버스엔 노드를 넣을 수 없다** |
 | `edges` | `(canvas_id, src, rel, dst)` | `(canvas_id, rel)` → `relation_types`, 양끝 → `nodes` ON DELETE CASCADE |
 | `sources` | `(canvas_id, file)` | 업로드 원본 바이트(`content`) 포함 |
+| `doc_chunks` | `(canvas_id, file, seq)` | 문서 원문 청크(원문 RAG). `embedding vector(768)`, `(canvas_id, file)` → `sources` ON DELETE CASCADE |
 | `object_types` | `(canvas_id, type_id)` | |
 | `relation_types` | `(canvas_id, rel_id)` | |
 | `object_subtypes` | `(canvas_id, type_id, st_id)` | `(canvas_id, type_id)` → `object_types` |
@@ -79,11 +80,13 @@ CREATE TABLE canvases (
 
 **메타모델도 캔버스별이다.** §1의 객체 9종 · §2의 관계 12종은 `default` 캔버스의 시드값이며,
 사용자가 만드는 캔버스는 **빈 스키마**로 시작해 `/api/schema/object-types` ·
-`/api/schema/relation-types` 로 직접 정의한다(설계 §3.4). `nodes.embedding`(pgvector 384-dim)은
-컬럼 변경 없이 유사도 쿼리에 `canvas_id` 조건만 붙는다.
+`/api/schema/relation-types` 로 직접 정의한다(설계 §3.4). `nodes.embedding`(pgvector 768-dim,
+`multilingual-e5-base`)은 컬럼 변경 없이 유사도 쿼리에 `canvas_id` 조건만 붙는다.
 
-**마이그레이션**: `lib/db/migrations/001-canvas.sql` — 단일 온톨로지 DB를 캔버스 DB로 승격.
-단일 트랜잭션, **단방향**(되돌리기 스크립트 없음). 배포 주의사항은 [deployment.md](deployment.md).
+**마이그레이션**: `lib/db/migrations/001-canvas.sql`(단일 온톨로지→캔버스) ·
+`002-chunks.sql`(임베딩 384→768 재생성 + `doc_chunks` 테이블). 둘 다 단일 트랜잭션,
+**단방향**(되돌리기 스크립트 없음). 002 는 기존 384dim 임베딩을 폐기하므로 pyservice v8(768dim)이
+앱보다 먼저 떠야 한다 — 배포 주의사항은 [deployment.md](deployment.md).
 
 > 설계: [superpowers/specs/2026-07-20-multi-canvas-design.md](superpowers/specs/2026-07-20-multi-canvas-design.md)
 
