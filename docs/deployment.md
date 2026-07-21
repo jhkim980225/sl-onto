@@ -23,7 +23,7 @@ docker run -p 8000:8000 sl-ontoground
 - **Cloud Run / ACA / App Service**: 이미지 지정, 포트=컨테이너 `$PORT`.
 - **ECS / K8s**: Deployment + Service, `containerPort` 매핑, 필요 시 HPA.
 
-## FEDA 클러스터 실제 배포 기록 (배포 완료 · 현재 v79)
+## FEDA 클러스터 실제 배포 기록 (배포 완료 · 현재 v81 · pyservice v8)
 - v25: 샘플 인제스천 개편 — 매 클릭 새 현장보고(차수 증가)로 결로·습기(FMFOG)에 정확히 3개 노드
   (부품·원인·조치) 부착, "이미 반영됨" 케이스 제거, 완료 시 결로·습기 자동 포커스.
 - v26: 노드 삭제 후 직전 탐색 항목 자동 복귀(포커스·인스펙터 유지).
@@ -38,8 +38,13 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v79.** 아래는 버전별 이력이다.
+- **현재 배포 = v81 (앱) · pyservice v8.** 아래는 버전별 이력이다.
   다음 v번호는 마스터의 `docker images` + `kubectl get rs` 로 확인(로컬 스크립트 파일명 믿지 말 것).
+- v81 (2026-07-22, **pyservice v8**) — **문서 원문 청킹 RAG**: 임베딩 `multilingual-e5-base`(768dim)
+  교체(`002-chunks.sql`, 단방향) + 형식별 청커(`lib/chunk.ts`) + `doc_chunks` + `/api/doc-ask` +
+  📖 문서 질문 패널. pyservice v8 먼저 롤아웃(768 확인) 후 앱 배포. 운영 검증: 002 마이그레이션 자동
+  적용 · 백필 노드 245/245 · 청크 310/310 임베딩 · 원문 근거 [C n] 답변 · 캔버스 격리 · FK CASCADE.
+  배포 전 `pg_dump` 백업(`~/slonto-backups/slonto-20260722-080129.sql.gz`). pyservice limit 2Gi→3Gi.
 - v56 (2026-07-10, pyservice v7) — **구조 리팩토링 + 성능**: 순삭 ~1,100줄
   (pyservice 클라이언트·fnv1a·패널 마크업 복붙 통합, Workbench 1,522→1,290, infer 684→542,
   ingest/index 676→533, 라우트 보일러플레이트 lib 하강) + ready() 재동기화 TTL 2s +
@@ -154,7 +159,7 @@ docker run -p 8000:8000 sl-ontoground
 ## ⚠ 002-chunks 마이그레이션 (임베딩 768 전환 + 문서 청킹 — 다음 배포 시 1회)
 
 문서 원문 RAG 도입으로 임베딩 모델이 `multilingual-e5-base`(768dim)로 바뀌고 `doc_chunks`
-테이블이 생긴다. **아직 미배포** — 코드·매니페스트는 준비 완료(브랜치 `feat/document-chunking`).
+테이블이 생긴다. **v81(2026-07-22)에 배포 완료** — 운영 DB 에 적용됨.
 
 - **적용 시점**: 자동. `doReady()` 가 `nodes` 는 있는데 `doc_chunks` 가 없으면
   `002-chunks.sql` 을 부팅 후 1회 실행. `nodes.embedding` 을 `vector(768)` 로 DROP/ADD 하고

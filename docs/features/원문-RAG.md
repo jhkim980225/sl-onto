@@ -1,9 +1,9 @@
-# feature: 원문 RAG — 문서 원문 기반 자유 질문 (코드 완료 · 배포 대기)
+# feature: 원문 RAG — 문서 원문 기반 자유 질문 (배포됨 · v81)
 
-> **코드 완료 · 운영 미배포.** 브랜치 `feat/document-chunking` 에 구현됨:
-> `lib/chunk.ts`(형식별 청커) · `doc_chunks` 테이블(`002-chunks.sql`) · `app/api/doc-ask` ·
-> `components/DocAskPanel.tsx` · pyservice v8(e5-base 768dim + `task=docask`).
-> 운영 배포는 002 마이그레이션(단방향, pyservice 선행) 때문에 대기 — [deployment.md](../deployment.md).
+> **배포됨(v81 · 2026-07-22).** 구현: `lib/chunk.ts`(형식별 청커) · `doc_chunks` 테이블
+> (`002-chunks.sql`) · `app/api/doc-ask` · `components/DocAskPanel.tsx` ·
+> pyservice v8(e5-base 768dim + `task=docask`).
+> 운영 검증: 백필 청크 310/310 임베딩 · 원문 [C n] 근거 답변 · 캔버스 격리 · FK CASCADE — [deployment.md](../deployment.md).
 > 설계 [document-chunking](../superpowers/specs/2026-07-20-document-chunking-design.md) ·
 > 계획 [2026-07-20-document-chunking.md](../superpowers/plans/2026-07-20-document-chunking.md).
 > 노드 컨텍스트 기반 RAG(`/api/ask`)는 별개다 → [질의응답.md](질의응답.md)

@@ -23,7 +23,7 @@ pgvector 384-dim + Python 임베딩 사이드카 pyservice) · 그래프 RAG(`/a
 자연어 검색(규칙기반 + 임베딩 후보확장, LLM 옵트인) · 인제스천(xlsx/pptx/docx/dxf) ·
 규칙기반 그래프 추론(`/api/infer`, **레거시·FMEA 전용**) ·
 **라이트 SL 브랜드 테마**(흰 배경·네이비 텍스트·시안 액센트 `#00a2e5`).
-- **배포됨(v79):** FEDA K8s ns `sl-ontoground`, NodePort **30494** → `http://192.168.0.100:30494/` (상세 `docs/deployment.md`).
+- **배포됨(v81 · pyservice v8):** FEDA K8s ns `sl-ontoground`, NodePort **30494** → `http://192.168.0.100:30494/` (상세 `docs/deployment.md`).
   다음 버전 번호는 마스터의 `docker images` + `kubectl get rs`로 확인(로컬 스크립트 파일명 믿지 말 것).
 
 ## 레포 구조
@@ -71,7 +71,7 @@ FMEA 타입이 없는 캔버스에서는 추론·초안·모순·BOM 이 409(`li
 - TypeScript strict. 도메인 로직은 `lib/`에 두고 프레임워크(Next) 비의존으로 유지 → 테스트·재사용 용이.
 - API 응답 형태는 `docs/data-model.md`의 JSON 스키마를 따른다.
 - 기존 데모의 SVG 포스 그래프는 **재작성하지 말고** 클라이언트 컴포넌트로 이식, `fetch`만 연결.
-- 각 MVP 구성요소는 확장 대상으로 "갈아끼우기" 가능하게(시드→Docling, 인메모리→Postgres, 키워드→벡터, 문서 원문 청킹 RAG — 뒤 셋은 코드 완료. 청킹 RAG 는 배포 대기(브랜치 feat/document-chunking, 002 마이그레이션 미적용). 다음 갈아끼우기: 시드→Docling PDF).
+- 각 MVP 구성요소는 확장 대상으로 "갈아끼우기" 가능하게(시드→Docling, 인메모리→Postgres, 키워드→벡터, 문서 원문 청킹 RAG — 넷 다 배포 완료(청킹 RAG=v81, 002 마이그레이션 적용). 다음 갈아끼우기: 시드→Docling PDF).
 
 ## 작업 방식
 - 서브에이전트 위임 규칙: `AGENTS.md`
@@ -86,7 +86,7 @@ FMEA 타입이 없는 캔버스에서는 추론·초안·모순·BOM 이 409(`li
 | `docs/architecture.md` | 시스템 구조·데이터흐름·API·캔버스 스코핑·배포 |
 | `docs/data-model.md` | 메타모델·캔버스 스키마·JSON 형태 |
 | `docs/design.md` | UI 디자인 시스템(라이트 SL 브랜드 · 그래프 존/방사형 레이아웃) |
-| `docs/deployment.md` | Docker standalone → FEDA K8s(v79 · 레지스트리 :5000 · NodePort 30494) |
+| `docs/deployment.md` | Docker standalone → FEDA K8s(v81 · pyservice v8 · 레지스트리 :5000 · NodePort 30494) |
 | `docs/features/*` | 기능별 상세 |
 | `docs/features/legacy-fmea/*` | FMEA 전용 레거시 기능 |
 | `docs/legacy/과제요구-구현현황.md` | (아카이브) FMEA 과제 대응 기록 — 1차 MVP |

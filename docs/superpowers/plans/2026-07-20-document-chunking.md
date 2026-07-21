@@ -715,7 +715,7 @@ grep -n "class LLMRequest" -A 12 pyservice/main.py
 
 `k8s/pyservice.yaml` 의 `limits.memory` 를 `2Gi` → `3Gi`. e5-base 실측 피크 RSS 1,687MB.
 
-- [ ] **Step 7: 빌드·배포·검증** — ⏸ 보류: 운영 클러스터 변경이라 Task 8 배포 때 한 번에 수행(코드·매니페스트는 준비 완료)
+- [x] **Step 7: 빌드·배포·검증** — v8 빌드·배포·768 확인 완료(Task 8 과 함께)
 
 ```bash
 # 마스터에서
@@ -1157,7 +1157,7 @@ git commit -m "feat(ui): 문서 질문 패널 — 답변 + 인용 청크 원문 
 
 **Files:** 없음(운영 작업)
 
-- [ ] **Step 1: 운영 DB 백업**
+- [x] **Step 1: 운영 DB 백업**
 
 **마이그레이션 002 는 단방향이고 기존 임베딩을 폐기한다.** 먼저 백업한다.
 
@@ -1169,7 +1169,7 @@ kubectl -n sl-ontoground exec sts/postgres -- \
 gzip -f ~/slonto-backups/slonto-$TS.sql && ls -lh ~/slonto-backups/
 ```
 
-- [ ] **Step 2: pyservice v8 이 먼저 떠 있는지 확인**
+- [x] **Step 2: pyservice v8 이 먼저 떠 있는지 확인**
 
 Task 4 Step 7 에서 배포했다. 앱보다 **먼저** 768dim 이어야 한다 — 앱이 먼저 뜨면 384dim
 벡터를 768 컬럼에 넣으려다 실패한다.
@@ -1180,7 +1180,7 @@ kubectl -n sl-ontoground get deploy pyservice -o jsonpath='{.spec.template.spec.
 
 Expected: `...pyservice:v8`
 
-- [ ] **Step 3: 앱 배포**
+- [x] **Step 3: 앱 배포**
 
 다음 v번호는 클러스터 기준으로 확인한다(로컬 파일명 믿지 말 것 — `CLAUDE.md`).
 
@@ -1194,7 +1194,7 @@ kubectl -n sl-ontoground set image deploy/sl-ontoground web=192.168.0.100:5000/s
 kubectl -n sl-ontoground rollout status deploy/sl-ontoground --timeout=300s
 ```
 
-- [ ] **Step 4: 마이그레이션·백필 확인**
+- [x] **Step 4: 마이그레이션·백필 확인**
 
 ```bash
 curl -s -o /dev/null "http://192.168.0.100:30494/api/ontology?canvas=default"
@@ -1209,7 +1209,7 @@ kubectl -n sl-ontoground exec sts/postgres -- env PGPASSWORD=slontoDb7Pq2Xr9mK4n
 
 Expected: `[db] 002-chunks 마이그레이션 적용` 로그 · `nodes_emb` 245 · `chunks` 수백 · `chunks_emb == chunks`
 
-- [ ] **Step 5: 실제 질문 — 원문에만 있는 값이 나오는지**
+- [x] **Step 5: 실제 질문 — 원문에만 있는 값이 나오는지**
 
 설계 §1 의 질문들이 핵심이다. 노드에는 없고 **원문에만** 있는 수치를 물어본다.
 
@@ -1221,7 +1221,7 @@ curl -s -X POST "http://192.168.0.100:30494/api/doc-ask?canvas=default" \
 
 응답의 `answer` 에 원문 문장이 반영되고, `chunks` 에 실제 근거 구절이 담겼는지 사람이 대조한다.
 
-- [ ] **Step 6: 캔버스 격리 확인**
+- [x] **Step 6: 캔버스 격리 확인**
 
 ```bash
 CV=$(node -e "console.log(encodeURIComponent('화장품'))")
@@ -1234,7 +1234,7 @@ curl -s -X POST "http://192.168.0.100:30494/api/doc-ask?canvas=$CV" \
 Expected: 화장품 문서만 나오거나, 청크가 없으면 409 `needsDocs`. **램프 파일명이 하나라도
 나오면 격리 위반이다.**
 
-- [ ] **Step 7: 문서 삭제 시 청크 CASCADE 확인**
+- [x] **Step 7: 문서 삭제 시 청크 CASCADE 확인**
 
 ```bash
 # 임시 캔버스에서 검증 후 purge (운영 캔버스 건드리지 않는다)
@@ -1276,7 +1276,7 @@ Expected: 삭제 전 청크 수가 20 이상, 삭제 후 **0**. 0이 아니면 F
 `docs/dev-summary.md`(API 표·테스트 수) · `docs/deployment.md`(002 마이그레이션 주의 — 단방향,
 pyservice v8 이 먼저) · `CLAUDE.md`(레포 구조에 `lib/chunk.ts` 등).
 
-- [ ] **Step 9: 커밋**
+- [x] **Step 9: 커밋**
 
 ```bash
 git add docs CLAUDE.md
@@ -1291,10 +1291,10 @@ git commit -m "docs: 문서 청킹 반영 + vN 배포 기록"
 - [x] `npx tsc --noEmit` → 에러 0
 - [x] `npm run build` → 성공
 - [x] `grep -rn "embedOne\|embed(" lib/ app/ --include=*.ts | grep -v embedQuery | grep -v embedPassage | grep -v embedRaw | grep -v embedEnabled` → 접두어 없는 임베딩 호출 0건
-- [ ] 운영: `nodes.embedding` 245개 · `doc_chunks` 전량 임베딩 완료
-- [ ] 운영: 원문에만 있는 수치를 묻는 질문에 근거와 함께 답변
-- [ ] 운영: 캔버스 격리 — 타 캔버스 청크가 안 섞임
-- [ ] 운영: 문서 삭제 시 `doc_chunks` CASCADE 동작
+- [x] 운영: `nodes.embedding` 245개 · `doc_chunks` 전량 임베딩 완료
+- [x] 운영: 원문에만 있는 수치를 묻는 질문에 근거와 함께 답변
+- [x] 운영: 캔버스 격리 — 타 캔버스 청크가 안 섞임
+- [x] 운영: 문서 삭제 시 `doc_chunks` CASCADE 동작
 
 ---
 
