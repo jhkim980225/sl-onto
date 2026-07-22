@@ -34,3 +34,28 @@
 - 설계: `docs/superpowers/specs/2026-07-22-v2-neo4j-foundation-design.md`
 - 구조: `docs/v2-README.md`
 - 리뷰 전문: `.superpowers/sdd/v2-review.md`
+
+---
+
+## 라이브 통합 e2e (실 Neo4j Community pod, FEDA)
+`sl-ontoground-v2` 네임스페이스에 실 Neo4j 5 Community 띄워 데이터모델 검증.
+
+**검증 성공 ✅ (실 Neo4j 5):**
+- 스키마 DDL 적용 — `entity_id`(UNIQUE)·`entity_embedding`(**VECTOR**)·`entity_type` 인덱스 생성 확인
+- 엔티티 3개 + 768차원 임베딩 저장
+- **벡터 검색** `db.index.vector.queryNodes('entity_embedding', k, q)` 정상 동작(top-k+score)
+- 관계 생성 + 이웃 탐색(`홍길동 -WORKS_AT-> 아크메`)
+
+**e2e가 잡은 실버그 2건:**
+| 버그 | 원인 | 처리 |
+|---|---|---|
+| **매니페스트 CrashLoop** | k8s Service 주입 env(`NEO4J_<SVC>_PORT`)를 Neo4j가 config로 오인 → strict validation 크래시 | `enableServiceLinks:false` 추가 (커밋 d242305, 회귀테스트) |
+| PVC Pending | longhorn 기본 SC 바인딩 안 됨 | e2e는 emptyDir로 우회. 실사용 시 스토리지 SC 별도 확인 필요 |
+
+→ **데이터모델·벡터인덱스·프로비저닝 핵심 = 실 Neo4j에서 검증됨.** 테스트 리소스 정리 완료.
+
+## 남은 것 (실사용 전)
+1. **PVC 스토리지** — longhorn 바인딩 이슈 해결 or nfs-client SC 사용(매니페스트 storageClassName 지정)
+2. Neo4j 비번 **Secret**화(현재 매니페스트 평문)
+3. 앱 배포 + in-cluster RBAC(ServiceAccount가 StatefulSet/Service 생성 권한)
+4. 이메일 파서
