@@ -9,13 +9,16 @@ from config import Config
 
 def get_llm(cfg: Config) -> LangchainLLMWrapper:
     # vLLM 은 OpenAI 호환 — api_key 는 임의값. temperature 0 으로 판정 재현성 확보.
+    # enable_thinking=False: qwen3 reasoning 모드를 꺼 <think> 토큰 소모·지연을 없앤다 —
+    # 안 끄면 심판이 매 호출 추론에 토큰을 써 느리고 RAGAS 구조화 파싱이 흔들린다.
     chat = ChatOpenAI(
         model=cfg.llm_model,
         base_url=cfg.vllm_base,
         api_key="EMPTY",
         temperature=0,
-        timeout=120,
+        timeout=180,
         max_retries=1,
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
     return LangchainLLMWrapper(chat)
 
