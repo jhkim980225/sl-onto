@@ -34,7 +34,10 @@ export function neo4jManifest(canvasId: string, opts: Neo4jManifestOptions = {})
   const namespace = opts.namespace ?? DEFAULT_NAMESPACE;
   const memory = opts.memory ?? DEFAULT_MEMORY;
   const storage = opts.storage ?? DEFAULT_STORAGE;
-  const password = opts.password ?? DEFAULT_PASSWORD;
+  // 비번은 driver.ts와 동일 소스여야 pod↔드라이버 auth가 맞는다: opts → env NEO4J_PASSWORD → dev 기본.
+  const password = opts.password ?? process.env.NEO4J_PASSWORD ?? DEFAULT_PASSWORD;
+  // StorageClass: opts → env NEO4J_STORAGE_CLASS → 미지정(클러스터 기본). FEDA는 nfs-client 주입 필요.
+  const storageClass = opts.storageClass ?? process.env.NEO4J_STORAGE_CLASS;
 
   const labels = { app: "neo4j", canvas: name };
 
@@ -85,7 +88,7 @@ export function neo4jManifest(canvasId: string, opts: Neo4jManifestOptions = {})
             accessModes: ["ReadWriteOnce"],
             resources: { requests: { storage } },
             // 지정 시에만 넣는다 — 미지정이면 클러스터 기본 SC.
-            ...(opts.storageClass ? { storageClassName: opts.storageClass } : {}),
+            ...(storageClass ? { storageClassName: storageClass } : {}),
           },
         },
       ],
