@@ -53,3 +53,19 @@ export interface GraphView {
   entities: Entity[];
   relations: Relation[];
 }
+
+/** 캔버스 하나(=Neo4j pod 하나)의 그래프 저장소 계약.
+ * lib/neo4j/repo.ts 가 구현, 인제스천·검색·UI 라우트가 소비한다. */
+export interface GraphRepo {
+  /** 스키마 DDL 적용(멱등). */
+  ensureSchema(): Promise<void>;
+  upsertEntity(e: EntityInput): Promise<void>;
+  upsertRelation(r: RelationInput): Promise<void>;
+  deleteEntity(id: string): Promise<void>;
+  /** 의미 검색 — 질의 임베딩에 가까운 엔티티 top-k. */
+  vectorSearch(embedding: number[], k: number): Promise<EntityHit[]>;
+  /** id 주변 1-hop 이웃 서브그래프. */
+  neighbors(id: string, depth?: number): Promise<GraphView>;
+  /** 캔버스 전체 그래프(UI 렌더용). */
+  fullGraph(): Promise<GraphView>;
+}
