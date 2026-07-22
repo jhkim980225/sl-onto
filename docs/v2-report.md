@@ -58,4 +58,4 @@
 1. ~~PVC 스토리지~~ ✅ storageClass 옵션 추가(nfs-client 지정 가능, 커밋 d469caa)
 2. Neo4j 비번 **Secret**화(현재 매니페스트 평문)
 3. 앱 배포 + in-cluster RBAC(ServiceAccount가 StatefulSet/Service 생성 권한)
-4. 이메일 파서
+4. ~~이메일 파서~~ ✅ .eml 파서 + 파이프라인 배선(커밋 7905be7, 6 tests)
