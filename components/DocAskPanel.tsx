@@ -15,7 +15,9 @@ interface ChunkHit {
 }
 
 interface Props {
-  onOpenDoc: (file: string) => void;
+  /** 원문 열기 — highlight 토큰(질문어)을 함께 넘겨 원문에서 그 부분이 강조되게 한다.
+   * 안 넘기면 Workbench 가 현재 선택 객체로 폴백해 질문과 무관한 행이 강조된다. */
+  onOpenDoc: (file: string, highlight: string[]) => void;
   onClose: () => void;
 }
 
@@ -25,7 +27,11 @@ export default function DocAskPanel({ onOpenDoc, onClose }: Props) {
   const [answer, setAnswer] = useState<string | null>(null);
   const [cited, setCited] = useState<number[]>([]);
   const [chunks, setChunks] = useState<ChunkHit[]>([]);
+  const [asked, setAsked] = useState(""); // 현재 답변을 만든 질문 — 원문 강조 토큰의 근거
   const [err, setErr] = useState<string | null>(null);
+
+  // 질문어(2글자 이상 토큰)로 원문 강조 — "페녹시에탄" 검색 → 원료규격서의 그 행이 강조된다.
+  const highlightTokens = asked.split(/[\s,·?!.()]+/).filter((t) => t.length >= 2);
 
   async function ask() {
     const question = q.trim();
@@ -48,6 +54,7 @@ export default function DocAskPanel({ onOpenDoc, onClose }: Props) {
       setAnswer(d.answer ?? "");
       setCited(d.citedChunks ?? []);
       setChunks(d.chunks ?? []);
+      setAsked(question);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -84,7 +91,7 @@ export default function DocAskPanel({ onOpenDoc, onClose }: Props) {
           <ul className="da-chunks">
             {chunks.map((c) => (
               <li key={c.n} className={"da-chunk" + (cited.includes(c.n) ? " cited" : "")}>
-                <button className="da-src" onClick={() => onOpenDoc(c.file)} title="원문 열기">
+                <button className="da-src" onClick={() => onOpenDoc(c.file, highlightTokens)} title="원문 열기">
                   [C{c.n}] {c.file} · {c.block}
                 </button>
                 <pre className="da-text">{c.text}</pre>

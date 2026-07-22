@@ -1467,7 +1467,7 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
             />
           ) : rightPanelMode === "docask" ? (
             <DocAskPanel
-              onOpenDoc={(f) => handleOpenEvidenceFile(f)}
+              onOpenDoc={(f, hl) => handleOpenEvidenceFile(f, hl)}
               onClose={() => setRightPanelMode("inspector")}
             />
           ) : rightPanelMode === "reason" ? (
