@@ -27,6 +27,7 @@ const KIND_META: Record<QualityIssue["kind"], { icon: string; label: string; col
   "dup-candidate": { icon: "⧉", label: "중복 후보", color: "#8a6d1f" },
   orphan: { icon: "◌", label: "고립 노드", color: "#8a6d1f" },
   "no-evidence": { icon: "⚠", label: "근거 없음", color: "#8a6d1f" },
+  "master-missing": { icon: "⚑", label: "표준 미등록", color: "#8a6d1f" },
   "rel-domain": { icon: "⛓", label: "관계 제약 위반", color: "#b3453c" },
   "bad-subtype": { icon: "🏷", label: "미등록 서브타입", color: "#b3453c" },
   "missing-prop": { icon: "▢", label: "필수 속성 누락", color: "#b3453c" },

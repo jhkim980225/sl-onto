@@ -4,13 +4,16 @@
 // 이 모듈이 하지 않는다 — 기존 POST /api/curate + Workbench 큐레이션 핸들러가 그 몫이다.
 // 골든 룰: 확신도 항상 노출(애매하면 낮게 '검토' 톤) / 근거 우선 / 원본 보존(여기선 "제안"만 함).
 import type { Node } from "./types";
-import { allNodes, outEdges, inEdges, evidenceOf, deg } from "./store";
+import { allNodes, getNode, outEdges, inEdges, evidenceOf, deg } from "./store";
 import { dbEnabled, nearestSameTypePairs } from "./db";
 import { scanSchemaViolations } from "./schema/validate";
+import { severityOf } from "./infer/confidence";
 import { foldKey } from "./fold";
 
+const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
+
 export type QualityKind =
-  | "dup-candidate" | "orphan" | "no-evidence"
+  | "dup-candidate" | "orphan" | "no-evidence" | "master-missing"
   // 스키마 위반(형식 온톨로지 1차, lib/schema/validate.ts)
   | "rel-domain" | "bad-subtype" | "missing-prop" | "bad-datatype";
 
@@ -183,9 +186,59 @@ function scanNoEvidence(): QualityIssue[] {
   return out.slice(0, MAX_PER_RULE);
 }
 
+/* ───────── (e) 재발방지 표준 미등록 — 심각도 높은 fm 이 REF_MASTER 없이 존재 ─────────
+ * 두 사실의 "충돌"(모순)이 아니라 표준 등록이 비어 있는 커버리지 갭이라 여기(품질) 소속이다.
+ * (이전엔 lib/contradictions.ts 에 있었으나 개념상 누락이라 재분류.)
+ * fm 에 심각도 S≥6, REF_MASTER 가 원인 경로 포함해도 없음, 근거·실존 관계가 있을 때만 — 골든 룰 유지. */
+const SEVERITY_THRESHOLD = 6;
+
+function hasMasterRef(fmId: string): boolean {
+  if (outEdges(fmId).some((e) => e.rel === "REF_MASTER")) return true;
+  for (const ce of outEdges(fmId).filter((e) => e.rel === "CAUSED_BY")) {
+    if (outEdges(ce.dst).some((e) => e.rel === "REF_MASTER")) return true;
+  }
+  return false;
+}
+
+function scanMasterGaps(): QualityIssue[] {
+  const out: QualityIssue[] = [];
+  for (const fm of allNodes()) {
+    if (fm.type !== "fm") continue;
+    const severity = severityOf(fm);
+    if (severity < SEVERITY_THRESHOLD) continue;
+    if (hasMasterRef(fm.id)) continue;
+    const docs = evidenceOf(fm.id);
+    if (!docs.length) continue; // 근거 없는 항목은 no-evidence 규칙 몫(골든 룰)
+    // 실존 관계 하나 이상 — 고아 fm 오탐 방지(소속 부품 HAS_FAILURE 또는 원인 CAUSED_BY).
+    const hasRel =
+      inEdges(fm.id).some((e) => e.rel === "HAS_FAILURE") || outEdges(fm.id).some((e) => e.rel === "CAUSED_BY");
+    if (!hasRel) continue;
+
+    const projs = inEdges(fm.id)
+      .filter((e) => e.rel === "OCCURRED_IN")
+      .map((e) => getNode(e.src)?.label)
+      .filter((l): l is string => !!l);
+    const confidence = Math.round(clamp01(0.5 * clamp01(severity / 10) + 0.3 * clamp01(docs.length / 10) + 0.1) * 100);
+    if (confidence < MIN_CONFIDENCE) continue;
+    out.push({
+      kind: "master-missing",
+      title: `${fm.label} — 재발방지 표준 미등록 (심각도 S=${severity})`,
+      detail:
+        `${fm.label}(심각도 S=${severity})은 원인 경로를 포함해도 재발방지 표준(REF_MASTER) 연결이 없습니다` +
+        (projs.length ? ` — 관련 제품: ${projs.join(", ")}.` : ".") +
+        ` 표준 문서(참조원id 컬럼 포함)를 인제스천하면 연결돼 목록에서 빠집니다.`,
+      nodeId: fm.id,
+      evidence: docs.slice(0, 2).map((d) => d.filename),
+      confidence,
+    });
+  }
+  out.sort((a, b) => b.confidence - a.confidence);
+  return out.slice(0, MAX_PER_RULE);
+}
+
 /** 온톨로지 품질 스캔 — 무엇을 정리할지 찾아만 준다(실행은 /api/curate). */
 export function scanQuality(): QualityIssue[] {
-  return [...scanDupCandidates(), ...scanOrphans(), ...scanNoEvidence(), ...scanSchemaViolations()];
+  return [...scanDupCandidates(), ...scanOrphans(), ...scanNoEvidence(), ...scanMasterGaps(), ...scanSchemaViolations()];
 }
 
 /* ───────── (d) 임베딩 유사 중복 — 표기는 달라도 의미가 같은 동의 개체(예: "아우터렌즈" vs "외측 렌즈") ─────────

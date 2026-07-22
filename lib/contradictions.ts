@@ -4,7 +4,6 @@
 // 골든 룰: 근거(evidence)·경로(trace, 실존 엣지만)·확신도(confidence) 없는 항목은 만들지 않는다.
 import type { Contradiction, Node } from "./types";
 import { allNodes, getNode, outEdges, inEdges, evidenceOf } from "./store";
-import { severityOf } from "./infer/confidence";
 
 const arrow = "→";
 const hop = (a: string, rel: string, b: string) => `${a}${arrow}${rel}${arrow}${b}`;
@@ -123,56 +122,10 @@ function scanMarketEnvGaps(): Contradiction[] {
   return out.slice(0, MAX_PER_RULE);
 }
 
-/* ───────── (c) 마스터 미참조: 심각도 높은 fm 이 REF_MASTER 없이 존재(원인 경로 포함해도) ───────── */
-const SEVERITY_THRESHOLD = 6;
+/* 참고: "마스터 미참조"(심각도 높은 fm 이 REF_MASTER 없이 존재)는 두 사실의 충돌이 아니라
+ * 표준 등록이 비어 있는 커버리지 갭이라 모순이 아니다 → lib/quality.ts scanMasterGaps 로 이관. */
 
-function hasMasterRef(fmId: string): boolean {
-  if (outEdges(fmId).some((e) => e.rel === "REF_MASTER")) return true;
-  for (const ce of outEdges(fmId).filter((e) => e.rel === "CAUSED_BY")) {
-    if (outEdges(ce.dst).some((e) => e.rel === "REF_MASTER")) return true;
-  }
-  return false;
-}
-
-function scanMasterGaps(): Contradiction[] {
-  const out: Contradiction[] = [];
-  for (const fm of allNodes()) {
-    if (fm.type !== "fm") continue;
-    const severity = severityOf(fm);
-    if (severity < SEVERITY_THRESHOLD) continue;
-    if (hasMasterRef(fm.id)) continue;
-    const docs = evidenceOf(fm.id);
-    if (!docs.length) continue; // 근거 없는 항목은 만들지 않는다(골든 룰)
-
-    // trace: 실존하는 대표 관계 하나 이상 확보 — 소속 부품(HAS_FAILURE) 또는 원인(CAUSED_BY).
-    const ownerEdge = inEdges(fm.id).find((e) => e.rel === "HAS_FAILURE");
-    const causeEdge = outEdges(fm.id).find((e) => e.rel === "CAUSED_BY");
-    const trace: string[] = [];
-    if (ownerEdge) trace.push(hop(ownerEdge.src, ownerEdge.rel, ownerEdge.dst));
-    if (causeEdge) trace.push(hop(causeEdge.src, causeEdge.rel, causeEdge.dst));
-    if (!trace.length) continue; // 실존 엣지 없으면 스킵(골든 룰)
-
-    const occurredProjs = inEdges(fm.id)
-      .filter((e) => e.rel === "OCCURRED_IN")
-      .map((e) => getNode(e.src))
-      .filter((n): n is Node => !!n);
-    const confidence = Math.round(clamp01(0.5 * clamp01(severity / 10) + 0.3 * clamp01(docs.length / 10) + 0.1) * 100);
-    if (confidence < MIN_CONFIDENCE) continue;
-    out.push({
-      kind: "master-missing",
-      title: `${fm.label} — 표준 마스터 미참조 (심각도 S=${severity})`,
-      detail: `${fm.label}(심각도 S=${severity})은 원인 경로를 포함해도 참조 표준(REF_MASTER)이 없습니다 — 재발방지 마스터 등록 누락 가능성.`,
-      projects: occurredProjs.map((p) => p.label),
-      evidence: [fm.label, ...docs.slice(0, 2).map((d) => d.filename)],
-      trace,
-      confidence,
-    });
-  }
-  out.sort((a, b) => b.confidence - a.confidence);
-  return out.slice(0, MAX_PER_RULE);
-}
-
-/** 전역 모순 스캔 — 전 프로젝트/고장모드 순회, 규칙 3종 결합. */
+/** 전역 모순 스캔 — 서로 충돌하는 두 사실만(기록 괴리·등급환경). 규칙 2종 결합. */
 export function scanContradictions(): Contradiction[] {
-  return [...scanRecordGaps(), ...scanMarketEnvGaps(), ...scanMasterGaps()];
+  return [...scanRecordGaps(), ...scanMarketEnvGaps()];
 }

@@ -95,6 +95,18 @@ test("실 데이터: 도면 프로젝트(PJ 2027-HL22)가 고립 노드(orphan)�
   assert.ok(orphan!.evidence.length > 0, "orphan 항목인데 evidence 가 비어있음(근거 있는 고립만 orphan 이어야 함)");
 });
 
+// 재분류(A): "마스터 미참조"(심각도 높은 fm 이 REF_MASTER 없음)는 모순이 아니라 품질 갭 →
+// contradictions.ts 에서 이관. 품질 스캔에서 나오고 nodeId 는 실존 fm, 근거를 가져야 한다.
+test("재분류: master-missing 이 품질 스캔에서 검출되고 근거 있는 fm 을 가리킨다", () => {
+  const items = scanQuality();
+  const mm = items.filter((it) => it.kind === "master-missing");
+  assert.ok(mm.length > 0, "master-missing 항목이 없음 — 이관이 깨졌거나 시드가 바뀜");
+  for (const it of mm) {
+    assert.ok(/S=\d+/.test(it.title), `심각도 표기 누락: ${it.title}`);
+    assert.ok(it.evidence.length > 0, `근거 없는 master-missing(골든 룰 위반): ${it.title}`);
+  }
+});
+
 test("정식↔정식 fold 일치: 주입한 표기 변형 노드가 degree 높은 쪽으로 병합 제안된다(확신도 88)", () => {
   const items = scanQuality();
   const dup = items.find((it) => it.kind === "dup-candidate" && it.nodeId === "TESTQ_LENS_B");

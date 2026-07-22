@@ -61,3 +61,10 @@ test("규칙당 상한을 지킨다 (건수 폭주 방지)", () => {
     assert.ok(count <= MAX_PER_RULE, `${kind} 규칙이 상한(${MAX_PER_RULE})을 초과: ${count}건`);
   }
 });
+
+// 재분류(A): "마스터 미참조"는 두 사실의 충돌이 아니라 표준 등록 커버리지 갭이라 모순 아님 →
+// lib/quality.ts scanMasterGaps 로 이관. 모순 스캔에 다시 새어들면 실패.
+test("모순 스캔에 master-missing 이 없다 (품질로 재분류됨)", () => {
+  const kinds = new Set(scanContradictions().map((it) => it.kind));
+  assert.ok(!kinds.has("master-missing" as never), `master-missing 이 모순에 남아있음: ${[...kinds].join(",")}`);
+});

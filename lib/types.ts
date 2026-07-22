@@ -86,7 +86,7 @@ export interface NLSearchResponse {
 
 /** 전역 모순 스캔(lib/contradictions.ts) 항목 — 질문 없이도 상시 노출되는 근거 기반 모순. */
 export interface Contradiction {
-  kind: "record-gap" | "market-env" | "master-missing";
+  kind: "record-gap" | "market-env";
   title: string;
   detail: string;
   projects: string[];         // 관련 프로젝트 라벨

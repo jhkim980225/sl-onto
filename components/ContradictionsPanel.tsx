@@ -21,7 +21,6 @@ interface ContradictionsPanelProps {
 const KIND_LABEL: Record<Contradiction["kind"], string> = {
   "record-gap": "기록 괴리",
   "market-env": "등급-환경 모순",
-  "master-missing": "마스터 미참조",
 };
 
 export default function ContradictionsPanel({
