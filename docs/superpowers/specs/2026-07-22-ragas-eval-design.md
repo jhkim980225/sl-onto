@@ -83,7 +83,7 @@ eval/
 ## 6. 인터페이스 (경계)
 
 - **config.py** — 단일 설정 진입점. 전부 env, 기본값은 운영 클러스터 내부 주소.
-  `DOC_ASK_BASE=http://sl-ontoground.sl-ontoground:8000` · `VLLM_BASE=http://vllm-loadbalancer.vllm-cluster.svc.cluster.local/v1`
+  `DOC_ASK_BASE=http://sl-ontoground.sl-ontoground` (Service 포트 80→컨테이너 8000) · `VLLM_BASE=http://vllm-loadbalancer.vllm-cluster.svc.cluster.local/v1`
   · `LLM_MODEL=qwen3-32b-finance` · `EMBED_MODEL=intfloat/multilingual-e5-base` · `CANVAS=화장품`.
 - **llm_embed.py** — `get_llm()`·`get_embeddings()` 반환(RAGAS 용 래퍼). gen/eval 이 공유해 모델 배선 중복 제거.
 - **gen_testset.py / ragas_eval.py** — 각각 독립 실행 스크립트. 서로를 import 하지 않고 `golden_화장품.jsonl`
