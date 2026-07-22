@@ -45,6 +45,9 @@ export function neo4jManifest(canvasId: string, opts: Neo4jManifestOptions = {})
       template: {
         metadata: { labels },
         spec: {
+          // ⚠ 필수: k8s Service 가 주입하는 NEO4J_<SVC>_PORT 같은 env 를 Neo4j 가 config 로
+          // 오인해 strict validation 으로 크래시한다(라이브 e2e 에서 확인). 링크 주입을 끈다.
+          enableServiceLinks: false,
           containers: [
             {
               name: "neo4j",

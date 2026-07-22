@@ -81,3 +81,9 @@ test("deterministic: 같은 입력 → 동일 매니페스트(구조적으로)",
   const b = neo4jManifest("default");
   assert.deepEqual(a, b);
 });
+
+test("statefulSet: enableServiceLinks false (Neo4j 가 k8s Service env 를 config 로 오인·크래시 방지)", () => {
+  const { statefulSet } = neo4jManifest("c1");
+  const spec = (statefulSet as any).spec.template.spec;
+  assert.equal(spec.enableServiceLinks, false);
+});
