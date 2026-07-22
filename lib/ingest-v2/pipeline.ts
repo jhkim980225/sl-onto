@@ -2,6 +2,7 @@
 // 설계: docs/superpowers/specs/2026-07-22-v2-neo4j-foundation-design.md
 // 소스는 씨앗, 그래프가 진실 — provenance 연결 없음(v1과 달리 doc 노드를 만들지 않는다).
 import { extractSourceBlocks } from "../source-text";
+import { parseEml, emailToText } from "./email";
 import { llmExtract } from "../llm";
 import { extractToGraph } from "./extract-to-graph";
 import { embedPassage } from "../embed";
@@ -18,11 +19,10 @@ export interface IngestResult {
 /** 파일 버퍼 → 그래프 적재. 한 파일의 실패는 throw 하지 않고 skipped 로 보고한다. */
 export async function ingestFileToGraph(canvasId: string, fileName: string, buf: Buffer): Promise<IngestResult> {
   try {
-    const { blocks } = extractSourceBlocks(fileName, buf, { cap: false });
-    const text = blocks
-      .flatMap((b) => b.lines)
-      .join("\n")
-      .slice(0, LLM_TEXT_CAP);
+    const rawText = fileName.toLowerCase().endsWith(".eml")
+      ? emailToText(parseEml(buf))
+      : extractSourceBlocks(fileName, buf, { cap: false }).blocks.flatMap((b) => b.lines).join("\n");
+    const text = rawText.slice(0, LLM_TEXT_CAP);
     if (!text.trim()) return { entities: 0, relations: 0, skipped: "추출된 텍스트 없음" };
 
     const extracted = await llmExtract(text, "");
