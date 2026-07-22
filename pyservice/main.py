@@ -414,6 +414,20 @@ def extract_json(text: str) -> dict | None:
     return out if isinstance(out, dict) else None
 
 
+def salvage_answer(content: str) -> str:
+    """docask 전용 구제 — JSON 이 절단/오염돼도 답 텍스트만 살린다(근거 청크는 라우트가 보여줌).
+    qwen3 가 /no_think 에도 흘리는 <think> 나 코드펜스, 잘린 JSON 에서 answer 를 뽑는다."""
+    c = strip_think(content)
+    m = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)"', c)  # 잘린 JSON 이라도 answer 필드가 온전하면
+    if m:
+        try:
+            return json.loads('"' + m.group(1) + '"').strip()
+        except (json.JSONDecodeError, ValueError):
+            return m.group(1).strip()
+    c = re.sub(r"```(?:json)?", "", c).strip()  # 코드펜스 제거
+    return c.strip("{} \n").strip()
+
+
 def _messages(req: LLMRequest) -> list[dict]:
     if req.task == "nlsearch":
         return [
@@ -510,13 +524,25 @@ async def llm(req: LLMRequest) -> dict:
         messages = _messages(req)
     except ValueError as e:
         return {"ok": False, "error": str(e)}
-    # extract 는 개체 목록이 길 수 있어 토큰 상한만 넉넉히(다른 task 는 기존 400 유지).
-    max_tokens = 800 if req.task == "extract" else 400
+    # extract(개체 목록)·docask(한국어 3~6문장 답+citedChunks)는 토큰 여유가 필요하다.
+    # 400 이면 qwen3 가 /no_think 에도 흘리는 <think> 추론이 JSON 을 밀어내 절단 → 파싱 실패.
+    max_tokens = 800 if req.task in ("extract", "docask") else 400
     try:
         content = await asyncio.wait_for(_guarded_chat(messages, max_tokens), timeout=LLM_TOTAL_TIMEOUT_S)
     except Exception as e:  # timeout, connect error, HTTP error — never 500
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     out = extract_json(content)
+    if req.task == "docask":
+        # docask 는 JSON 파싱 실패해도 원문 텍스트를 답으로 살린다 — 근거 청크는 라우트가 이미
+        # 보여주므로 503 보다 낫다. (qwen3 추론 누출·토큰 절단으로 간헐 파싱 실패하던 문제 대응.)
+        if out is not None:
+            answer = str(out.get("answer") or "").strip()
+            cited = _to_int_list(out.get("citedChunks"))
+        else:
+            answer, cited = salvage_answer(content), []
+        if not answer:
+            return {"ok": False, "error": "empty answer"}
+        return {"ok": True, "result": {"answer": answer, "citedChunks": cited}}
     if out is None:
         return {"ok": False, "error": "LLM output is not JSON"}
     if req.task == "extract":
@@ -532,11 +558,6 @@ async def llm(req: LLMRequest) -> dict:
         if not answer:
             return {"ok": False, "error": "empty answer"}
         return {"ok": True, "result": {"answer": answer, "citedRels": _to_int_list(out.get("citedRels"))}}
-    if req.task == "docask":
-        answer = str(out.get("answer") or "").strip()
-        if not answer:
-            return {"ok": False, "error": "empty answer"}
-        return {"ok": True, "result": {"answer": answer, "citedChunks": _to_int_list(out.get("citedChunks"))}}
     opinion = str(out.get("opinion") or "").strip()
     if not opinion:
         return {"ok": False, "error": "empty opinion"}
