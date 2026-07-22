@@ -9,7 +9,7 @@ import { repoFor } from "@/lib/neo4j/canvas-repo";
 import { parseJsonBody } from "@/lib/schemas";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const IdSchema = z.object({ id: z.string().trim().min(1).max(64) });
 

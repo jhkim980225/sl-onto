@@ -10,7 +10,7 @@ import { neo4jManifest, type Neo4jManifestOptions } from "./neo4j-manifest.ts";
 import { resourceName, boltUri, DEFAULT_NAMESPACE } from "./naming.ts";
 
 const POLL_INTERVAL_MS = 2000;
-const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_TIMEOUT_MS = 280_000;
 
 /** StatefulSet 의 volumeClaimTemplate("data")이 단일 replica(ordinal 0)로 실제 만드는 PVC 이름. */
 function pvcName(statefulSetName: string): string {

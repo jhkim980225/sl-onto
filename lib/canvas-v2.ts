@@ -6,7 +6,7 @@
 
 import { provisionNeo4j, teardownNeo4j, waitForNeo4j } from "./provision/apply.ts";
 
-const READY_TIMEOUT_MS = 120_000;
+const READY_TIMEOUT_MS = 280_000; // 최초 neo4j 이미지 풀(~75s)+부팅 여유. 이미지 캐시된 노드는 빠름
 
 /** 캔버스용 Neo4j pod 를 프로비저닝하고 준비될 때까지 대기한다. */
 export async function createCanvas(canvasId: string): Promise<{ boltUri: string }> {
