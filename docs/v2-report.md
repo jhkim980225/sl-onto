@@ -78,3 +78,31 @@
   - 필요: `sl-ontoground-v2` ns(생성됨) · RBAC Role/RoleBinding · PVC용 동작 StorageClass(nfs-client) · Docker 이미지 빌드·배포.
 
 즉 **코드·데이터모델·프로비저닝 로직은 실검증까지 끝**. 실서비스로 띄우는 것만 남았고 그건 배포 결정 대기.
+
+---
+
+## 🚀 프로덕션 배포 완료 (2026-07-23)
+**v2 앱 배포 + 엔드투엔드 실동작 검증 성공.**
+
+접속: **`http://192.168.0.100:30495/v2`** (NodePort 30495, ns `sl-ontoground-v2`)
+
+배포 구성:
+- 앱 이미지 `sl-ontoground-v2:v2` (Deployment, SA=`v2-provisioner`)
+- **RBAC** — `v2-provisioner` SA + Role(StatefulSet/Service/Secret/PVC/Pod CRUD)
+- pyservice **v10** — 범용 추출 `task=graphextract` 추가(v1과 공유, 하위호환)
+- StorageClass **cephfs-sc** (longhorn·nfs-client는 이 클러스터서 미바인딩 → env `NEO4J_STORAGE_CLASS`)
+
+**e2e 실검증 (라이브):**
+1. ✅ 캔버스 생성 → 실 Neo4j Community pod 프로비저닝(Secret+cephfs PVC Bound+스키마), 33s 준비
+2. ✅ 이메일(.eml) 인제스천 → **범용 엔티티 추출**(person 김철수·박영희, org 아크메 / 관계 소속·발신)
+3. ✅ 그래프 조회 — 엔티티·관계 반환
+4. ✅ GraphRAG 질문 "아크메 관련 사람?" → "김철수와 박영희" + 근거 엔티티
+
+**배포 중 발견·수정한 실버그:**
+| 버그 | 처리 |
+|---|---|
+| PVC 미바인딩(longhorn·nfs-client) | cephfs-sc로 전환(env) |
+| 파이프라인이 FMEA 전용 추출 재사용 → 0 엔티티 | 범용 `graphextract` 추가(pyservice v10) |
+| graphextract 최초 콜드 ReadTimeout | 재시도 정상(일시적) |
+
+**남은 것:** stale PVC(동명 재생성) 자동정리 · graphextract max_tokens 800 상향(현 400, 큰 문서서 절단 가능) · cephfs-sc를 매니페스트 기본에 반영.
