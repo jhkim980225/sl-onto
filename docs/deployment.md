@@ -23,7 +23,7 @@ docker run -p 8000:8000 sl-ontoground
 - **Cloud Run / ACA / App Service**: 이미지 지정, 포트=컨테이너 `$PORT`.
 - **ECS / K8s**: Deployment + Service, `containerPort` 매핑, 필요 시 HPA.
 
-## FEDA 클러스터 실제 배포 기록 (배포 완료 · 현재 v83 · pyservice v9)
+## FEDA 클러스터 실제 배포 기록 (배포 완료 · 현재 v84 · pyservice v9)
 - v25: 샘플 인제스천 개편 — 매 클릭 새 현장보고(차수 증가)로 결로·습기(FMFOG)에 정확히 3개 노드
   (부품·원인·조치) 부착, "이미 반영됨" 케이스 제거, 완료 시 결로·습기 자동 포커스.
 - v26: 노드 삭제 후 직전 탐색 항목 자동 복귀(포커스·인스펙터 유지).
@@ -38,12 +38,15 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v83 (앱) · pyservice v9.** 아래는 버전별 이력이다.
+- **현재 배포 = v84 (앱) · pyservice v9.** 아래는 버전별 이력이다.
   다음 v번호는 마스터의 `docker images` + `kubectl get rs` 로 확인(로컬 스크립트 파일명 믿지 말 것).
 - **pyservice v9** (2026-07-22, 앱 v83 유지) — **docask LLM 응답 실패 수정**: qwen3 가 /no_think 에도
   간헐 <think> 추론을 흘려 max_tokens=400 안에서 JSON 절단 → "LLM output is not JSON" 503 반복.
   docask max_tokens 400→800 + JSON 파싱 실패 시 `salvage_answer()` 로 원문 텍스트를 답으로 살림
   (근거 청크는 라우트가 표시). 운영 검증: 재현 실패 4건 → 4/4 성공. ReadTimeout(무거운 집계)도 완화.
+- v84 (2026-07-22, 앱-온리) — **doc-ask 원문 강조 버그 수정**: 원문 열 때 highlight 토큰을 안 넘겨
+  현재 선택 인스펙터 객체(예: CP-306)로 폴백 강조 → 질문과 무관한 행 강조. 질문어(2글자+ 토큰)를
+  강조 토큰으로 전달 → "페녹시에탄" 질문 시 그 원료 행이 강조된다.
 - v83 (2026-07-22) — **'마스터 미참조' 모순→품질 재분류(앱-온리)**: '심각도 높은데 REF_MASTER 없음'은
   두 사실의 충돌이 아니라 표준 등록 커버리지 갭이라 모순 아님 → `lib/quality.ts`(⚑ 표준 미등록)로 이관.
   모순 스캔은 진짜 충돌 2종만(기록괴리·등급환경). 운영 검증: 화장품 캔버스 모순 5→0, 품질 미비 8. 롤백=이미지만.
