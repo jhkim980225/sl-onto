@@ -539,9 +539,11 @@ async def llm(req: LLMRequest) -> dict:
         messages = _messages(req)
     except ValueError as e:
         return {"ok": False, "error": str(e)}
-    # extract(개체 목록)·docask(한국어 3~6문장 답+citedChunks)는 토큰 여유가 필요하다.
+    # extract·graphextract(개체·관계 JSON)·docask(한국어 3~6문장 답+citedChunks)는 토큰 여유가 필요하다.
     # 400 이면 qwen3 가 /no_think 에도 흘리는 <think> 추론이 JSON 을 밀어내 절단 → 파싱 실패.
-    max_tokens = 800 if req.task in ("extract", "docask") else 400
+    # graphextract 는 extract 와 동일 JSON shape 인데 더 큰 입력(최대 12000자)이라 400 이면 빈 그래프가 됐다.
+    # ponytail: extract 와 동급 800. 초대형 문서에서 또 절단되면 graphextract 만 1200 로.
+    max_tokens = 800 if req.task in ("extract", "graphextract", "docask") else 400
     try:
         content = await asyncio.wait_for(_guarded_chat(messages, max_tokens), timeout=LLM_TOTAL_TIMEOUT_S)
     except Exception as e:  # timeout, connect error, HTTP error — never 500

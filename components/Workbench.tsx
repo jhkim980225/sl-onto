@@ -11,6 +11,7 @@ import DesignConditionForm from "./DesignConditionForm";
 import SourcePanel from "./SourcePanel";
 import LeftRail from "./LeftRail";
 import CanvasPanel from "./CanvasPanel";
+import CanvasSwitcher from "./CanvasSwitcher";
 import SchemaPanel from "./SchemaPanel";
 import { reasonOf } from "./apiError";
 import DocumentPanel from "./DocumentPanel";
@@ -1043,6 +1044,7 @@ export default function Workbench({ canvas, onSwitchCanvas, onReset }: Workbench
           </span>
           <span className="sub">FMEA 지식 온톨로지 워크벤치 · for SL Corporation</span>
         </div>
+        <CanvasSwitcher current={canvas} onSwitch={onSwitchCanvas} />
         <div className="grow" />
         <div className={"search" + (nlLoading ? " search-busy" : "")}>
           {nlLoading ? (

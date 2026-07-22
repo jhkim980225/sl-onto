@@ -105,6 +105,17 @@ export async function teardownNeo4j(canvasId: string, namespace: string = DEFAUL
   );
 }
 
+/** 네임스페이스의 캔버스(Neo4j StatefulSet) 목록. 원본 canvasId 는 어노테이션에서 복원하고,
+ *  (구버전 리소스 등) 어노테이션이 없으면 이름의 `neo4j-` 접두어를 떼어 폴백한다. */
+export async function listCanvases(namespace: string = DEFAULT_NAMESPACE): Promise<string[]> {
+  const { apps } = getClients();
+  const res = await apps.listNamespacedStatefulSet({ namespace, labelSelector: "app=neo4j" });
+  return (res.items ?? [])
+    .map((sts) => sts.metadata?.annotations?.["sl-onto/canvas-id"] ?? sts.metadata?.name?.replace(/^neo4j-/, "") ?? null)
+    .filter((id): id is string => !!id)
+    .sort((a, b) => a.localeCompare(b));
+}
+
 /** StatefulSet 의 readyReplicas>=1 이 될 때까지 폴링한다. timeoutMs 내 준비 안 되면 false. */
 export async function waitForNeo4j(
   canvasId: string,

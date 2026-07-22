@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import type { GraphView } from "@/lib/neo4j/types";
+import CanvasSwitcherV2 from "@/components/CanvasSwitcherV2";
 
 const OntologyGraph = dynamic(() => import("@/components/OntologyGraph"), { ssr: false });
 
@@ -24,7 +25,6 @@ async function parseJson(res: Response): Promise<any> {
 
 export default function V2Page() {
   const [canvasId, setCanvasId] = useState("");
-  const [canvasInput, setCanvasInput] = useState("");
   const [graph, setGraph] = useState<GraphView>(EMPTY_GRAPH);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,10 +39,7 @@ export default function V2Page() {
 
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-    if (saved) {
-      setCanvasId(saved);
-      setCanvasInput(saved);
-    }
+    if (saved) setCanvasId(saved);
   }, []);
 
   useEffect(() => {
@@ -64,8 +61,8 @@ export default function V2Page() {
     }
   }
 
-  async function createCanvas() {
-    const id = canvasInput.trim();
+  async function createCanvas(rawId: string) {
+    const id = rawId.trim();
     if (!id) return;
     setLoading(true);
     setError(null);
@@ -88,8 +85,7 @@ export default function V2Page() {
     }
   }
 
-  function selectExisting() {
-    const id = canvasInput.trim();
+  function switchCanvas(id: string) {
     if (!id) return;
     localStorage.setItem(STORAGE_KEY, id);
     setError(null);
@@ -193,19 +189,7 @@ export default function V2Page() {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#fff", color: NAVY, fontFamily: "sans-serif" }}>
       <header style={{ padding: "10px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <strong style={{ color: NAVY }}>SL OntoGround v2</strong>
-        <input
-          value={canvasInput}
-          onChange={(e) => setCanvasInput(e.target.value)}
-          placeholder="캔버스 id"
-          style={{ padding: "6px 8px", border: "1px solid #a0acc0", borderRadius: 4 }}
-        />
-        <button onClick={createCanvas} disabled={loading || !canvasInput.trim()} style={btnStyle(CYAN)}>
-          캔버스 생성
-        </button>
-        <button onClick={selectExisting} disabled={loading || !canvasInput.trim()} style={btnStyle(NAVY)}>
-          기존 캔버스 선택
-        </button>
-        {canvasId && <span style={{ color: "#8291a8", fontSize: 13 }}>현재 캔버스: {canvasId}</span>}
+        <CanvasSwitcherV2 current={canvasId} busy={loading} onSwitch={switchCanvas} onCreate={createCanvas} />
         {loading && <span style={{ color: CYAN, fontSize: 13 }}>처리 중…</span>}
       </header>
 

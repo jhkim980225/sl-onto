@@ -40,11 +40,14 @@ export function neo4jManifest(canvasId: string, opts: Neo4jManifestOptions = {})
   const storageClass = opts.storageClass ?? process.env.NEO4J_STORAGE_CLASS;
 
   const labels = { app: "neo4j", canvas: name };
+  // 원본 canvasId 는 슬러그화(+해시)로 이름에서 복원 불가하므로 어노테이션에 보존한다 — 목록 조회 역매핑용.
+  // 라벨은 charset·63자 제약이 있어 한글 id 를 못 담는다. 어노테이션은 임의 문자열 허용.
+  const annotations = { "sl-onto/canvas-id": canvasId };
 
   const statefulSet = {
     apiVersion: "apps/v1",
     kind: "StatefulSet",
-    metadata: { name, namespace, labels },
+    metadata: { name, namespace, labels, annotations },
     spec: {
       serviceName: name,
       replicas: 1,
