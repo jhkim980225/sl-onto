@@ -1,6 +1,6 @@
 // lib/neo4j/repo.ts — GraphRepo 라이브 구현. 캔버스(pod) 하나 = Neo4jGraphRepo 인스턴스 하나.
 // 설계: docs/superpowers/specs/2026-07-22-v2-neo4j-foundation-design.md
-import { isNode, isRelationship, type Driver, type Node, type Relationship } from "neo4j-driver";
+import neo4j, { isNode, isRelationship, type Driver, type Node, type Relationship } from "neo4j-driver";
 import { getDriver, runQuery } from "./driver";
 import {
   buildCreateEntity,
@@ -10,14 +10,15 @@ import {
   buildVectorSearch,
 } from "./cypher";
 import { SCHEMA_STATEMENTS } from "./schema";
-import type {
-  Entity,
-  EntityHit,
-  EntityInput,
-  GraphRepo,
-  GraphView,
-  Relation,
-  RelationInput,
+import {
+  EMBEDDING_DIM,
+  type Entity,
+  type EntityHit,
+  type EntityInput,
+  type GraphRepo,
+  type GraphView,
+  type Relation,
+  type RelationInput,
 } from "./types";
 
 const KNOWN_ENTITY_KEYS = new Set(["id", "name", "type", "embedding"]);
@@ -80,6 +81,12 @@ export class Neo4jGraphRepo implements GraphRepo {
   }
 
   async upsertEntity(e: EntityInput): Promise<void> {
+    if (e.embedding && e.embedding.length !== EMBEDDING_DIM) {
+      console.warn(
+        `upsertEntity(${e.id}): embedding dim ${e.embedding.length} !== ${EMBEDDING_DIM}, dropping embedding`
+      );
+      e = { ...e, embedding: undefined };
+    }
     await runQuery(this.driver, buildCreateEntity(e));
   }
 
@@ -92,7 +99,9 @@ export class Neo4jGraphRepo implements GraphRepo {
   }
 
   async vectorSearch(embedding: number[], k: number): Promise<EntityHit[]> {
-    const rows = await runQuery(this.driver, buildVectorSearch(embedding, k));
+    const query = buildVectorSearch(embedding, k);
+    query.params.k = neo4j.int(k);
+    const rows = await runQuery(this.driver, query);
     return rows
       .filter((row) => isNode(row.node))
       .map((row) => ({

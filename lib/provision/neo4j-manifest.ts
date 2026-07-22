@@ -4,11 +4,12 @@
 // 매니페스트를 클러스터에 적용하는 것은 이 모듈의 책임이 아니다(라이브 배선은 후속 서브프로젝트).
 
 import { resourceName, DEFAULT_NAMESPACE } from "./naming.ts";
+import { DEV_NEO4J_PASSWORD } from "../neo4j/auth.ts";
 
 const DEFAULT_MEMORY = "2Gi";
 const DEFAULT_STORAGE = "5Gi";
-/** ponytail: 개발 기본 비밀번호 — 라이브 배선 시 Secret으로 교체. */
-const DEFAULT_PASSWORD = "sl-dev-neo4j";
+/** ponytail: 개발 기본 비밀번호(driver.ts와 동일 소스) — 라이브 배선 시 Secret으로 교체. */
+const DEFAULT_PASSWORD = DEV_NEO4J_PASSWORD;
 
 export interface Neo4jManifestOptions {
   namespace?: string;
@@ -55,6 +56,12 @@ export function neo4jManifest(canvasId: string, opts: Neo4jManifestOptions = {})
               env: [{ name: "NEO4J_AUTH", value: `neo4j/${password}` }],
               resources: { limits: { memory } },
               volumeMounts: [{ name: "data", mountPath: "/data" }],
+              readinessProbe: {
+                tcpSocket: { port: 7687 },
+                initialDelaySeconds: 10,
+                periodSeconds: 5,
+                failureThreshold: 30,
+              },
             },
           ],
         },

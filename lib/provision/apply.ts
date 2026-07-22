@@ -51,8 +51,10 @@ async function deleteIgnoringNotFound(fn: () => Promise<unknown>, label: string)
 
 /**
  * 캔버스의 Neo4j StatefulSet+Service 를 클러스터에 적용한다.
- * 이미 존재하면(409) replace 로 갱신한다(create-or-replace). PVC 는 StatefulSet 의
- * volumeClaimTemplate 이 자동 생성하므로 별도 적용 대상이 아니다.
+ * 이미 존재하면(409) 멱등 성공으로 취급한다(create-or-noop) — StatefulSet/Service 의
+ * 불변 필드·resourceVersion 요구 때문에 replace 는 별도 조회 없이는 안전하지 않다.
+ * 재프로비저닝은 no-op 이어야 하며 기존 리소스를 덮어쓰지 않는다.
+ * PVC 는 StatefulSet 의 volumeClaimTemplate 이 자동 생성하므로 별도 적용 대상이 아니다.
  */
 export async function provisionNeo4j(
   canvasId: string,
@@ -60,21 +62,20 @@ export async function provisionNeo4j(
 ): Promise<{ boltUri: string }> {
   const { statefulSet, service } = neo4jManifest(canvasId, opts);
   const namespace = opts.namespace ?? DEFAULT_NAMESPACE;
-  const name = resourceName(canvasId);
   const { apps, core } = getClients();
 
   try {
     await apps.createNamespacedStatefulSet({ namespace, body: statefulSet as unknown as V1StatefulSet });
   } catch (err) {
     if (!isConflict(err)) throw wrapError("Neo4j StatefulSet 적용 실패", err);
-    await apps.replaceNamespacedStatefulSet({ name, namespace, body: statefulSet as unknown as V1StatefulSet });
+    console.log(`Neo4j StatefulSet 이미 존재(캔버스=${canvasId}) — 멱등 통과`);
   }
 
   try {
     await core.createNamespacedService({ namespace, body: service as unknown as V1Service });
   } catch (err) {
     if (!isConflict(err)) throw wrapError("Neo4j Service 적용 실패", err);
-    await core.replaceNamespacedService({ name, namespace, body: service as unknown as V1Service });
+    console.log(`Neo4j Service 이미 존재(캔버스=${canvasId}) — 멱등 통과`);
   }
 
   return { boltUri: boltUri(canvasId, namespace) };

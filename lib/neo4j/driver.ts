@@ -2,9 +2,7 @@
 // 설계: docs/superpowers/specs/2026-07-22-v2-neo4j-foundation-design.md
 import neo4j, { type Driver } from "neo4j-driver";
 import type { CypherQuery } from "./types";
-
-// ponytail: dev-only fallback password, real deploys must set NEO4J_PASSWORD.
-const DEV_PASSWORD = "sl-onto-dev";
+import { DEV_NEO4J_PASSWORD } from "./auth";
 
 const drivers = new Map<string, Driver>();
 
@@ -13,7 +11,7 @@ export function getDriver(boltUri: string, password?: string): Driver {
   const cached = drivers.get(boltUri);
   if (cached) return cached;
 
-  const pw = password ?? process.env.NEO4J_PASSWORD ?? DEV_PASSWORD;
+  const pw = password ?? process.env.NEO4J_PASSWORD ?? DEV_NEO4J_PASSWORD;
   const driver = neo4j.driver(boltUri, neo4j.auth.basic("neo4j", pw), {
     disableLosslessIntegers: true,
   });
