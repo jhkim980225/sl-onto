@@ -374,6 +374,11 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
     let alpha = 0;
     let running = false;
     let raf = 0;
+    // 정착(rest) 임계 — alpha 가 이 밑이면 tick/render 를 건너뛴다(비용 0). 값은 옛 alpha 바닥과
+    // 같아, 정착 시점·모션은 그대로 두고 "정착 후 영구 60fps burn" 꼬리만 제거한다.
+    // 인터랙션 핸들러들이 alpha 를 재가열(Math.max(alpha, …))하면 다음 프레임 자동 재개 —
+    // rAF 루프 자체는 계속 살아 있어 wake 배선이 따로 필요 없다.
+    const REST = 0.12;
 
     function tick() {
       const act = nodes.filter((n) => n.added && !n.hiddenNow);
@@ -463,7 +468,7 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
         n.x = Math.max(30, Math.min(W - 30, n.x));
         n.y = Math.max(30, Math.min(H - 30, n.y));
       }
-      alpha = Math.max(alpha * 0.995, 0.12);
+      alpha = Math.max(alpha * 0.995, 0); // 옛값 0.12 → 0: 실제로 냉각돼 REST 밑으로 정착
     }
 
     function render() {
@@ -496,8 +501,12 @@ const Graph = forwardRef<GraphHandle, GraphProps>(function Graph(
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     function loop() {
       if (!running) return;
-      tick();
-      render();
+      // 정착 후엔 O(n²) tick + O(e) DOM render 를 건너뛴다 — rAF 는 계속 돌지만(빈 콜백 ~0 비용)
+      // 재가열되면 즉시 재개. 이게 "노드 많을 때 영구 렉"의 근본 해소.
+      if (alpha > REST) {
+        tick();
+        render();
+      }
       raf = requestAnimationFrame(loop);
     }
     function start() {
