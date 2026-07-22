@@ -81,6 +81,11 @@ export async function llmExtract(text: string, vocab: string): Promise<LlmExtrac
   return callLlm<LlmExtractResult>({ task: "extract", text, vocab }, REVIEW_TIMEOUT_MS);
 }
 
+/** v2 범용 지식그래프 추출 — 도메인 무관 개체·관계. 결과 형태는 llmExtract 와 동일. */
+export async function llmGraphExtract(text: string): Promise<LlmExtractResult | null> {
+  return callLlm<LlmExtractResult>({ task: "graphextract", text }, REVIEW_TIMEOUT_MS);
+}
+
 export interface LlmAskResult {
   answer: string;
   citedRels: number[];

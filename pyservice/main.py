@@ -369,6 +369,16 @@ EXTRACT_SYSTEM = (
     '"relations":[{"srcLabel":"...","rel":"HAS_FAILURE","dstLabel":"..."}]} /no_think'
 )
 
+# v2 범용 지식그래프 추출 — FMEA 도메인에 얽매이지 않고 임의 개체·관계를 뽑는다.
+GRAPHEXTRACT_SYSTEM = (
+    '너는 지식그래프 추출기다. 문서(이메일·메모 등)에 등장하는 개체와 개체 사이 관계를 추출하라. '
+    '개체 type 은 짧은 영문 소문자 종류(person·org·product·place·concept·event·project 등 자유). '
+    'label 은 원문 표기 그대로. 관계는 srcLabel(출발 개체 label)·rel(관계명, 짧은 동사구)·dstLabel(도착 개체 label). '
+    '문서에 실제로 등장하는 것만, 창작 금지. 대명사·일반명사(그것·회사 등)는 개체로 만들지 마라. '
+    'JSON만 출력: {"entities":[{"type":"person","label":"김철수"},{"type":"org","label":"아크메"}],'
+    '"relations":[{"srcLabel":"김철수","rel":"소속","dstLabel":"아크메"}]} /no_think'
+)
+
 EXTRACT_TEXT_MAX = 4000  # 문서 텍스트 절단 — 프롬프트 폭주 방지
 
 
@@ -463,6 +473,11 @@ def _messages(req: LLMRequest) -> list[dict]:
             {"role": "system", "content": EXTRACT_SYSTEM},
             {"role": "user", "content": f"/no_think 통제 어휘:\n{req.vocab}\n\n문서:\n{req.text[:EXTRACT_TEXT_MAX]}"},
         ]
+    if req.task == "graphextract":
+        return [
+            {"role": "system", "content": GRAPHEXTRACT_SYSTEM},
+            {"role": "user", "content": f"/no_think 문서:\n{req.text[:EXTRACT_TEXT_MAX]}"},
+        ]
     raise ValueError(f"unknown task: {req.task}")
 
 
@@ -545,7 +560,7 @@ async def llm(req: LLMRequest) -> dict:
         return {"ok": True, "result": {"answer": answer, "citedChunks": cited}}
     if out is None:
         return {"ok": False, "error": "LLM output is not JSON"}
-    if req.task == "extract":
+    if req.task in ("extract", "graphextract"):
         return {"ok": True, "result": _norm_extract(out)}
     if req.task == "nlsearch":
         return {"ok": True, "result": {

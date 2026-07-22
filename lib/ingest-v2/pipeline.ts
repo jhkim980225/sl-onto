@@ -3,7 +3,7 @@
 // 소스는 씨앗, 그래프가 진실 — provenance 연결 없음(v1과 달리 doc 노드를 만들지 않는다).
 import { extractSourceBlocks } from "../source-text";
 import { parseEml, emailToText } from "./email";
-import { llmExtract } from "../llm";
+import { llmGraphExtract } from "../llm";
 import { extractToGraph } from "./extract-to-graph";
 import { embedPassage } from "../embed";
 import { repoFor } from "../neo4j/canvas-repo";
@@ -25,7 +25,7 @@ export async function ingestFileToGraph(canvasId: string, fileName: string, buf:
     const text = rawText.slice(0, LLM_TEXT_CAP);
     if (!text.trim()) return { entities: 0, relations: 0, skipped: "추출된 텍스트 없음" };
 
-    const extracted = await llmExtract(text, "");
+    const extracted = await llmGraphExtract(text); // v2 범용 추출(FMEA 아님)
     if (!extracted) return { entities: 0, relations: 0, skipped: "LLM 추출 실패" };
 
     const { entities, relations } = extractToGraph(extracted);
