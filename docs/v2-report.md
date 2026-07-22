@@ -56,6 +56,25 @@
 
 ## 남은 것 (실사용 전)
 1. ~~PVC 스토리지~~ ✅ storageClass 옵션 추가(nfs-client 지정 가능, 커밋 d469caa)
-2. Neo4j 비번 **Secret**화(현재 매니페스트 평문)
+2. ~~Neo4j 비번 Secret화~~ ✅ secretKeyRef + apply Secret 생성·삭제(커밋 03d4715)
 3. 앱 배포 + in-cluster RBAC(ServiceAccount가 StatefulSet/Service 생성 권한)
 4. ~~이메일 파서~~ ✅ .eml 파서 + 파이프라인 배선(커밋 7905be7, 6 tests)
+
+---
+
+## 자율 루프 최종 (2026-07-22)
+**v2 첫 파스 + 하드닝 전부 완료 — 48 tests · tsc 0 · build ✓ · 58 커밋.**
+
+완료 항목:
+- ✅ 토대 5모듈 + 배선 5모듈 + `/v2` 페이지 (병렬 10 에이전트)
+- ✅ 코드리뷰 교차버그 5건 수정
+- ✅ 라이브 e2e — 실 Neo4j 5에서 데이터모델·768벡터인덱스·벡터검색·관계탐색 검증
+- ✅ 인프라 버그 2건(enableServiceLinks·PVC storageClass)
+- ✅ 이메일(.eml) 인제스천
+- ✅ Neo4j 비번 Secret화
+
+**남은 단 하나 = 판단지점(자동 안 함):**
+- **v2 앱 프로덕션 배포** — 새 Next 앱을 FEDA 클러스터에 배포 + in-cluster RBAC(ServiceAccount가 StatefulSet/Service/Secret/PVC 생성 권한) 설정. 프로덕션 아웃워드 액션이라 사용자 승인 필요.
+  - 필요: `sl-ontoground-v2` ns(생성됨) · RBAC Role/RoleBinding · PVC용 동작 StorageClass(nfs-client) · Docker 이미지 빌드·배포.
+
+즉 **코드·데이터모델·프로비저닝 로직은 실검증까지 끝**. 실서비스로 띄우는 것만 남았고 그건 배포 결정 대기.
