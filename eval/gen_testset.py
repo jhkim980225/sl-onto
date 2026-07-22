@@ -17,8 +17,8 @@ GOLDEN_PATH = "golden_화장품.jsonl"
 def fetch_documents(cfg: config.Config) -> list[Document]:
     """캔버스 문서 목록(/api/sources) → 각 문서 원문(/api/source-text) → langchain Document."""
     cv = urllib.parse.quote(cfg.canvas)
-    srcs = requests.get(f"{cfg.doc_ask_base}/api/sources?canvas={cv}", timeout=30).json()
-    files = [s["file"] for s in srcs]
+    resp = requests.get(f"{cfg.doc_ask_base}/api/sources?canvas={cv}", timeout=30).json()
+    files = [s["file"] for s in resp.get("sources", [])]  # /api/sources → {sources:[{file,...}]}
     docs: list[Document] = []
     for f in files:
         fq = urllib.parse.quote(f)
