@@ -1,0 +1,25 @@
+# 테스트셋 생성 Job — sleep 무한 파드로 띄우고 kubectl cp 후 exec 로 실행(README 절차).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ragas-gen
+  namespace: sl-ontoground
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: gen
+          image: python:3.11-slim
+          workingDir: /eval
+          command: ["bash", "-lc", "sleep 36000"]  # cp 대기용 — README 절차로 pip+실행
+          env:
+            - { name: DOC_ASK_BASE, value: "http://sl-ontoground.sl-ontoground" }
+            - { name: VLLM_BASE, value: "http://vllm-loadbalancer.vllm-cluster.svc.cluster.local/v1" }
+            - { name: LLM_MODEL, value: "qwen3-32b-finance" }
+            - { name: EMBED_MODEL, value: "intfloat/multilingual-e5-base" }
+            - { name: CANVAS, value: "화장품" }
+            - { name: TESTSET_SIZE, value: "15" }
+          resources:
+            limits: { memory: "4Gi", cpu: "2" }

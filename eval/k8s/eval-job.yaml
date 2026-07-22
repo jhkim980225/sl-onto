@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ragas-eval
+  namespace: sl-ontoground
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: eval
+          image: python:3.11-slim
+          workingDir: /eval
+          command: ["bash", "-lc", "sleep 36000"]
+          env:
+            - { name: DOC_ASK_BASE, value: "http://sl-ontoground.sl-ontoground" }
+            - { name: VLLM_BASE, value: "http://vllm-loadbalancer.vllm-cluster.svc.cluster.local/v1" }
+            - { name: LLM_MODEL, value: "qwen3-32b-finance" }
+            - { name: EMBED_MODEL, value: "intfloat/multilingual-e5-base" }
+            - { name: CANVAS, value: "화장품" }
+            - { name: GOLDEN_PATH, value: "golden_화장품.jsonl" }
+            - { name: REPORT_DATE, value: "20260722" }
+          resources:
+            limits: { memory: "4Gi", cpu: "2" }
