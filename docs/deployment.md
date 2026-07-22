@@ -23,7 +23,7 @@ docker run -p 8000:8000 sl-ontoground
 - **Cloud Run / ACA / App Service**: 이미지 지정, 포트=컨테이너 `$PORT`.
 - **ECS / K8s**: Deployment + Service, `containerPort` 매핑, 필요 시 HPA.
 
-## FEDA 클러스터 실제 배포 기록 (배포 완료 · 현재 v82 · pyservice v8)
+## FEDA 클러스터 실제 배포 기록 (배포 완료 · 현재 v83 · pyservice v8)
 - v25: 샘플 인제스천 개편 — 매 클릭 새 현장보고(차수 증가)로 결로·습기(FMFOG)에 정확히 3개 노드
   (부품·원인·조치) 부착, "이미 반영됨" 케이스 제거, 완료 시 결로·습기 자동 포커스.
 - v26: 노드 삭제 후 직전 탐색 항목 자동 복귀(포커스·인스펙터 유지).
@@ -38,8 +38,11 @@ docker run -p 8000:8000 sl-ontoground
   `:5001`은 일부 워커(03/04)만 신뢰 → 다른 워커에 스케줄되면 `ImagePullBackOff`(HTTP→HTTPS 오류). 따라서 **`:5000` 고정**.
 - 리소스: ns `sl-ontoground`, Deployment 2 replica(무상태), Service NodePort **30494** → 8000.
 - **접속: `http://192.168.0.100:30494/`** (사내망).
-- **현재 배포 = v82 (앱) · pyservice v8.** 아래는 버전별 이력이다.
+- **현재 배포 = v83 (앱) · pyservice v8.** 아래는 버전별 이력이다.
   다음 v번호는 마스터의 `docker images` + `kubectl get rs` 로 확인(로컬 스크립트 파일명 믿지 말 것).
+- v83 (2026-07-22) — **'마스터 미참조' 모순→품질 재분류(앱-온리)**: '심각도 높은데 REF_MASTER 없음'은
+  두 사실의 충돌이 아니라 표준 등록 커버리지 갭이라 모순 아님 → `lib/quality.ts`(⚑ 표준 미등록)로 이관.
+  모순 스캔은 진짜 충돌 2종만(기록괴리·등급환경). 운영 검증: 화장품 캔버스 모순 5→0, 품질 미비 8. 롤백=이미지만.
 - v82 (2026-07-22) — **그래프 렉 수정(앱-온리, 마이그레이션 없음)**: 힘 시뮬 alpha 바닥 0.12→0 +
   loop() 이 alpha≤REST 면 tick/render 스킵. 수렴 후 영구 60fps burn(O(n²) 반발·O(e) DOM) 제거 —
   정착 후 CPU ~0. 진단: 메모리·페이로드는 병목 아님(임베딩 인메모리 미적재, 17KB gzip). 롤백=이미지만.
