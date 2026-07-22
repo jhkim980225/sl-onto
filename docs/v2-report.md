@@ -55,7 +55,7 @@
 → **데이터모델·벡터인덱스·프로비저닝 핵심 = 실 Neo4j에서 검증됨.** 테스트 리소스 정리 완료.
 
 ## 남은 것 (실사용 전)
-1. **PVC 스토리지** — longhorn 바인딩 이슈 해결 or nfs-client SC 사용(매니페스트 storageClassName 지정)
+1. ~~PVC 스토리지~~ ✅ storageClass 옵션 추가(nfs-client 지정 가능, 커밋 d469caa)
 2. Neo4j 비번 **Secret**화(현재 매니페스트 평문)
 3. 앱 배포 + in-cluster RBAC(ServiceAccount가 StatefulSet/Service 생성 권한)
 4. 이메일 파서
