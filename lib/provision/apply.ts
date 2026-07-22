@@ -5,7 +5,7 @@
 // 라이브 클러스터 미보유 환경에서 import 만으로 실패하지 않도록, k8s 클라이언트 생성은 호출 시점에만 수행한다.
 
 import { AppsV1Api, ApiException, CoreV1Api, KubeConfig } from "@kubernetes/client-node";
-import type { V1StatefulSet, V1Service } from "@kubernetes/client-node";
+import type { V1StatefulSet, V1Service, V1Secret } from "@kubernetes/client-node";
 import { neo4jManifest, type Neo4jManifestOptions } from "./neo4j-manifest.ts";
 import { resourceName, boltUri, DEFAULT_NAMESPACE } from "./naming.ts";
 
@@ -60,9 +60,16 @@ export async function provisionNeo4j(
   canvasId: string,
   opts: Neo4jManifestOptions = {},
 ): Promise<{ boltUri: string }> {
-  const { statefulSet, service } = neo4jManifest(canvasId, opts);
+  const { statefulSet, service, secret } = neo4jManifest(canvasId, opts);
   const namespace = opts.namespace ?? DEFAULT_NAMESPACE;
   const { apps, core } = getClients();
+
+  try {
+    await core.createNamespacedSecret({ namespace, body: secret as unknown as V1Secret });
+  } catch (err) {
+    if (!isConflict(err)) throw wrapError("Neo4j Secret 적용 실패", err);
+    console.log(`Neo4j Secret 이미 존재(캔버스=${canvasId}) — 멱등 통과`);
+  }
 
   try {
     await apps.createNamespacedStatefulSet({ namespace, body: statefulSet as unknown as V1StatefulSet });
@@ -91,6 +98,10 @@ export async function teardownNeo4j(canvasId: string, namespace: string = DEFAUL
   await deleteIgnoringNotFound(
     () => core.deleteNamespacedPersistentVolumeClaim({ name: pvcName(name), namespace }),
     "PVC",
+  );
+  await deleteIgnoringNotFound(
+    () => core.deleteNamespacedSecret({ name: `${name}-auth`, namespace }),
+    "Secret",
   );
 }
 

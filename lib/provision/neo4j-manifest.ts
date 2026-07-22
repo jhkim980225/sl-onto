@@ -25,6 +25,7 @@ export interface Neo4jManifest {
   statefulSet: Record<string, unknown>;
   service: Record<string, unknown>;
   pvc: Record<string, unknown>;
+  secret: Record<string, unknown>;
 }
 
 /** 캔버스별 Neo4j Community StatefulSet+Service+PVC(volumeClaimTemplate) 매니페스트를 생성한다. */
@@ -59,7 +60,12 @@ export function neo4jManifest(canvasId: string, opts: Neo4jManifestOptions = {})
                 { name: "bolt", containerPort: 7687 },
                 { name: "http", containerPort: 7474 },
               ],
-              env: [{ name: "NEO4J_AUTH", value: `neo4j/${password}` }],
+              env: [
+                {
+                  name: "NEO4J_AUTH",
+                  valueFrom: { secretKeyRef: { name: `${name}-auth`, key: "NEO4J_AUTH" } },
+                },
+              ],
               resources: { limits: { memory } },
               volumeMounts: [{ name: "data", mountPath: "/data" }],
               readinessProbe: {
@@ -103,5 +109,13 @@ export function neo4jManifest(canvasId: string, opts: Neo4jManifestOptions = {})
   // volumeClaimTemplate 안에 기술되므로 별도 PVC 오브젝트는 그 템플릿을 그대로 노출(참조용).
   const pvc = statefulSet.spec.volumeClaimTemplates[0];
 
-  return { statefulSet, service, pvc };
+  const secret = {
+    apiVersion: "v1",
+    kind: "Secret",
+    metadata: { name: `${name}-auth`, namespace, labels },
+    type: "Opaque",
+    stringData: { NEO4J_AUTH: `neo4j/${password}` },
+  };
+
+  return { statefulSet, service, pvc, secret };
 }

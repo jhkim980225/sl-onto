@@ -19,8 +19,9 @@ register("data:text/javascript," + encodeURIComponent(HOOK), import.meta.url);
 const { neo4jManifest } = await import("./neo4j-manifest.ts");
 const { resourceName } = await import("./naming.ts");
 
-test("statefulSet: Neo4j Community 이미지·bolt+http 포트·NEO4J_AUTH·데이터 마운트", () => {
+test("statefulSet: Neo4j Community 이미지·bolt+http 포트·NEO4J_AUTH secretKeyRef·데이터 마운트", () => {
   const { statefulSet } = neo4jManifest("default");
+  const name = resourceName("default");
   const container = (statefulSet as any).spec.template.spec.containers[0];
   assert.equal(container.image, "neo4j:5-community");
   const ports = container.ports.map((p: any) => p.containerPort);
@@ -28,9 +29,20 @@ test("statefulSet: Neo4j Community 이미지·bolt+http 포트·NEO4J_AUTH·데�
   assert.ok(ports.includes(7474));
   const auth = container.env.find((e: any) => e.name === "NEO4J_AUTH");
   assert.ok(auth);
-  assert.match(auth.value, /^neo4j\//);
+  assert.equal(auth.value, undefined);
+  assert.equal(auth.valueFrom.secretKeyRef.name, `${name}-auth`);
+  assert.equal(auth.valueFrom.secretKeyRef.key, "NEO4J_AUTH");
   const mount = container.volumeMounts.find((m: any) => m.mountPath === "/data");
   assert.ok(mount);
+});
+
+test("secret: kind Secret·이름 <resourceName>-auth·stringData.NEO4J_AUTH", () => {
+  const { secret } = neo4jManifest("default");
+  const name = resourceName("default");
+  assert.equal((secret as any).kind, "Secret");
+  assert.equal((secret as any).metadata.name, `${name}-auth`);
+  assert.equal((secret as any).type, "Opaque");
+  assert.match((secret as any).stringData.NEO4J_AUTH, /^neo4j\//);
 });
 
 test("PVC/volumeClaimTemplate: 기본 스토리지 5Gi, /data 볼륨", () => {
@@ -50,18 +62,20 @@ test("service: selector가 statefulSet pod 라벨과 일치", () => {
   assert.equal((service as any).spec.type, "ClusterIP");
 });
 
-test("이름 일관성: statefulSet·service·pvc 라벨이 resourceName 기준 동일", () => {
+test("이름 일관성: statefulSet·service·pvc·secret 라벨이 resourceName 기준 동일", () => {
   const canvasId = "품질 캔버스";
   const name = resourceName(canvasId);
-  const { statefulSet, service } = neo4jManifest(canvasId);
+  const { statefulSet, service, secret } = neo4jManifest(canvasId);
   assert.equal((statefulSet as any).metadata.name, name);
   assert.equal((service as any).metadata.name, name);
   assert.equal((statefulSet as any).metadata.labels.canvas, name);
   assert.equal((service as any).metadata.labels.canvas, name);
+  assert.equal((secret as any).metadata.name, `${name}-auth`);
+  assert.equal((secret as any).metadata.labels.canvas, name);
 });
 
 test("opts override: memory·storage·namespace·password 반영", () => {
-  const { statefulSet, service } = neo4jManifest("default", {
+  const { statefulSet, service, secret } = neo4jManifest("default", {
     namespace: "custom-ns",
     memory: "4Gi",
     storage: "20Gi",
@@ -70,10 +84,12 @@ test("opts override: memory·storage·namespace·password 반영", () => {
   const ss = statefulSet as any;
   assert.equal(ss.metadata.namespace, "custom-ns");
   assert.equal((service as any).metadata.namespace, "custom-ns");
+  assert.equal((secret as any).metadata.namespace, "custom-ns");
   assert.equal(ss.spec.template.spec.containers[0].resources.limits.memory, "4Gi");
   assert.equal(ss.spec.volumeClaimTemplates[0].spec.resources.requests.storage, "20Gi");
   const auth = ss.spec.template.spec.containers[0].env.find((e: any) => e.name === "NEO4J_AUTH");
-  assert.equal(auth.value, "neo4j/sekret");
+  assert.equal(auth.valueFrom.secretKeyRef.name, resourceName("default") + "-auth");
+  assert.equal((secret as any).stringData.NEO4J_AUTH, "neo4j/sekret");
 });
 
 test("deterministic: 같은 입력 → 동일 매니페스트(구조적으로)", () => {
