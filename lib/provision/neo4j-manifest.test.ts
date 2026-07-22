@@ -87,3 +87,11 @@ test("statefulSet: enableServiceLinks false (Neo4j 가 k8s Service env 를 confi
   const spec = (statefulSet as any).spec.template.spec;
   assert.equal(spec.enableServiceLinks, false);
 });
+
+test("PVC: storageClass 지정 시 storageClassName 반영, 미지정이면 없음(클러스터 기본)", () => {
+  const withSC = neo4jManifest("c1", { storageClass: "nfs-client" });
+  const sc = ((withSC.statefulSet as any).spec.volumeClaimTemplates[0].spec.storageClassName);
+  assert.equal(sc, "nfs-client");
+  const without = neo4jManifest("c1");
+  assert.equal(((without.statefulSet as any).spec.volumeClaimTemplates[0].spec.storageClassName), undefined);
+});

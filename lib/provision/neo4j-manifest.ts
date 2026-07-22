@@ -16,6 +16,9 @@ export interface Neo4jManifestOptions {
   memory?: string;
   storage?: string;
   password?: string;
+  /** PVC StorageClass. 미지정이면 클러스터 기본. 이식성을 위해 하드코딩하지 않는다.
+   * ⚠ FEDA: 기본(longhorn)이 바인딩 안 돼 e2e에서 PVC Pending — `nfs-client` 등 동작 SC 지정 필요. */
+  storageClass?: string;
 }
 
 export interface Neo4jManifest {
@@ -75,6 +78,8 @@ export function neo4jManifest(canvasId: string, opts: Neo4jManifestOptions = {})
           spec: {
             accessModes: ["ReadWriteOnce"],
             resources: { requests: { storage } },
+            // 지정 시에만 넣는다 — 미지정이면 클러스터 기본 SC.
+            ...(opts.storageClass ? { storageClassName: opts.storageClass } : {}),
           },
         },
       ],
