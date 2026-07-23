@@ -54,6 +54,29 @@ export interface GraphView {
   relations: Relation[];
 }
 
+/** Neo4j Document 노드 입력 — 문서 단위 근거(요약·분류·출처) + 표준 레코드 통째 보관. */
+export interface DocumentInput {
+  id: string;
+  docType: string;
+  summary: string;
+  from: string;
+  to: string;
+  date: string;
+  subject: string;
+  ingestedAt: string;
+  record: string; // JSON.stringify(StandardDocRecord)
+}
+
+/** 문서당 표준 교환 규격(interchange). GET /api/v2/document/[id] 가 반환. */
+export interface StandardDocRecord {
+  id: string;
+  doc_type: string;
+  summary: string;
+  source: { from: string; to: string; date: string; subject: string };
+  entities: { name: string; type: string }[];
+  relations: { subject: string; predicate: string; object: string }[];
+}
+
 /** 캔버스 하나(=Neo4j pod 하나)의 그래프 저장소 계약.
  * lib/neo4j/repo.ts 가 구현, 인제스천·검색·UI 라우트가 소비한다. */
 export interface GraphRepo {
@@ -68,4 +91,10 @@ export interface GraphRepo {
   neighbors(id: string, depth?: number): Promise<GraphView>;
   /** 캔버스 전체 그래프(UI 렌더용). */
   fullGraph(): Promise<GraphView>;
+  /** 문서 노드 upsert(근거 복원). */
+  upsertDocument(d: DocumentInput): Promise<void>;
+  /** 문서 → 개체 MENTIONS 연결. entityIds 가 비면 no-op. */
+  linkMentions(docId: string, entityIds: string[]): Promise<void>;
+  /** 문서 id → 저장된 표준 레코드(없으면 null). */
+  getDocument(id: string): Promise<StandardDocRecord | null>;
 }

@@ -1,7 +1,7 @@
 // lib/neo4j/cypher.ts — 순수 Cypher 쿼리 빌더. IO·드라이버 없음, 값은 전부 params 로만 바인딩.
 // 설계: docs/superpowers/specs/2026-07-22-v2-neo4j-foundation-design.md §3, §4(골든 룰 1)
 import { EMBEDDING_DIM } from "./types";
-import type { CypherQuery, EntityInput, RelationInput } from "./types";
+import type { CypherQuery, DocumentInput, EntityInput, RelationInput } from "./types";
 
 function requireId(id: string, what: string): void {
   if (!id) throw new Error(`${what}: id required`);
@@ -100,4 +100,44 @@ export function buildNeighbors(id: string, depth = 1): CypherQuery {
     cypher: `MATCH (e:Entity {id: $id})-[r:REL${hop}]-(n:Entity) RETURN e, r, n`,
     params: { id },
   };
+}
+
+/** MERGE(id) 로 Document upsert — 모든 값 params. */
+export function buildUpsertDocument(d: DocumentInput): CypherQuery {
+  requireId(d.id, "buildUpsertDocument");
+  return {
+    cypher:
+      "MERGE (d:Document {id: $id}) " +
+      "SET d.doc_type = $docType, d.summary = $summary, d.from = $from, d.to = $to, " +
+      "d.date = $date, d.subject = $subject, d.ingested_at = $ingestedAt, d.record = $record " +
+      "RETURN d",
+    params: {
+      id: d.id, docType: d.docType, summary: d.summary, from: d.from, to: d.to,
+      date: d.date, subject: d.subject, ingestedAt: d.ingestedAt, record: d.record,
+    },
+  };
+}
+
+/** Document → 여러 Entity 를 MENTIONS 로 연결(멱등). */
+export function buildLinkMentions(docId: string, entityIds: string[]): CypherQuery {
+  requireId(docId, "buildLinkMentions");
+  return {
+    cypher:
+      "MATCH (d:Document {id: $docId}) " +
+      "UNWIND $ids AS eid " +
+      "MATCH (e:Entity {id: eid}) " +
+      "MERGE (d)-[:MENTIONS]->(e)",
+    params: { docId, ids: entityIds },
+  };
+}
+
+/** id 로 저장된 표준 레코드(record 문자열) 조회. */
+export function buildGetDocument(id: string): CypherQuery {
+  requireId(id, "buildGetDocument");
+  return { cypher: "MATCH (d:Document {id: $id}) RETURN d.record AS record", params: { id } };
+}
+
+/** 전체 Document + MENTIONS(그래프 렌더에 문서 허브 포함). */
+export function buildFullGraphDocuments(): CypherQuery {
+  return { cypher: "MATCH (d:Document) OPTIONAL MATCH (d)-[m:MENTIONS]->(e:Entity) RETURN d, e", params: {} };
 }

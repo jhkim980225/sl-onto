@@ -22,6 +22,9 @@ const {
   buildDeleteEntity,
   buildVectorSearch,
   buildNeighbors,
+  buildUpsertDocument,
+  buildLinkMentions,
+  buildGetDocument,
 } = await import("./cypher.ts");
 const { EMBEDDING_DIM } = await import("./types.ts");
 
@@ -106,4 +109,28 @@ test("buildNeighbors: depth>1 은 가변 길이 패턴, depth<1 은 예외", () 
   const q = buildNeighbors("a", 2);
   assert.ok(q.cypher.includes("[r:REL*1..2]"));
   assert.throws(() => buildNeighbors("a", 0));
+});
+
+test("buildUpsertDocument: MERGE(id) + 모든 값 params 바인딩", () => {
+  const q = buildUpsertDocument({
+    id: "m.eml", docType: "견적", summary: "s", from: "a", to: "b",
+    date: "d", subject: "sub", ingestedAt: "t", record: "{}",
+  });
+  assert.match(q.cypher, /MERGE \(d:Document \{id: \$id\}\)/);
+  assert.equal(q.params.id, "m.eml");
+  assert.equal(q.params.record, "{}");
+  assert.ok(!/"m\.eml"/.test(q.cypher), "id 가 cypher 문자열에 보간되면 안 됨");
+});
+
+test("buildLinkMentions: UNWIND ids MERGE MENTIONS", () => {
+  const q = buildLinkMentions("m.eml", ["e1", "e2"]);
+  assert.match(q.cypher, /UNWIND \$ids AS eid/);
+  assert.match(q.cypher, /MERGE \(d\)-\[:MENTIONS\]->\(e\)/);
+  assert.deepEqual(q.params.ids, ["e1", "e2"]);
+});
+
+test("buildGetDocument: record 반환", () => {
+  const q = buildGetDocument("m.eml");
+  assert.match(q.cypher, /RETURN d\.record/);
+  assert.equal(q.params.id, "m.eml");
 });

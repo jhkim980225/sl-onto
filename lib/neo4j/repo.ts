@@ -5,13 +5,18 @@ import { getDriver, runQuery } from "./driver";
 import {
   buildCreateEntity,
   buildDeleteEntity,
+  buildFullGraphDocuments,
+  buildGetDocument,
+  buildLinkMentions,
   buildNeighbors,
+  buildUpsertDocument,
   buildUpsertRelation,
   buildVectorSearch,
 } from "./cypher";
 import { SCHEMA_STATEMENTS } from "./schema";
 import {
   EMBEDDING_DIM,
+  type DocumentInput,
   type Entity,
   type EntityHit,
   type EntityInput,
@@ -19,6 +24,7 @@ import {
   type GraphView,
   type Relation,
   type RelationInput,
+  type StandardDocRecord,
 } from "./types";
 
 const KNOWN_ENTITY_KEYS = new Set(["id", "name", "type", "embedding"]);
@@ -57,6 +63,22 @@ function toRelation(rel: Relationship, srcId: string, dstId: string): Relation {
   }
   if (Object.keys(props).length > 0) relation.props = props;
   return relation;
+}
+
+/** Document 노드 → 그래프 렌더용 Entity 형상(type "문서", props.kind="document"). */
+function docNodeToEntity(node: Node): Entity {
+  const raw = node.properties as Record<string, unknown>;
+  const id = String(raw.id);
+  return {
+    id,
+    name: String(raw.subject || id),
+    type: "문서",
+    props: {
+      kind: "document",
+      doc_type: String(raw.doc_type ?? ""),
+      summary: String(raw.summary ?? ""),
+    },
+  };
 }
 
 /** 관계의 시작 elementId 로 방향(src/dst) 판정 후 Relation 구성. */
@@ -143,6 +165,26 @@ export class Neo4jGraphRepo implements GraphRepo {
     return { entities: [...entities.values()], relations };
   }
 
+  async upsertDocument(d: DocumentInput): Promise<void> {
+    await runQuery(this.driver, buildUpsertDocument(d));
+  }
+
+  async linkMentions(docId: string, entityIds: string[]): Promise<void> {
+    if (entityIds.length === 0) return;
+    await runQuery(this.driver, buildLinkMentions(docId, entityIds));
+  }
+
+  async getDocument(id: string): Promise<StandardDocRecord | null> {
+    const rows = await runQuery(this.driver, buildGetDocument(id));
+    const rec = rows[0]?.record;
+    if (typeof rec !== "string" || !rec) return null;
+    try {
+      return JSON.parse(rec) as StandardDocRecord;
+    } catch {
+      return null;
+    }
+  }
+
   async fullGraph(): Promise<GraphView> {
     const rows = await runQuery(this.driver, {
       cypher: "MATCH (e:Entity) OPTIONAL MATCH (e)-[r:REL]->(m) RETURN e, r, m",
@@ -160,6 +202,17 @@ export class Neo4jGraphRepo implements GraphRepo {
       if (isNode(m)) entities.set(String(m.properties.id), toEntity(m));
       if (isNode(e) && isNode(m) && isRelationship(r)) {
         relations.push(relationFromNodes(e, r, m));
+      }
+    }
+
+    // 문서 노드(type "문서")와 MENTIONS 를 그래프에 합류 — 문서가 개체를 묶는 허브.
+    const docRows = await runQuery(this.driver, buildFullGraphDocuments());
+    for (const row of docRows) {
+      const d = row.d;
+      const e = row.e;
+      if (isNode(d)) entities.set(String(d.properties.id), docNodeToEntity(d));
+      if (isNode(d) && isNode(e)) {
+        relations.push({ src: String(d.properties.id), dst: String(e.properties.id), type: "MENTIONS" });
       }
     }
 
