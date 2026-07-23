@@ -197,3 +197,65 @@ docker run -p 8000:8000 sl-ontoground
 - `next.config.mjs`의 `outputFileTracingIncludes`가 `data/sources/**`를 standalone에 포함.
 - Dockerfile은 보완적으로 `data/`를 런타임 이미지에 명시 복사.
 - 실 데이터 전환 시 `data/sources`를 교체(또는 `scripts/gen-sources.ts` 재실행)하고 재빌드.
+
+## v2(Neo4j) 배포 런북 — 실패 방지 (2026-07-23 정립)
+
+v2 앱은 `ns sl-ontoground-v2 / deploy sl-ontoground-v2 / container web`,
+pyservice 는 `ns sl-ontoground / deploy pyservice / container pyservice`, 레지스트리 `:5000`.
+현재 배포 = **v2 앱 v4 · pyservice v11**. **접속: `http://192.168.0.100:30495/v2`**.
+
+### 원샷(권장)
+```bash
+# 1) git push 는 한 번만: GCM 붙이면 이후 자동(자격증명은 Windows 자격증명 관리자에 이미 저장됨)
+git config --global credential.helper manager
+
+# 2) 배포 — 태그 자동 +1, 전체 트리 재동기화, 빌드·푸시·롤아웃·스모크까지 한 방
+FEDA_PW='<ssh 비번>' python scripts/deploy-v2.py           # 앱+pyservice
+FEDA_PW='...' python scripts/deploy-v2.py --app            # 앱만
+FEDA_PW='...' python scripts/deploy-v2.py --py             # pyservice만
+```
+
+### 왜 이렇게 됐나 (겪은 함정 — 다시 밟지 말 것)
+1. **git push 가 `could not read Username` 로 실패** → `credential.helper` 가 비어 있어서.
+   GCM(`git-credential-manager`)은 설치돼 있고 자격증명(`jhkim980225`)도 저장돼 있었다.
+   **해결: `git config --global credential.helper manager` 1회.** 이후 비대화형에서도 조용히 됨.
+2. **로컬 Windows 의 kubectl 은 프로덕션이 아니다** — 현재 컨텍스트가 죽은 `kind-local`(127.0.0.1:53504).
+   프로덕션 접근은 **마스터 SSH**(`feda@192.168.0.100`, 비번 인증 — publickey 는 거부됨) 경유뿐.
+   `ssh -o BatchMode=yes` 로 테스트하면 항상 publickey 로만 시도돼 "거부"로 오판한다. 비번을 줘야 붙는다.
+3. **마스터 `~/sl-ontoground` 는 git 저장소가 아니다**(SFTP 로 동기화된 평트리) — 게다가 stale 할 수 있다.
+   그래서 **"변경 파일만 SFTP"는 새 디렉토리(`app/api/v2/canvases/` 등)에서 `No such file` 로 실패한다.**
+   **매번 전체 트리를 tar 로 재동기화**해야 안전(스크립트가 자동으로 함, `TREE_OK` 로 검증).
+   백업은 `~/sl-ontoground.bak`.
+4. **다음 태그는 배포 중 이미지에서 +1** — 로컬 스크립트 파일명·기억 믿지 말 것.
+   스크립트가 `kubectl get deploy -o jsonpath='{..image}'` 로 읽어 자동 증가.
+5. **pyservice 빌드의 느린 단계는 `get_model()`(e5-base 모델 로드, ~1분)** 하나뿐 — 나머지 레이어는 캐시.
+   `main.py` 만 바뀌면 그 뒤 레이어만 재실행되어 전체 수분이면 끝난다.
+6. (Windows 로컬에서 paramiko 로그를 볼 때) stdout 을 **utf-8 로 reconfigure** — 아니면 cp949 로 이모지/체크(✓)에서 크래시.
+
+### 수동 절차(스크립트 못 쓸 때)
+```bash
+# 로컬: 전체 트리 tar (node_modules/.next/.git/docs/eval 제외)
+cd /c/feda/sl-onto
+tar czf /tmp/deploy.tgz --exclude=node_modules --exclude=.next --exclude=.git \
+  --exclude=docs --exclude=eval --exclude='*.zip' -C /c/feda/sl-onto .
+scp /tmp/deploy.tgz feda@192.168.0.100:~/deploy.tgz     # 비번 프롬프트
+ssh feda@192.168.0.100                                   # 비번 프롬프트
+
+# 마스터에서 (vN 은 kubectl get deploy -o wide 로 현재 태그 확인 후 +1)
+cd ~ && rm -rf sl-ontoground.bak && mv sl-ontoground sl-ontoground.bak \
+  && mkdir sl-ontoground && tar xzf deploy.tgz -C sl-ontoground && cd sl-ontoground
+test -f app/api/v2/canvases/route.ts && echo TREE_OK     # 떠야 정상
+docker build -t 192.168.0.100:5000/sl-ontoground-v2:vN . && docker push 192.168.0.100:5000/sl-ontoground-v2:vN
+docker build -t 192.168.0.100:5000/sl-ontoground-pyservice:vM pyservice/ && docker push 192.168.0.100:5000/sl-ontoground-pyservice:vM
+kubectl -n sl-ontoground-v2 set image deploy/sl-ontoground-v2 web=192.168.0.100:5000/sl-ontoground-v2:vN
+kubectl -n sl-ontoground    set image deploy/pyservice        pyservice=192.168.0.100:5000/sl-ontoground-pyservice:vM
+kubectl -n sl-ontoground-v2 rollout status deploy/sl-ontoground-v2 --timeout=300s
+kubectl -n sl-ontoground    rollout status deploy/pyservice        --timeout=300s
+```
+
+### 롤백
+```bash
+kubectl -n sl-ontoground-v2 rollout undo deploy/sl-ontoground-v2   # 이미지 태그만 되돌림
+kubectl -n sl-ontoground    rollout undo deploy/pyservice
+# 소스 트리 롤백: 마스터 ~/sl-ontoground.bak
+```
