@@ -148,3 +148,23 @@ def test_extract_json_handles_prose_wrapping():
     assert main.extract_json('앞말 {"a": 1} 뒷말') == {"a": 1}
     assert main.extract_json("<think>{...}</think>no json here") is None
     assert main.extract_json('[1,2]') is None  # dict만 허용
+
+
+def test_norm_extract_passes_summary_and_doc_type():
+    from main import _norm_extract
+    out = _norm_extract({
+        "summary": " 성진 견적 요청 ",
+        "doc_type": "견적",
+        "entities": [{"type": "인물", "label": "정아라"}],
+        "relations": [{"srcLabel": "정아라", "rel": "소속", "dstLabel": "성진"}],
+    })
+    assert out["summary"] == "성진 견적 요청"
+    assert out["doc_type"] == "견적"
+    assert out["entities"] == [{"type": "인물", "label": "정아라"}]
+
+
+def test_norm_extract_defaults_missing_summary_doc_type_to_empty():
+    from main import _norm_extract
+    out = _norm_extract({"entities": [], "relations": []})
+    assert out["summary"] == ""
+    assert out["doc_type"] == ""

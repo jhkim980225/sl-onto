@@ -74,6 +74,8 @@ export interface LlmExtractRelation {
 export interface LlmExtractResult {
   entities: LlmExtractEntity[];
   relations: LlmExtractRelation[];
+  summary?: string;   // graphextract 만 채움(extract 는 미포함 → undefined)
+  doc_type?: string;
 }
 
 /** 자유 텍스트 문서 + 통제 어휘 카탈로그 → 개체·관계 추출(인제스천 옵트인 보강). 프롬프트는 pyservice 쪽. */

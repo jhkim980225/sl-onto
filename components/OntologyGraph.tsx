@@ -59,7 +59,7 @@ function EntityNode({ data }: NodeProps<EntityNodeData>) {
         boxShadow: selected ? "0 0 0 3px rgba(0,162,229,0.25)" : "0 1px 2px rgba(0,0,0,0.08)",
       }}
     >
-      {selected && onDelete && (
+      {selected && onDelete && entity.props?.kind !== "document" && (
         <button
           type="button"
           aria-label={`${entity.name} 삭제`}

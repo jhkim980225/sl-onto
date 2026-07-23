@@ -17,9 +17,14 @@ export const ENTITY_VECTOR_INDEX =
 export const ENTITY_TYPE_INDEX =
   "CREATE INDEX entity_type IF NOT EXISTS FOR (e:Entity) ON (e.type)";
 
+/** Document.id 유일 제약 — 문서 upsert(MERGE) 앵커. */
+export const DOCUMENT_ID_CONSTRAINT =
+  "CREATE CONSTRAINT document_id IF NOT EXISTS FOR (d:Document) REQUIRE d.id IS UNIQUE";
+
 /** 캔버스 부팅 시 순서대로 실행할 DDL 전체(멱등). */
 export const SCHEMA_STATEMENTS: string[] = [
   ENTITY_ID_CONSTRAINT,
   ENTITY_VECTOR_INDEX,
   ENTITY_TYPE_INDEX,
+  DOCUMENT_ID_CONSTRAINT,
 ];

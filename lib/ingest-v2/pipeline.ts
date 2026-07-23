@@ -7,6 +7,8 @@ import { llmGraphExtract } from "../llm";
 import { extractToGraph } from "./extract-to-graph";
 import { embedPassage } from "../embed";
 import { repoFor } from "../neo4j/canvas-repo";
+import { buildStandardRecord, toDocumentInput, EMPTY_SOURCE, type DocSource } from "./standard-record";
+import type { StandardDocRecord } from "../neo4j/types";
 
 const LLM_TEXT_CAP = 12000; // LLM 입력 상한(문자 수)
 
@@ -14,13 +16,16 @@ export interface IngestResult {
   entities: number;
   relations: number;
   skipped?: string;
+  document?: StandardDocRecord;
 }
 
 /** 파일 버퍼 → 그래프 적재. 한 파일의 실패는 throw 하지 않고 skipped 로 보고한다. */
 export async function ingestFileToGraph(canvasId: string, fileName: string, buf: Buffer): Promise<IngestResult> {
   try {
-    const rawText = fileName.toLowerCase().endsWith(".eml")
-      ? emailToText(parseEml(buf))
+    const isEml = fileName.toLowerCase().endsWith(".eml");
+    const parsed = isEml ? parseEml(buf) : null;
+    const rawText = parsed
+      ? emailToText(parsed)
       : extractSourceBlocks(fileName, buf, { cap: false }).blocks.flatMap((b) => b.lines).join("\n");
     const text = rawText.slice(0, LLM_TEXT_CAP);
     if (!text.trim()) return { entities: 0, relations: 0, skipped: "추출된 텍스트 없음" };
@@ -48,7 +53,14 @@ export async function ingestFileToGraph(canvasId: string, fileName: string, buf:
     for (const e of entities) await repo.upsertEntity(e);
     for (const r of relations) await repo.upsertRelation(r);
 
-    return { entities: entities.length, relations: relations.length };
+    const source: DocSource = parsed
+      ? { from: parsed.from, to: parsed.to, date: parsed.date, subject: parsed.subject }
+      : EMPTY_SOURCE;
+    const record = buildStandardRecord(fileName, source, extracted);
+    await repo.upsertDocument(toDocumentInput(record, new Date().toISOString()));
+    await repo.linkMentions(record.id, entities.map((e) => e.id));
+
+    return { entities: entities.length, relations: relations.length, document: record };
   } catch (err) {
     return { entities: 0, relations: 0, skipped: `인제스천 실패: ${err instanceof Error ? err.message : String(err)}` };
   }

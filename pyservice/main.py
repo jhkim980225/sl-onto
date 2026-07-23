@@ -375,7 +375,9 @@ GRAPHEXTRACT_SYSTEM = (
     '개체 type 은 짧은 영문 소문자 종류(person·org·product·place·concept·event·project 등 자유). '
     'label 은 원문 표기 그대로. 관계는 srcLabel(출발 개체 label)·rel(관계명, 짧은 동사구)·dstLabel(도착 개체 label). '
     '문서에 실제로 등장하는 것만, 창작 금지. 대명사·일반명사(그것·회사 등)는 개체로 만들지 마라. '
-    'JSON만 출력: {"entities":[{"type":"person","label":"김철수"},{"type":"org","label":"아크메"}],'
+    '추가로 문서 전체를 요약한 summary(1~2문장 한국어)와 문서 분류 doc_type(짧은 라벨, 예: 견적·자료요청·원료소개)도 반환하라. '
+    'JSON만 출력: {"summary":"...","doc_type":"견적",'
+    '"entities":[{"type":"person","label":"김철수"},{"type":"org","label":"아크메"}],'
     '"relations":[{"srcLabel":"김철수","rel":"소속","dstLabel":"아크메"}]} /no_think'
 )
 
@@ -530,7 +532,12 @@ def _norm_extract(out: dict) -> dict:
         dst = str(r.get("dstLabel") or "").strip()
         if src and rel and dst:
             relations.append({"srcLabel": src, "rel": rel, "dstLabel": dst})
-    return {"entities": entities, "relations": relations}
+    return {
+        "summary": str(out.get("summary") or "").strip(),
+        "doc_type": str(out.get("doc_type") or "").strip(),
+        "entities": entities,
+        "relations": relations,
+    }
 
 
 @app.post("/llm")
