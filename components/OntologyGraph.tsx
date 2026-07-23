@@ -6,6 +6,8 @@ import { useMemo, useState, useCallback } from "react";
 import ReactFlow, {
   Background,
   Controls,
+  Handle,
+  Position,
   type Node,
   type Edge,
   type NodeProps,
@@ -51,8 +53,12 @@ function EntityNode({ data }: NodeProps<EntityNodeData>) {
   const { entity, color, selected, onDelete } = data;
   const isDoc = entity.props?.kind === "document";
   const size = isDoc ? 46 : 58;
+  // 엣지 앵커 — 커스텀 노드는 Handle 없으면 관계선이 노드에 못 붙는다. 중앙에 숨겨 배치(중심-중심 연결).
+  const anchor = { opacity: 0, left: "50%", top: "50%", width: 1, height: 1, minWidth: 0, border: "none" } as const;
   return (
     <div style={{ position: "relative", width: size, height: size }}>
+      <Handle type="target" position={Position.Top} isConnectable={false} style={anchor} />
+      <Handle type="source" position={Position.Bottom} isConnectable={false} style={anchor} />
       <div
         style={{
           width: size,
