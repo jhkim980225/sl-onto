@@ -26,6 +26,7 @@ const TYPE_COLORS: Record<string, string> = {
   product: "#FFC46B",
   email: "#8291a8",
   topic: "#B18CFF",
+  문서: "#14243f",
 };
 const FALLBACK_COLORS = ["#5EDC9A", "#FF8A3D", "#FF5470", "#93A8FF", "#4FE0D2"];
 const DEFAULT_COLOR = "#a0acc0";
@@ -45,21 +46,47 @@ type EntityNodeData = {
   onDelete?: (id: string) => void;
 };
 
+// 온톨로지 그래프식 원형 노드 — 색=타입, 라벨은 원 아래. 문서 노드는 📄 + 조금 크게.
 function EntityNode({ data }: NodeProps<EntityNodeData>) {
   const { entity, color, selected, onDelete } = data;
+  const isDoc = entity.props?.kind === "document";
+  const size = isDoc ? 46 : 58;
   return (
-    <div
-      style={{
-        position: "relative",
-        border: `2px solid ${selected ? "#00a2e5" : color}`,
-        borderRadius: 8,
-        background: "#fff",
-        padding: "6px 10px",
-        minWidth: 96,
-        boxShadow: selected ? "0 0 0 3px rgba(0,162,229,0.25)" : "0 1px 2px rgba(0,0,0,0.08)",
-      }}
-    >
-      {selected && onDelete && entity.props?.kind !== "document" && (
+    <div style={{ position: "relative", width: size, height: size }}>
+      <div
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          background: selected ? color : `${color}26`, // 선택 시 채움, 평소 옅은 틴트
+          border: `${selected ? 3 : 2.5}px solid ${color}`,
+          boxShadow: selected ? `0 0 0 4px ${color}40` : "0 1px 3px rgba(0,33,87,0.14)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          transition: "box-shadow .12s, background .12s",
+        }}
+      >
+        {isDoc && <span style={{ fontSize: 16, lineHeight: 1 }}>📄</span>}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          top: size + 3,
+          left: "50%",
+          transform: "translateX(-50%)",
+          whiteSpace: "nowrap",
+          fontSize: 11,
+          fontWeight: 600,
+          color: "#14243f",
+          textShadow: "0 1px 2px #fff,0 -1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff",
+          pointerEvents: "none",
+        }}
+      >
+        {entity.name}
+      </div>
+      {selected && onDelete && !isDoc && (
         <button
           type="button"
           aria-label={`${entity.name} 삭제`}
@@ -69,8 +96,8 @@ function EntityNode({ data }: NodeProps<EntityNodeData>) {
           }}
           style={{
             position: "absolute",
-            top: -8,
-            right: -8,
+            top: -6,
+            right: -6,
             width: 18,
             height: 18,
             borderRadius: "50%",
@@ -86,11 +113,6 @@ function EntityNode({ data }: NodeProps<EntityNodeData>) {
           ✕
         </button>
       )}
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: "#14243f" }}>{entity.name}</span>
-      </div>
-      <div style={{ fontSize: 10, color: "#8291a8", marginTop: 2, paddingLeft: 14 }}>{entity.type}</div>
     </div>
   );
 }
