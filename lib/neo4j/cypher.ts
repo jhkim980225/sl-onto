@@ -124,6 +124,8 @@ export function buildLinkMentions(docId: string, entityIds: string[]): CypherQue
   return {
     cypher:
       "MATCH (d:Document {id: $docId}) " +
+      "OPTIONAL MATCH (d)-[old:MENTIONS]->() DELETE old " +
+      "WITH d " +
       "UNWIND $ids AS eid " +
       "MATCH (e:Entity {id: eid}) " +
       "MERGE (d)-[:MENTIONS]->(e)",

@@ -124,6 +124,7 @@ test("buildUpsertDocument: MERGE(id) + 모든 값 params 바인딩", () => {
 
 test("buildLinkMentions: UNWIND ids MERGE MENTIONS", () => {
   const q = buildLinkMentions("m.eml", ["e1", "e2"]);
+  assert.match(q.cypher, /OPTIONAL MATCH \(d\)-\[old:MENTIONS\]->\(\) DELETE old/);
   assert.match(q.cypher, /UNWIND \$ids AS eid/);
   assert.match(q.cypher, /MERGE \(d\)-\[:MENTIONS\]->\(e\)/);
   assert.deepEqual(q.params.ids, ["e1", "e2"]);

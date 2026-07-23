@@ -11,7 +11,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const { id } = await params;
   try {
-    const document = await repoFor(canvas).getDocument(decodeURIComponent(id));
+    const document = await repoFor(canvas).getDocument(id);
     if (!document) return NextResponse.json({ ok: false, error: "문서를 찾을 수 없습니다" }, { status: 404 });
     return NextResponse.json({ ok: true, document });
   } catch (err) {

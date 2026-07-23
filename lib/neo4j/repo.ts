@@ -210,6 +210,9 @@ export class Neo4jGraphRepo implements GraphRepo {
     for (const row of docRows) {
       const d = row.d;
       const e = row.e;
+      // ponytail: entities Map is keyed by id across Entity + Document. A user can create an
+      // Entity with id == a Document filename (manual "엔티티 추가"), which would drop one from
+      // THIS response only (both stay correctly stored in Neo4j). Namespace the key if it bites.
       if (isNode(d)) entities.set(String(d.properties.id), docNodeToEntity(d));
       if (isNode(d) && isNode(e)) {
         relations.push({ src: String(d.properties.id), dst: String(e.properties.id), type: "MENTIONS" });

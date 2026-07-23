@@ -14,6 +14,8 @@ export const EMPTY_SOURCE: DocSource = { from: "", to: "", date: "", subject: ""
 
 /** 추출 결과(내부 label/srcLabel 형태) → 표준 규격(name/subject·predicate·object). */
 export function buildStandardRecord(id: string, source: DocSource, ex: LlmExtractResult): StandardDocRecord {
+  // 표준 레코드는 LLM 원문 산출을 무손실 반영한다(원본 보존). extractToGraph 는 미해결 라벨·self-loop 를
+  // 드롭하고 dedup 하므로, 이 record.relations/entities 가 /api/v2/graph 의 엣지/노드와 다를 수 있다.
   return {
     id,
     doc_type: (ex.doc_type ?? "").trim(),
